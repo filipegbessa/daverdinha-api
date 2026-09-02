@@ -11,7 +11,7 @@ interface IncomingMessage {
   from: string;
   type: 'text' | 'interactive';
   text?: { body: string };
-  interactive?: { list_reply?: { id: string } };
+  interactive?: { list_reply?: { id: string; title?: string } };
   referredProductId?: string;
 }
 
@@ -40,6 +40,17 @@ export class BotEngineService {
           conversationId: conversation.id,
           direction: 'inbound',
           body: message.text.body,
+        },
+      });
+    }
+
+    const listReplyTitle = message.interactive?.list_reply?.title;
+    if (listReplyTitle) {
+      await this.prisma.message.create({
+        data: {
+          conversationId: conversation.id,
+          direction: 'inbound',
+          body: listReplyTitle,
         },
       });
     }
@@ -110,12 +121,22 @@ export class BotEngineService {
       },
     });
 
+    const menuBodyText = 'Como posso te ajudar hoje?';
     await this.whatsapp.sendInteractiveList(
       conversation.phone,
-      'Como posso te ajudar hoje?',
+      menuBodyText,
       'Ver opções',
       items.map((item) => ({ id: item.id, title: item.topic })),
     );
+    await this.prisma.message.create({
+      data: {
+        conversationId: conversation.id,
+        direction: 'outbound',
+        body: [menuBodyText, ...items.map((item) => `- ${item.topic}`)].join(
+          '\n',
+        ),
+      },
+    });
   }
 
   private async handleMenuSelection(

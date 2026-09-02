@@ -193,4 +193,69 @@ describe('BotEngineService', () => {
       data: { conversationId: 'c1', direction: 'outbound', body: 'Bem-vinda(o)!' },
     });
   });
+
+  it('persists the interactive menu list itself as an outbound message alongside the sendInteractiveList call', async () => {
+    prisma.conversation.findFirst.mockResolvedValue(null);
+    prisma.conversation.create.mockResolvedValue({ id: 'c1', phone: '5521999999999', status: 'bot_active', invalidAttempts: 0, awaitingDeliveryReply: false });
+
+    await service.handleIncomingMessage(textMessagePayload('5521999999999', 'Oi, boa tarde!'));
+
+    expect(whatsapp.sendInteractiveList).toHaveBeenCalledWith(
+      '5521999999999',
+      'Como posso te ajudar hoje?',
+      'Ver opções',
+      [
+        { id: 'm1', title: 'Locais de entrega' },
+        { id: 'm2', title: 'Bingo de Plantas' },
+        { id: 'm3', title: 'Falar com um atendente' },
+      ],
+    );
+    expect(prisma.message.create).toHaveBeenCalledWith({
+      data: {
+        conversationId: 'c1',
+        direction: 'outbound',
+        body: expect.stringContaining('Como posso te ajudar hoje?'),
+      },
+    });
+    const menuMessageCall = prisma.message.create.mock.calls.find(
+      ([{ data }]: [{ data: { body: string } }]) =>
+        data.body.includes('Como posso te ajudar hoje?'),
+    );
+    expect(menuMessageCall[0].data.body).toContain('Locais de entrega');
+    expect(menuMessageCall[0].data.body).toContain('Bingo de Plantas');
+    expect(menuMessageCall[0].data.body).toContain('Falar com um atendente');
+  });
+
+  it('persists an inbound interactive list-reply tap using the human-readable title, not the opaque item id', async () => {
+    const conversation = { id: 'c1', phone: '5521999999999', status: 'bot_active', invalidAttempts: 0, awaitingDeliveryReply: false };
+    prisma.conversation.findFirst.mockResolvedValue(conversation);
+
+    await service.handleIncomingMessage({
+      entry: [{ changes: [{ value: { messages: [{
+        from: '5521999999999',
+        type: 'interactive',
+        interactive: { list_reply: { id: 'm2', title: 'Bingo de Plantas' } },
+      }] } }] }],
+    });
+
+    expect(prisma.message.create).toHaveBeenCalledWith({
+      data: { conversationId: 'c1', direction: 'inbound', body: 'Bingo de Plantas' },
+    });
+    expect(prisma.message.create).not.toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ body: 'm2' }) }),
+    );
+  });
+
+  it('does not persist an inbound interactive tap when the webhook payload has no list_reply title', async () => {
+    const conversation = { id: 'c1', phone: '5521999999999', status: 'bot_active', invalidAttempts: 0, awaitingDeliveryReply: false };
+    prisma.conversation.findFirst.mockResolvedValue(conversation);
+
+    await service.handleIncomingMessage({
+      entry: [{ changes: [{ value: { messages: [{ from: '5521999999999', type: 'interactive', interactive: { list_reply: { id: 'm2' } } }] } }] }],
+    });
+
+    expect(prisma.message.create).not.toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ direction: 'inbound' }) }),
+    );
+  });
 });
