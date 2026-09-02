@@ -38,6 +38,11 @@ export class BotEngineService {
       return;
     }
 
+    if (conversation.awaitingDeliveryReply && message.text?.body) {
+      await this.deliveryCheck.handleReply(conversation, message.text.body);
+      return;
+    }
+
     if (message.referredProductId) {
       await this.deliveryCheck.start(conversation);
       return;

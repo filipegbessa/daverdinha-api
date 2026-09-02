@@ -62,15 +62,16 @@ enum EntryPoint {
 }
 
 model Conversation {
-  id              String              @id @default(uuid())
-  phone           String
-  name            String?
-  status          ConversationStatus  @default(bot_active)
-  entryPoint      EntryPoint?         @map("entry_point")
-  invalidAttempts Int                 @default(0) @map("invalid_attempts")
-  createdAt       DateTime            @default(now()) @map("created_at")
-  updatedAt       DateTime            @updatedAt @map("updated_at")
-  messages        Message[]
+  id                    String             @id @default(uuid())
+  phone                 String
+  name                  String?
+  status                ConversationStatus @default(bot_active)
+  entryPoint            EntryPoint?        @map("entry_point")
+  invalidAttempts       Int                @default(0) @map("invalid_attempts")
+  awaitingDeliveryReply Boolean            @default(false) @map("awaiting_delivery_reply")
+  createdAt             DateTime           @default(now()) @map("created_at")
+  updatedAt             DateTime           @updatedAt @map("updated_at")
+  messages              Message[]
 
   @@map("conversations")
 }

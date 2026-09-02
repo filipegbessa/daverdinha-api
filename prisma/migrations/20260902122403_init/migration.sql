@@ -56,6 +56,7 @@ CREATE TABLE "conversations" (
     "status" "ConversationStatus" NOT NULL DEFAULT 'bot_active',
     "entry_point" "EntryPoint",
     "invalid_attempts" INTEGER NOT NULL DEFAULT 0,
+    "awaiting_delivery_reply" BOOLEAN NOT NULL DEFAULT false,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
 
