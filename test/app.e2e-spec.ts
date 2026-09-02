@@ -32,4 +32,8 @@ describe('AppController (e2e)', () => {
       .expect(200)
       .expect({ status: 'ok' });
   });
+
+  it('GET /menu-items without a token returns 401', () => {
+    return request(app.getHttpServer()).get('/menu-items').expect(401);
+  });
 });
