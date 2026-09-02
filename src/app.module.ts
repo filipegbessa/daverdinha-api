@@ -6,6 +6,7 @@ import { MenuItemsModule } from './menu-items/menu-items.module';
 import { DeliveryLocationsModule } from './delivery-locations/delivery-locations.module';
 import { WhatsAppModule } from './whatsapp/whatsapp.module';
 import { BotEngineModule } from './bot-engine/bot-engine.module';
+import { ConversationsModule } from './conversations/conversations.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { BotEngineModule } from './bot-engine/bot-engine.module';
     DeliveryLocationsModule,
     WhatsAppModule,
     BotEngineModule,
+    ConversationsModule,
   ],
   controllers: [AppController],
 })
