@@ -22,10 +22,10 @@ async function main() {
   });
 
   const rows = [
-    ...ZONA_SUL.map((nomeRegiao) => ({ zona: 'Zona Sul', nomeRegiao, atendida: true })),
-    ...CENTRO.map((nomeRegiao) => ({ zona: 'Centro', nomeRegiao, atendida: true })),
-    ...ZONA_PORTUARIA.map((nomeRegiao) => ({ zona: 'Zona Portuária', nomeRegiao, atendida: true })),
-    ...ZONA_NORTE.map((nomeRegiao) => ({ zona: 'Zona Norte', nomeRegiao, atendida: true })),
+    ...ZONA_SUL.map((regionName) => ({ zone: 'Zona Sul', regionName, covered: true })),
+    ...CENTRO.map((regionName) => ({ zone: 'Centro', regionName, covered: true })),
+    ...ZONA_PORTUARIA.map((regionName) => ({ zone: 'Zona Portuária', regionName, covered: true })),
+    ...ZONA_NORTE.map((regionName) => ({ zone: 'Zona Norte', regionName, covered: true })),
   ];
 
   for (const row of rows) {
@@ -33,9 +33,9 @@ async function main() {
   }
 
   const menuItems = [
-    { ordem: 0, tema: 'Locais de entrega', tipo: 'entrega' as const, resposta: null, active: true },
-    { ordem: 1, tema: 'Bingo de Plantas', tipo: 'texto' as const, resposta: 'Todo sábado às 16h, aqui na loja! 🌱', active: true },
-    { ordem: 2, tema: 'Falar com um atendente', tipo: 'atendente' as const, resposta: null, active: true },
+    { order: 0, topic: 'Locais de entrega', type: 'entrega' as const, reply: null, active: true },
+    { order: 1, topic: 'Bingo de Plantas', type: 'texto' as const, reply: 'Todo sábado às 16h, aqui na loja! 🌱', active: true },
+    { order: 2, topic: 'Falar com um atendente', type: 'atendente' as const, reply: null, active: true },
   ];
 
   for (const item of menuItems) {

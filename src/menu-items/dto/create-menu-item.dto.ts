@@ -2,17 +2,17 @@ import { IsBoolean, IsIn, IsInt, IsOptional, IsString } from 'class-validator';
 
 export class CreateMenuItemDto {
   @IsInt()
-  ordem: number;
+  order: number;
 
   @IsString()
-  tema: string;
+  topic: string;
 
   @IsIn(['texto', 'entrega', 'atendente'])
-  tipo: 'texto' | 'entrega' | 'atendente';
+  type: 'texto' | 'entrega' | 'atendente';
 
   @IsString()
   @IsOptional()
-  resposta?: string;
+  reply?: string;
 
   @IsBoolean()
   @IsOptional()

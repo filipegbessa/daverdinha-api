@@ -32,25 +32,25 @@ describe('MenuItemsService', () => {
     service = moduleRef.get(MenuItemsService);
   });
 
-  it('list() returns items ordered by ordem ascending', async () => {
+  it('list() returns items ordered by order ascending', async () => {
     prisma.menuItem.findMany.mockResolvedValue([]);
     await service.list();
     expect(prisma.menuItem.findMany).toHaveBeenCalledWith({
-      orderBy: { ordem: 'asc' },
+      orderBy: { order: 'asc' },
     });
   });
 
   it('create() persists a new item', async () => {
     const dto = {
-      tema: 'Bingo de Plantas',
-      tipo: 'texto' as const,
-      resposta: 'Todo sábado às 16h!',
-      ordem: 1,
+      topic: 'Bingo de Plantas',
+      type: 'texto' as const,
+      reply: 'Todo sábado às 16h!',
+      order: 1,
     };
     prisma.menuItem.create.mockResolvedValue({ id: '1', ...dto, active: true });
     const result = await service.create(dto);
     expect(prisma.menuItem.create).toHaveBeenCalledWith({ data: dto });
-    expect(result.tema).toBe('Bingo de Plantas');
+    expect(result.topic).toBe('Bingo de Plantas');
   });
 
   it('update() deactivating an item triggers auto-disable check', async () => {
@@ -72,7 +72,7 @@ describe('MenuItemsService', () => {
     expect(botSettings.autoDisableIfNoActiveMenuItems).toHaveBeenCalled();
   });
 
-  it('reorder() calls update with the right ordem for each id, in a transaction', async () => {
+  it('reorder() calls update with the right order for each id, in a transaction', async () => {
     const updateCalls: any[] = [];
     prisma.menuItem.update.mockImplementation((args: any) => {
       updateCalls.push(args);
@@ -85,8 +85,8 @@ describe('MenuItemsService', () => {
     await service.reorder({ orderedIds: ['b', 'a'] });
 
     expect(updateCalls).toEqual([
-      { where: { id: 'b' }, data: { ordem: 0 } },
-      { where: { id: 'a' }, data: { ordem: 1 } },
+      { where: { id: 'b' }, data: { order: 0 } },
+      { where: { id: 'a' }, data: { order: 1 } },
     ]);
     expect(prisma.$transaction).toHaveBeenCalled();
   });

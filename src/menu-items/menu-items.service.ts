@@ -13,7 +13,7 @@ export class MenuItemsService {
   ) {}
 
   list() {
-    return this.prisma.menuItem.findMany({ orderBy: { ordem: 'asc' } });
+    return this.prisma.menuItem.findMany({ orderBy: { order: 'asc' } });
   }
 
   create(dto: CreateMenuItemDto) {
@@ -38,7 +38,7 @@ export class MenuItemsService {
 
   reorder(dto: ReorderMenuItemsDto) {
     const ops = dto.orderedIds.map((id, index) =>
-      this.prisma.menuItem.update({ where: { id }, data: { ordem: index } }),
+      this.prisma.menuItem.update({ where: { id }, data: { order: index } }),
     );
     return this.prisma.$transaction(ops);
   }

@@ -2,12 +2,12 @@ import { IsBoolean, IsOptional, IsString } from 'class-validator';
 
 export class CreateDeliveryLocationDto {
   @IsString()
-  zona: string;
+  zone: string;
 
   @IsString()
-  nomeRegiao: string;
+  regionName: string;
 
   @IsBoolean()
   @IsOptional()
-  atendida?: boolean;
+  covered?: boolean;
 }

@@ -29,10 +29,10 @@ enum MenuItemType {
 
 model MenuItem {
   id        String       @id @default(uuid())
-  ordem     Int
-  tema      String
-  tipo      MenuItemType
-  resposta  String?
+  order     Int
+  topic     String
+  type      MenuItemType
+  reply     String?
   active    Boolean      @default(true)
   createdAt DateTime     @default(now()) @map("created_at")
   updatedAt DateTime     @updatedAt @map("updated_at")
@@ -42,9 +42,9 @@ model MenuItem {
 
 model DeliveryLocation {
   id         String   @id @default(uuid())
-  zona       String
-  nomeRegiao String   @map("nome_regiao")
-  atendida   Boolean  @default(true)
+  zone       String
+  regionName String   @map("region_name")
+  covered    Boolean  @default(true)
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @updatedAt @map("updated_at")
 
@@ -63,8 +63,8 @@ enum EntryPoint {
 
 model Conversation {
   id              String              @id @default(uuid())
-  telefone        String
-  nome            String?
+  phone           String
+  name            String?
   status          ConversationStatus  @default(bot_active)
   entryPoint      EntryPoint?         @map("entry_point")
   invalidAttempts Int                 @default(0) @map("invalid_attempts")

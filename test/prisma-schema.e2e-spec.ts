@@ -15,14 +15,14 @@ describe('Prisma schema + seed', () => {
   it('seeds 28 delivery locations covering 4 zones', async () => {
     const count = await prisma.deliveryLocation.count();
     expect(count).toBe(28);
-    const zonas = await prisma.deliveryLocation.groupBy({ by: ['zona'] });
-    expect(zonas.map((z) => z.zona).sort()).toEqual(['Centro', 'Zona Norte', 'Zona Portuária', 'Zona Sul']);
+    const zonas = await prisma.deliveryLocation.groupBy({ by: ['zone'] });
+    expect(zonas.map((z) => z.zone).sort()).toEqual(['Centro', 'Zona Norte', 'Zona Portuária', 'Zona Sul']);
   });
 
-  it('seeds 3 menu items covering all tipo values', async () => {
+  it('seeds 3 menu items covering all type values', async () => {
     const count = await prisma.menuItem.count();
     expect(count).toBe(3);
-    const tipos = await prisma.menuItem.groupBy({ by: ['tipo'] });
-    expect(tipos.map((t) => t.tipo).sort()).toEqual(['atendente', 'entrega', 'texto']);
+    const tipos = await prisma.menuItem.groupBy({ by: ['type'] });
+    expect(tipos.map((t) => t.type).sort()).toEqual(['atendente', 'entrega', 'texto']);
   });
 });

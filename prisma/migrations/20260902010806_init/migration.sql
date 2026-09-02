@@ -25,10 +25,10 @@ CREATE TABLE "bot_settings" (
 -- CreateTable
 CREATE TABLE "menu_items" (
     "id" TEXT NOT NULL,
-    "ordem" INTEGER NOT NULL,
-    "tema" TEXT NOT NULL,
-    "tipo" "MenuItemType" NOT NULL,
-    "resposta" TEXT,
+    "order" INTEGER NOT NULL,
+    "topic" TEXT NOT NULL,
+    "type" "MenuItemType" NOT NULL,
+    "reply" TEXT,
     "active" BOOLEAN NOT NULL DEFAULT true,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
@@ -39,9 +39,9 @@ CREATE TABLE "menu_items" (
 -- CreateTable
 CREATE TABLE "delivery_locations" (
     "id" TEXT NOT NULL,
-    "zona" TEXT NOT NULL,
-    "nome_regiao" TEXT NOT NULL,
-    "atendida" BOOLEAN NOT NULL DEFAULT true,
+    "zone" TEXT NOT NULL,
+    "region_name" TEXT NOT NULL,
+    "covered" BOOLEAN NOT NULL DEFAULT true,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
 
@@ -51,8 +51,8 @@ CREATE TABLE "delivery_locations" (
 -- CreateTable
 CREATE TABLE "conversations" (
     "id" TEXT NOT NULL,
-    "telefone" TEXT NOT NULL,
-    "nome" TEXT,
+    "phone" TEXT NOT NULL,
+    "name" TEXT,
     "status" "ConversationStatus" NOT NULL DEFAULT 'bot_active',
     "entry_point" "EntryPoint",
     "invalid_attempts" INTEGER NOT NULL DEFAULT 0,
