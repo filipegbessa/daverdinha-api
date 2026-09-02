@@ -1,6 +1,6 @@
 # daverdinha-api
 
-Backend do bot de atendimento da Da Verdinha (NestJS + Prisma + Postgres).
+Backend do bot de atendimento da Daverdinha (NestJS + Prisma + Postgres).
 
 ## Setup local
 

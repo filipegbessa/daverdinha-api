@@ -15,7 +15,7 @@ async function main() {
     create: {
       id: 1,
       botEnabled: false,
-      welcomeMessage: 'Oi! Que bom te ver por aqui 🌱 Bem-vinda(o) à Da Verdinha — um espaço pra plantar, criar e brindar. Como posso te ajudar hoje?',
+      welcomeMessage: 'Oi! Que bom te ver por aqui 🌱 Bem-vinda(o) à Daverdinha — um espaço pra plantar, criar e brindar. Como posso te ajudar hoje?',
       deliveryPrompt: 'Qual o bairro ou região da entrega?',
       deliveryWaitMessage: 'Show, a gente atende sua região 🌿 Aguarde só um instante que já te chamamos por aqui pra fechar os detalhes.',
     },
