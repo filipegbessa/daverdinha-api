@@ -8,10 +8,18 @@ describe('DeliveryLocationsService', () => {
 
   beforeEach(async () => {
     prisma = {
-      deliveryLocation: { findMany: jest.fn(), create: jest.fn(), update: jest.fn(), delete: jest.fn() },
+      deliveryLocation: {
+        findMany: jest.fn(),
+        create: jest.fn(),
+        update: jest.fn(),
+        delete: jest.fn(),
+      },
     };
     const moduleRef = await Test.createTestingModule({
-      providers: [DeliveryLocationsService, { provide: PrismaService, useValue: prisma }],
+      providers: [
+        DeliveryLocationsService,
+        { provide: PrismaService, useValue: prisma },
+      ],
     }).compile();
     service = moduleRef.get(DeliveryLocationsService);
   });
@@ -33,15 +41,23 @@ describe('DeliveryLocationsService', () => {
   });
 
   it('update() patches an existing location', async () => {
-    prisma.deliveryLocation.update.mockResolvedValue({ id: '1', covered: false });
+    prisma.deliveryLocation.update.mockResolvedValue({
+      id: '1',
+      covered: false,
+    });
     const result = await service.update('1', { covered: false });
-    expect(prisma.deliveryLocation.update).toHaveBeenCalledWith({ where: { id: '1' }, data: { covered: false } });
+    expect(prisma.deliveryLocation.update).toHaveBeenCalledWith({
+      where: { id: '1' },
+      data: { covered: false },
+    });
     expect(result.covered).toBe(false);
   });
 
   it('remove() deletes a location', async () => {
     prisma.deliveryLocation.delete.mockResolvedValue({ id: '1' });
     await service.remove('1');
-    expect(prisma.deliveryLocation.delete).toHaveBeenCalledWith({ where: { id: '1' } });
+    expect(prisma.deliveryLocation.delete).toHaveBeenCalledWith({
+      where: { id: '1' },
+    });
   });
 });

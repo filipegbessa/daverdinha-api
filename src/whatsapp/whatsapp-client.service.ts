@@ -43,7 +43,9 @@ export class WhatsAppClientService {
 
     if (!response.ok) {
       const errorBody = await response.json();
-      throw new Error(errorBody?.error?.message ?? `WhatsApp API error (${response.status})`);
+      throw new Error(
+        errorBody?.error?.message ?? `WhatsApp API error (${response.status})`,
+      );
     }
   }
 }

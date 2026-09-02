@@ -8,7 +8,9 @@ export class DeliveryLocationsService {
   constructor(private readonly prisma: PrismaService) {}
 
   list() {
-    return this.prisma.deliveryLocation.findMany({ orderBy: [{ zone: 'asc' }, { regionName: 'asc' }] });
+    return this.prisma.deliveryLocation.findMany({
+      orderBy: [{ zone: 'asc' }, { regionName: 'asc' }],
+    });
   }
 
   create(dto: CreateDeliveryLocationDto) {
@@ -20,6 +22,8 @@ export class DeliveryLocationsService {
   }
 
   remove(id: string) {
-    return this.prisma.deliveryLocation.delete({ where: { id } }).then(() => undefined);
+    return this.prisma.deliveryLocation
+      .delete({ where: { id } })
+      .then(() => undefined);
   }
 }
