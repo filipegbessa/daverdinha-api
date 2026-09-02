@@ -10,7 +10,83 @@ generator client {
   provider = "prisma-client-js"
 }
 
-// Placeholder model - will be replaced with real models in Task 2
-model Placeholder {
-  id Int @id @default(autoincrement())
+model BotSettings {
+  id                  Int      @id @default(1)
+  botEnabled          Boolean  @default(false) @map("bot_enabled")
+  welcomeMessage      String   @map("welcome_message")
+  deliveryPrompt      String   @map("delivery_prompt")
+  deliveryWaitMessage String   @map("delivery_wait_message")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  @@map("bot_settings")
+}
+
+enum MenuItemType {
+  texto
+  entrega
+  atendente
+}
+
+model MenuItem {
+  id        String       @id @default(uuid())
+  ordem     Int
+  tema      String
+  tipo      MenuItemType
+  resposta  String?
+  active    Boolean      @default(true)
+  createdAt DateTime     @default(now()) @map("created_at")
+  updatedAt DateTime     @updatedAt @map("updated_at")
+
+  @@map("menu_items")
+}
+
+model DeliveryLocation {
+  id         String   @id @default(uuid())
+  zona       String
+  nomeRegiao String   @map("nome_regiao")
+  atendida   Boolean  @default(true)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@map("delivery_locations")
+}
+
+enum ConversationStatus {
+  bot_active
+  paused_human
+}
+
+enum EntryPoint {
+  menu
+  catalog
+}
+
+model Conversation {
+  id              String              @id @default(uuid())
+  telefone        String
+  nome            String?
+  status          ConversationStatus  @default(bot_active)
+  entryPoint      EntryPoint?         @map("entry_point")
+  invalidAttempts Int                 @default(0) @map("invalid_attempts")
+  createdAt       DateTime            @default(now()) @map("created_at")
+  updatedAt       DateTime            @updatedAt @map("updated_at")
+  messages        Message[]
+
+  @@map("conversations")
+}
+
+enum MessageDirection {
+  inbound
+  outbound
+}
+
+model Message {
+  id             String           @id @default(uuid())
+  conversationId String           @map("conversation_id")
+  conversation   Conversation     @relation(fields: [conversationId], references: [id])
+  direction      MessageDirection
+  body           String
+  createdAt      DateTime         @default(now()) @map("created_at")
+
+  @@map("messages")
 }
