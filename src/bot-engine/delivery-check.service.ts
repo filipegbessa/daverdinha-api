@@ -17,6 +17,13 @@ export class DeliveryCheckService {
   async start(conversation: { id: string; phone: string }): Promise<void> {
     const settings = await this.botSettings.get();
     await this.whatsapp.sendText(conversation.phone, settings.deliveryPrompt);
+    await this.prisma.message.create({
+      data: {
+        conversationId: conversation.id,
+        direction: 'outbound',
+        body: settings.deliveryPrompt,
+      },
+    });
     await this.prisma.conversation.update({
       where: { id: conversation.id },
       data: { awaitingDeliveryReply: true },
@@ -44,6 +51,13 @@ export class DeliveryCheckService {
     if (match.covered) {
       const settings = await this.botSettings.get();
       await this.whatsapp.sendText(conversation.phone, settings.deliveryWaitMessage);
+      await this.prisma.message.create({
+        data: {
+          conversationId: conversation.id,
+          direction: 'outbound',
+          body: settings.deliveryWaitMessage,
+        },
+      });
       await this.prisma.conversation.update({
         where: { id: conversation.id },
         data: { awaitingDeliveryReply: false, status: 'paused_human' },
@@ -51,10 +65,15 @@ export class DeliveryCheckService {
       return;
     }
 
-    await this.whatsapp.sendText(
-      conversation.phone,
-      'Poxa, ainda não entregamos nessa região 💚',
-    );
+    const notCoveredMessage = 'Poxa, ainda não entregamos nessa região 💚';
+    await this.whatsapp.sendText(conversation.phone, notCoveredMessage);
+    await this.prisma.message.create({
+      data: {
+        conversationId: conversation.id,
+        direction: 'outbound',
+        body: notCoveredMessage,
+      },
+    });
     await this.prisma.conversation.update({
       where: { id: conversation.id },
       data: { awaitingDeliveryReply: false },

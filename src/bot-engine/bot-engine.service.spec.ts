@@ -159,4 +159,38 @@ describe('BotEngineService', () => {
     expect(whatsapp.sendInteractiveList).not.toHaveBeenCalled();
     expect(prisma.conversation.update).not.toHaveBeenCalled();
   });
+
+  it('a message with context.referred_product creates the conversation with entry_point catalog and skips the menu', async () => {
+    prisma.conversation.findFirst.mockResolvedValue(null);
+    prisma.conversation.create.mockResolvedValue({ id: 'c1', phone: '5521999999999', status: 'bot_active', invalidAttempts: 0, awaitingDeliveryReply: false });
+
+    await service.handleIncomingMessage({
+      entry: [{ changes: [{ value: { messages: [{
+        from: '5521999999999',
+        type: 'text',
+        text: { body: 'Tenho interesse nesse vaso' },
+        context: { referred_product: { catalog_id: 'cat1', product_retailer_id: 'prod1' } },
+      }] } }] }],
+    });
+
+    expect(prisma.conversation.create).toHaveBeenCalledWith({
+      data: { phone: '5521999999999', status: 'bot_active', entryPoint: 'catalog' },
+    });
+    expect(deliveryCheck.start).toHaveBeenCalledWith(expect.objectContaining({ id: 'c1' }));
+    expect(whatsapp.sendInteractiveList).not.toHaveBeenCalled();
+  });
+
+  it('persists every inbound message and every outbound bot reply', async () => {
+    const conversation = { id: 'c1', phone: '5521999999999', status: 'bot_active', invalidAttempts: 0, awaitingDeliveryReply: false };
+    prisma.conversation.findFirst.mockResolvedValue(conversation);
+
+    await service.handleIncomingMessage(textMessagePayload('5521999999999', 'oi'));
+
+    expect(prisma.message.create).toHaveBeenCalledWith({
+      data: { conversationId: 'c1', direction: 'inbound', body: 'oi' },
+    });
+    expect(prisma.message.create).toHaveBeenCalledWith({
+      data: { conversationId: 'c1', direction: 'outbound', body: 'Bem-vinda(o)!' },
+    });
+  });
 });

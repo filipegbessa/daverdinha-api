@@ -18,7 +18,7 @@ describe('DeliveryCheckService', () => {
   ];
 
   beforeEach(async () => {
-    prisma = { conversation: { update: jest.fn() } };
+    prisma = { conversation: { update: jest.fn() }, message: { create: jest.fn() } };
     whatsapp = { sendText: jest.fn() };
     botSettings = {
       get: jest
@@ -44,6 +44,9 @@ describe('DeliveryCheckService', () => {
     const conversation = { id: 'c1', phone: '5521999999999' };
     await service.start(conversation);
     expect(whatsapp.sendText).toHaveBeenCalledWith('5521999999999', 'Qual o bairro?');
+    expect(prisma.message.create).toHaveBeenCalledWith({
+      data: { conversationId: 'c1', direction: 'outbound', body: 'Qual o bairro?' },
+    });
     expect(prisma.conversation.update).toHaveBeenCalledWith({
       where: { id: 'c1' },
       data: { awaitingDeliveryReply: true },
@@ -54,6 +57,9 @@ describe('DeliveryCheckService', () => {
     const conversation = { id: 'c1', phone: '5521999999999' };
     await service.handleReply(conversation, 'ipanema');
     expect(whatsapp.sendText).toHaveBeenCalledWith('5521999999999', 'Aguarde!');
+    expect(prisma.message.create).toHaveBeenCalledWith({
+      data: { conversationId: 'c1', direction: 'outbound', body: 'Aguarde!' },
+    });
     expect(prisma.conversation.update).toHaveBeenCalledWith({
       where: { id: 'c1' },
       data: { awaitingDeliveryReply: false, status: 'paused_human' },
@@ -67,6 +73,13 @@ describe('DeliveryCheckService', () => {
       '5521999999999',
       expect.stringContaining('não'),
     );
+    expect(prisma.message.create).toHaveBeenCalledWith({
+      data: {
+        conversationId: 'c1',
+        direction: 'outbound',
+        body: expect.stringContaining('não'),
+      },
+    });
     expect(prisma.conversation.update).toHaveBeenCalledWith({
       where: { id: 'c1' },
       data: { awaitingDeliveryReply: false },

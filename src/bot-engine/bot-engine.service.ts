@@ -34,6 +34,16 @@ export class BotEngineService {
       !!message.referredProductId,
     );
 
+    if (message.text?.body) {
+      await this.prisma.message.create({
+        data: {
+          conversationId: conversation.id,
+          direction: 'inbound',
+          body: message.text.body,
+        },
+      });
+    }
+
     if (conversation.status === 'paused_human') {
       return;
     }
@@ -92,6 +102,14 @@ export class BotEngineService {
     );
 
     await this.whatsapp.sendText(conversation.phone, settings.welcomeMessage);
+    await this.prisma.message.create({
+      data: {
+        conversationId: conversation.id,
+        direction: 'outbound',
+        body: settings.welcomeMessage,
+      },
+    });
+
     await this.whatsapp.sendInteractiveList(
       conversation.phone,
       'Como posso te ajudar hoje?',
@@ -122,6 +140,13 @@ export class BotEngineService {
     switch (selected.type) {
       case 'texto':
         await this.whatsapp.sendText(conversation.phone, selected.reply ?? '');
+        await this.prisma.message.create({
+          data: {
+            conversationId: conversation.id,
+            direction: 'outbound',
+            body: selected.reply ?? '',
+          },
+        });
         break;
       case 'entrega':
         await this.deliveryCheck.start(conversation);
