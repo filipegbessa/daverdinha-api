@@ -27,13 +27,14 @@ describe('BotEngineService', () => {
   let prisma: any;
   let whatsapp: { sendText: jest.Mock; sendInteractiveList: jest.Mock };
   let botSettings: { get: jest.Mock };
-  let menuItems: { list: jest.Mock };
+  let menuItems: { list: jest.Mock; findOne: jest.Mock };
   let deliveryCheck: { start: jest.Mock; handleReply: jest.Mock };
 
   const activeMenu = [
     { id: 'm1', order: 0, topic: 'Locais de entrega', type: 'entrega', reply: null, active: true },
     { id: 'm2', order: 1, topic: 'Bingo de Plantas', type: 'texto', reply: 'Todo sábado às 16h!', active: true },
     { id: 'm3', order: 2, topic: 'Falar com um atendente', type: 'atendente', reply: null, active: true },
+    { id: 'm4', order: 3, topic: 'Aulas de jardinagem', type: 'pergunta', reply: null, question: 'Qual dia você prefere?', noMatchReply: 'Não entendi o dia, vou te chamar um atendente!', active: true },
   ];
 
   beforeEach(async () => {
@@ -50,7 +51,7 @@ describe('BotEngineService', () => {
         invalidAttemptsExceededMessage: 'Vou te chamar um atendente, só um instante!',
       }),
     };
-    menuItems = { list: jest.fn().mockResolvedValue(activeMenu) };
+    menuItems = { list: jest.fn().mockResolvedValue(activeMenu), findOne: jest.fn() };
     deliveryCheck = { start: jest.fn(), handleReply: jest.fn() };
 
     const moduleRef = await Test.createTestingModule({
@@ -85,6 +86,7 @@ describe('BotEngineService', () => {
         { id: 'm1', title: 'Locais de entrega' },
         { id: 'm2', title: 'Bingo de Plantas' },
         { id: 'm3', title: 'Falar com um atendente' },
+        { id: 'm4', title: 'Aulas de jardinagem' },
       ],
     );
   });
@@ -136,13 +138,13 @@ describe('BotEngineService', () => {
   it('an "atendente" item with a reply configured sends it before handing off', async () => {
     menuItems.list.mockResolvedValue([
       ...activeMenu,
-      { id: 'm4', order: 3, topic: 'Falar com o financeiro', type: 'atendente', reply: 'Já vou te chamar um atendente do financeiro!', active: true },
+      { id: 'm5', order: 4, topic: 'Falar com o financeiro', type: 'atendente', reply: 'Já vou te chamar um atendente do financeiro!', active: true },
     ]);
     const conversation = { id: 'c1', phone: '5521999999999', status: 'bot_active', invalidAttempts: 0, awaitingDeliveryReply: false };
     prisma.conversation.findFirst.mockResolvedValue(conversation);
 
     await service.handleIncomingMessage({
-      entry: [{ changes: [{ value: { messages: [{ from: '5521999999999', type: 'interactive', interactive: { list_reply: { id: 'm4' } } }] } }] }],
+      entry: [{ changes: [{ value: { messages: [{ from: '5521999999999', type: 'interactive', interactive: { list_reply: { id: 'm5' } } }] } }] }],
     });
 
     expect(whatsapp.sendText).toHaveBeenCalledWith('5521999999999', 'Já vou te chamar um atendente do financeiro!');
@@ -300,6 +302,7 @@ describe('BotEngineService', () => {
         { id: 'm1', title: 'Locais de entrega' },
         { id: 'm2', title: 'Bingo de Plantas' },
         { id: 'm3', title: 'Falar com um atendente' },
+        { id: 'm4', title: 'Aulas de jardinagem' },
       ],
     );
     expect(prisma.message.create).toHaveBeenCalledWith({
@@ -316,6 +319,7 @@ describe('BotEngineService', () => {
     expect(menuMessageCall[0].data.body).toContain('Locais de entrega');
     expect(menuMessageCall[0].data.body).toContain('Bingo de Plantas');
     expect(menuMessageCall[0].data.body).toContain('Falar com um atendente');
+    expect(menuMessageCall[0].data.body).toContain('Aulas de jardinagem');
   });
 
   it('persists an inbound interactive list-reply tap using the human-readable title, not the opaque item id', async () => {
@@ -349,5 +353,91 @@ describe('BotEngineService', () => {
     expect(prisma.message.create).not.toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ direction: 'inbound' }) }),
     );
+  });
+
+  it('selecting a "pergunta" item sends its question and marks the conversation as awaiting that item\'s answer', async () => {
+    const conversation = { id: 'c1', phone: '5521999999999', status: 'bot_active', invalidAttempts: 0, awaitingDeliveryReply: false };
+    prisma.conversation.findFirst.mockResolvedValue(conversation);
+
+    await service.handleIncomingMessage({
+      entry: [{ changes: [{ value: { messages: [{ from: '5521999999999', type: 'interactive', interactive: { list_reply: { id: 'm4' } } }] } }] }],
+    });
+
+    expect(whatsapp.sendText).toHaveBeenCalledWith('5521999999999', 'Qual dia você prefere?');
+    expect(prisma.conversation.update).toHaveBeenCalledWith({
+      where: { id: 'c1' },
+      data: { awaitingMenuItemAnswerId: 'm4' },
+    });
+  });
+
+  it('routes a free-text reply to handleMenuItemAnswerReply when awaiting a menu-item answer', async () => {
+    const conversation = { id: 'c1', phone: '5521999999999', status: 'bot_active', invalidAttempts: 0, awaitingDeliveryReply: false, awaitingMenuItemAnswerId: 'm4' };
+    prisma.conversation.findFirst.mockResolvedValue(conversation);
+    menuItems.findOne.mockResolvedValue({
+      id: 'm4',
+      noMatchReply: 'Não entendi o dia, vou te chamar um atendente!',
+      answerOptions: [
+        { keywords: ['sabado'], reply: 'Perfeito, sábado às 10h!' },
+        { keywords: ['domingo'], reply: 'Show, domingo às 10h!' },
+      ],
+    });
+
+    await service.handleIncomingMessage(textMessagePayload('5521999999999', 'Sábado'));
+
+    expect(menuItems.findOne).toHaveBeenCalledWith('m4');
+    expect(whatsapp.sendText).toHaveBeenCalledWith('5521999999999', 'Perfeito, sábado às 10h!');
+    expect(prisma.message.create).toHaveBeenCalledWith({
+      data: { conversationId: 'c1', direction: 'outbound', body: 'Perfeito, sábado às 10h!' },
+    });
+    expect(prisma.conversation.update).toHaveBeenCalledWith({
+      where: { id: 'c1' },
+      data: { awaitingMenuItemAnswerId: null, status: 'paused_human' },
+    });
+  });
+
+  it('when the reply matches no answer option, sends the item\'s noMatchReply and still hands off', async () => {
+    const conversation = { id: 'c1', phone: '5521999999999', status: 'bot_active', invalidAttempts: 0, awaitingDeliveryReply: false, awaitingMenuItemAnswerId: 'm4' };
+    prisma.conversation.findFirst.mockResolvedValue(conversation);
+    menuItems.findOne.mockResolvedValue({
+      id: 'm4',
+      noMatchReply: 'Não entendi o dia, vou te chamar um atendente!',
+      answerOptions: [{ keywords: ['sabado'], reply: 'Perfeito, sábado às 10h!' }],
+    });
+
+    await service.handleIncomingMessage(textMessagePayload('5521999999999', 'quarta-feira'));
+
+    expect(whatsapp.sendText).toHaveBeenCalledWith('5521999999999', 'Não entendi o dia, vou te chamar um atendente!');
+    expect(prisma.conversation.update).toHaveBeenCalledWith({
+      where: { id: 'c1' },
+      data: { awaitingMenuItemAnswerId: null, status: 'paused_human' },
+    });
+  });
+
+  it('matches an answer option regardless of accents/case, like the delivery flow', async () => {
+    const conversation = { id: 'c1', phone: '5521999999999', status: 'bot_active', invalidAttempts: 0, awaitingDeliveryReply: false, awaitingMenuItemAnswerId: 'm4' };
+    prisma.conversation.findFirst.mockResolvedValue(conversation);
+    menuItems.findOne.mockResolvedValue({
+      id: 'm4',
+      noMatchReply: 'Não entendi.',
+      answerOptions: [{ keywords: ['sabado'], reply: 'Perfeito, sábado às 10h!' }],
+    });
+
+    await service.handleIncomingMessage(textMessagePayload('5521999999999', 'SÁBADO'));
+
+    expect(whatsapp.sendText).toHaveBeenCalledWith('5521999999999', 'Perfeito, sábado às 10h!');
+  });
+
+  it('falls back to a generic message when the item has no noMatchReply configured and nothing matches', async () => {
+    const conversation = { id: 'c1', phone: '5521999999999', status: 'bot_active', invalidAttempts: 0, awaitingDeliveryReply: false, awaitingMenuItemAnswerId: 'm4' };
+    prisma.conversation.findFirst.mockResolvedValue(conversation);
+    menuItems.findOne.mockResolvedValue({
+      id: 'm4',
+      noMatchReply: null,
+      answerOptions: [{ keywords: ['sabado'], reply: 'Perfeito!' }],
+    });
+
+    await service.handleIncomingMessage(textMessagePayload('5521999999999', 'terça'));
+
+    expect(whatsapp.sendText).toHaveBeenCalledWith('5521999999999', 'Não entendi sua resposta, vou te chamar um atendente!');
   });
 });

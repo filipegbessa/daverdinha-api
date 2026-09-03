@@ -4,8 +4,10 @@ import { WhatsAppClientService } from '../whatsapp/whatsapp-client.service';
 import { BotSettingsService } from '../bot-settings/bot-settings.service';
 import { MenuItemsService } from '../menu-items/menu-items.service';
 import { DeliveryCheckService } from './delivery-check.service';
+import { normalizeText } from '../common/normalize-text';
 
 const MAX_INVALID_ATTEMPTS = 3;
+const DEFAULT_NO_MATCH_REPLY = 'Não entendi sua resposta, vou te chamar um atendente!';
 
 interface IncomingMessage {
   from: string;
@@ -70,6 +72,11 @@ export class BotEngineService {
 
     if (conversation.awaitingDeliveryReply && message.text?.body) {
       await this.deliveryCheck.handleReply(conversation, message.text.body);
+      return;
+    }
+
+    if (conversation.awaitingMenuItemAnswerId && message.text?.body) {
+      await this.handleMenuItemAnswerReply(conversation, message.text.body);
       return;
     }
 
@@ -200,7 +207,48 @@ export class BotEngineService {
           data: { status: 'paused_human' },
         });
         break;
+      case 'pergunta':
+        await this.whatsapp.sendText(conversation.phone, selected.question ?? '');
+        await this.prisma.message.create({
+          data: {
+            conversationId: conversation.id,
+            direction: 'outbound',
+            body: selected.question ?? '',
+          },
+        });
+        await this.prisma.conversation.update({
+          where: { id: conversation.id },
+          data: { awaitingMenuItemAnswerId: selected.id },
+        });
+        break;
     }
+  }
+
+  private async handleMenuItemAnswerReply(
+    conversation: { id: string; phone: string; awaitingMenuItemAnswerId: string | null },
+    text: string,
+  ) {
+    const item = conversation.awaitingMenuItemAnswerId
+      ? await this.menuItems.findOne(conversation.awaitingMenuItemAnswerId)
+      : null;
+    const normalizedInput = normalizeText(text);
+    const match = item?.answerOptions?.find((option: { keywords: string[] }) =>
+      option.keywords.some((keyword) => normalizedInput.includes(normalizeText(keyword))),
+    );
+
+    const replyText = match?.reply ?? item?.noMatchReply ?? DEFAULT_NO_MATCH_REPLY;
+    await this.whatsapp.sendText(conversation.phone, replyText);
+    await this.prisma.message.create({
+      data: {
+        conversationId: conversation.id,
+        direction: 'outbound',
+        body: replyText,
+      },
+    });
+    await this.prisma.conversation.update({
+      where: { id: conversation.id },
+      data: { awaitingMenuItemAnswerId: null, status: 'paused_human' },
+    });
   }
 
   private async registerInvalidAttempt(conversation: {
