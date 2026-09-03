@@ -176,11 +176,25 @@ export class BotEngineService {
             body: selected.reply ?? '',
           },
         });
+        await this.prisma.conversation.update({
+          where: { id: conversation.id },
+          data: { status: 'paused_human' },
+        });
         break;
       case 'entrega':
         await this.deliveryCheck.start(conversation);
         break;
       case 'atendente':
+        if (selected.reply) {
+          await this.whatsapp.sendText(conversation.phone, selected.reply);
+          await this.prisma.message.create({
+            data: {
+              conversationId: conversation.id,
+              direction: 'outbound',
+              body: selected.reply,
+            },
+          });
+        }
         await this.prisma.conversation.update({
           where: { id: conversation.id },
           data: { status: 'paused_human' },
@@ -197,6 +211,15 @@ export class BotEngineService {
     const attempts = conversation.invalidAttempts + 1;
 
     if (attempts >= MAX_INVALID_ATTEMPTS) {
+      const settings = await this.botSettings.get();
+      await this.whatsapp.sendText(conversation.phone, settings.invalidAttemptsExceededMessage);
+      await this.prisma.message.create({
+        data: {
+          conversationId: conversation.id,
+          direction: 'outbound',
+          body: settings.invalidAttemptsExceededMessage,
+        },
+      });
       await this.prisma.conversation.update({
         where: { id: conversation.id },
         data: { status: 'paused_human', invalidAttempts: attempts },

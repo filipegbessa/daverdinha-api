@@ -43,9 +43,12 @@ describe('BotEngineService', () => {
     };
     whatsapp = { sendText: jest.fn(), sendInteractiveList: jest.fn() };
     botSettings = {
-      get: jest
-        .fn()
-        .mockResolvedValue({ botEnabled: true, welcomeMessage: 'Bem-vinda(o)!', menuPrompt: 'Escolha uma opção 🌱' }),
+      get: jest.fn().mockResolvedValue({
+        botEnabled: true,
+        welcomeMessage: 'Bem-vinda(o)!',
+        menuPrompt: 'Escolha uma opção 🌱',
+        invalidAttemptsExceededMessage: 'Vou te chamar um atendente, só um instante!',
+      }),
     };
     menuItems = { list: jest.fn().mockResolvedValue(activeMenu) };
     deliveryCheck = { start: jest.fn(), handleReply: jest.fn() };
@@ -117,6 +120,61 @@ describe('BotEngineService', () => {
     });
 
     expect(prisma.conversation.update).toHaveBeenCalledWith({ where: { id: 'c1' }, data: { status: 'paused_human' } });
+  });
+
+  it('after a "texto" item replies, hands off to a human', async () => {
+    const conversation = { id: 'c1', phone: '5521999999999', status: 'bot_active', invalidAttempts: 0, awaitingDeliveryReply: false };
+    prisma.conversation.findFirst.mockResolvedValue(conversation);
+
+    await service.handleIncomingMessage({
+      entry: [{ changes: [{ value: { messages: [{ from: '5521999999999', type: 'interactive', interactive: { list_reply: { id: 'm2' } } }] } }] }],
+    });
+
+    expect(prisma.conversation.update).toHaveBeenCalledWith({ where: { id: 'c1' }, data: { status: 'paused_human' } });
+  });
+
+  it('an "atendente" item with a reply configured sends it before handing off', async () => {
+    menuItems.list.mockResolvedValue([
+      ...activeMenu,
+      { id: 'm4', order: 3, topic: 'Falar com o financeiro', type: 'atendente', reply: 'Já vou te chamar um atendente do financeiro!', active: true },
+    ]);
+    const conversation = { id: 'c1', phone: '5521999999999', status: 'bot_active', invalidAttempts: 0, awaitingDeliveryReply: false };
+    prisma.conversation.findFirst.mockResolvedValue(conversation);
+
+    await service.handleIncomingMessage({
+      entry: [{ changes: [{ value: { messages: [{ from: '5521999999999', type: 'interactive', interactive: { list_reply: { id: 'm4' } } }] } }] }],
+    });
+
+    expect(whatsapp.sendText).toHaveBeenCalledWith('5521999999999', 'Já vou te chamar um atendente do financeiro!');
+    expect(prisma.message.create).toHaveBeenCalledWith({
+      data: { conversationId: 'c1', direction: 'outbound', body: 'Já vou te chamar um atendente do financeiro!' },
+    });
+    expect(prisma.conversation.update).toHaveBeenCalledWith({ where: { id: 'c1' }, data: { status: 'paused_human' } });
+  });
+
+  it('an "atendente" item with no reply configured stays silent before handing off (existing behavior)', async () => {
+    const conversation = { id: 'c1', phone: '5521999999999', status: 'bot_active', invalidAttempts: 0, awaitingDeliveryReply: false };
+    prisma.conversation.findFirst.mockResolvedValue(conversation);
+
+    await service.handleIncomingMessage({
+      entry: [{ changes: [{ value: { messages: [{ from: '5521999999999', type: 'interactive', interactive: { list_reply: { id: 'm3' } } }] } }] }],
+    });
+
+    expect(whatsapp.sendText).not.toHaveBeenCalled();
+    expect(prisma.conversation.update).toHaveBeenCalledWith({ where: { id: 'c1' }, data: { status: 'paused_human' } });
+  });
+
+  it('the 3rd invalid reply sends the escalation message before handing off', async () => {
+    const conversation = { id: 'c1', phone: '5521999999999', status: 'bot_active', invalidAttempts: 2, awaitingDeliveryReply: false };
+    prisma.conversation.findFirst.mockResolvedValue(conversation);
+
+    await service.handleIncomingMessage(textMessagePayload('5521999999999', 'blablabla'));
+
+    expect(whatsapp.sendText).toHaveBeenCalledWith('5521999999999', 'Vou te chamar um atendente, só um instante!');
+    expect(prisma.conversation.update).toHaveBeenCalledWith({
+      where: { id: 'c1' },
+      data: { status: 'paused_human', invalidAttempts: 3 },
+    });
   });
 
   it('an invalid free-text reply increments invalidAttempts and re-sends the menu, without escalating below 3', async () => {
