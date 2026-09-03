@@ -21,9 +21,12 @@ describe('DeliveryCheckService', () => {
     prisma = { conversation: { update: jest.fn() }, message: { create: jest.fn() } };
     whatsapp = { sendText: jest.fn() };
     botSettings = {
-      get: jest
-        .fn()
-        .mockResolvedValue({ deliveryPrompt: 'Qual o bairro?', deliveryWaitMessage: 'Aguarde!' }),
+      get: jest.fn().mockResolvedValue({
+        deliveryPrompt: 'Qual o bairro?',
+        deliveryWaitMessage: 'Aguarde!',
+        deliveryNotCoveredMessage: 'Ainda não chegamos aí, mas em breve!',
+        deliveryUnrecognizedMessage: 'Não reconheci esse bairro, vou te chamar um atendente!',
+      }),
     };
     deliveryLocations = { list: jest.fn().mockResolvedValue(locations) };
 
@@ -66,29 +69,34 @@ describe('DeliveryCheckService', () => {
     });
   });
 
-  it('handleReply() with a non-covered region informs the person and clears the awaiting flag without escalating', async () => {
+  it('handleReply() with a non-covered region sends the configurable not-covered message and hands off to a human', async () => {
     const conversation = { id: 'c1', phone: '5521999999999' };
     await service.handleReply(conversation, 'barra da tijuca');
-    expect(whatsapp.sendText).toHaveBeenCalledWith(
-      '5521999999999',
-      expect.stringContaining('não'),
-    );
+    expect(whatsapp.sendText).toHaveBeenCalledWith('5521999999999', 'Ainda não chegamos aí, mas em breve!');
     expect(prisma.message.create).toHaveBeenCalledWith({
       data: {
         conversationId: 'c1',
         direction: 'outbound',
-        body: expect.stringContaining('não'),
+        body: 'Ainda não chegamos aí, mas em breve!',
       },
     });
     expect(prisma.conversation.update).toHaveBeenCalledWith({
       where: { id: 'c1' },
-      data: { awaitingDeliveryReply: false },
+      data: { awaitingDeliveryReply: false, status: 'paused_human' },
     });
   });
 
-  it('handleReply() with an unrecognized region escalates to paused_human for manual confirmation', async () => {
+  it('handleReply() with an unrecognized region sends the configurable unrecognized message and escalates to paused_human', async () => {
     const conversation = { id: 'c1', phone: '5521999999999' };
     await service.handleReply(conversation, 'lugar nenhum conhecido');
+    expect(whatsapp.sendText).toHaveBeenCalledWith('5521999999999', 'Não reconheci esse bairro, vou te chamar um atendente!');
+    expect(prisma.message.create).toHaveBeenCalledWith({
+      data: {
+        conversationId: 'c1',
+        direction: 'outbound',
+        body: 'Não reconheci esse bairro, vou te chamar um atendente!',
+      },
+    });
     expect(prisma.conversation.update).toHaveBeenCalledWith({
       where: { id: 'c1' },
       data: { awaitingDeliveryReply: false, status: 'paused_human' },
