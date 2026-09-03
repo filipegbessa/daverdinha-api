@@ -59,6 +59,15 @@ export class BotEngineService {
       return;
     }
 
+    const settings = await this.botSettings.get();
+    if (!settings.botEnabled) {
+      await this.prisma.conversation.update({
+        where: { id: conversation.id },
+        data: { status: 'paused_human' },
+      });
+      return;
+    }
+
     if (conversation.awaitingDeliveryReply && message.text?.body) {
       await this.deliveryCheck.handleReply(conversation, message.text.body);
       return;
@@ -121,10 +130,9 @@ export class BotEngineService {
       },
     });
 
-    const menuBodyText = 'Como posso te ajudar hoje?';
     await this.whatsapp.sendInteractiveList(
       conversation.phone,
-      menuBodyText,
+      settings.menuPrompt,
       'Ver opções',
       items.map((item) => ({ id: item.id, title: item.topic })),
     );
@@ -132,7 +140,7 @@ export class BotEngineService {
       data: {
         conversationId: conversation.id,
         direction: 'outbound',
-        body: [menuBodyText, ...items.map((item) => `- ${item.topic}`)].join(
+        body: [settings.menuPrompt, ...items.map((item) => `- ${item.topic}`)].join(
           '\n',
         ),
       },

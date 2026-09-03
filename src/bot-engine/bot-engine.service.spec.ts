@@ -42,7 +42,11 @@ describe('BotEngineService', () => {
       message: { create: jest.fn() },
     };
     whatsapp = { sendText: jest.fn(), sendInteractiveList: jest.fn() };
-    botSettings = { get: jest.fn().mockResolvedValue({ botEnabled: true, welcomeMessage: 'Bem-vinda(o)!' }) };
+    botSettings = {
+      get: jest
+        .fn()
+        .mockResolvedValue({ botEnabled: true, welcomeMessage: 'Bem-vinda(o)!', menuPrompt: 'Escolha uma opção 🌱' }),
+    };
     menuItems = { list: jest.fn().mockResolvedValue(activeMenu) };
     deliveryCheck = { start: jest.fn(), handleReply: jest.fn() };
 
@@ -149,6 +153,36 @@ describe('BotEngineService', () => {
     expect(whatsapp.sendInteractiveList).not.toHaveBeenCalled();
   });
 
+  it('when the bot is disabled, sends nothing and marks the conversation as paused_human', async () => {
+    botSettings.get.mockResolvedValue({ botEnabled: false, welcomeMessage: 'Bem-vinda(o)!', menuPrompt: 'Escolha uma opção 🌱' });
+    const conversation = { id: 'c1', phone: '5521999999999', status: 'bot_active', invalidAttempts: 0, awaitingDeliveryReply: false };
+    prisma.conversation.findFirst.mockResolvedValue(conversation);
+
+    await service.handleIncomingMessage(textMessagePayload('5521999999999', 'Oi'));
+
+    expect(whatsapp.sendText).not.toHaveBeenCalled();
+    expect(whatsapp.sendInteractiveList).not.toHaveBeenCalled();
+    expect(prisma.conversation.update).toHaveBeenCalledWith({
+      where: { id: 'c1' },
+      data: { status: 'paused_human' },
+    });
+  });
+
+  it('when the bot is disabled and the conversation is brand new, still creates it but sends nothing', async () => {
+    botSettings.get.mockResolvedValue({ botEnabled: false, welcomeMessage: 'Bem-vinda(o)!', menuPrompt: 'Escolha uma opção 🌱' });
+    prisma.conversation.findFirst.mockResolvedValue(null);
+    prisma.conversation.create.mockResolvedValue({ id: 'c1', phone: '5521999999999', status: 'bot_active', invalidAttempts: 0, awaitingDeliveryReply: false });
+
+    await service.handleIncomingMessage(textMessagePayload('5521999999999', 'Oi, boa tarde!'));
+
+    expect(prisma.conversation.create).toHaveBeenCalled();
+    expect(whatsapp.sendText).not.toHaveBeenCalled();
+    expect(prisma.conversation.update).toHaveBeenCalledWith({
+      where: { id: 'c1' },
+      data: { status: 'paused_human' },
+    });
+  });
+
   it('routes a free-text reply to DeliveryCheckService.handleReply when the conversation is awaiting a delivery reply, instead of running normal menu-selection logic', async () => {
     const conversation = { id: 'c1', phone: '5521999999999', status: 'bot_active', invalidAttempts: 0, awaitingDeliveryReply: true };
     prisma.conversation.findFirst.mockResolvedValue(conversation);
@@ -202,7 +236,7 @@ describe('BotEngineService', () => {
 
     expect(whatsapp.sendInteractiveList).toHaveBeenCalledWith(
       '5521999999999',
-      'Como posso te ajudar hoje?',
+      'Escolha uma opção 🌱',
       'Ver opções',
       [
         { id: 'm1', title: 'Locais de entrega' },
@@ -214,12 +248,12 @@ describe('BotEngineService', () => {
       data: {
         conversationId: 'c1',
         direction: 'outbound',
-        body: expect.stringContaining('Como posso te ajudar hoje?'),
+        body: expect.stringContaining('Escolha uma opção 🌱'),
       },
     });
     const menuMessageCall = prisma.message.create.mock.calls.find(
       ([{ data }]: [{ data: { body: string } }]) =>
-        data.body.includes('Como posso te ajudar hoje?'),
+        data.body.includes('Escolha uma opção 🌱'),
     );
     expect(menuMessageCall[0].data.body).toContain('Locais de entrega');
     expect(menuMessageCall[0].data.body).toContain('Bingo de Plantas');
