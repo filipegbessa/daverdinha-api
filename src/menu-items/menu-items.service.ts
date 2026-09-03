@@ -13,17 +13,58 @@ export class MenuItemsService {
   ) {}
 
   list() {
-    return this.prisma.menuItem.findMany({ orderBy: { order: 'asc' } });
+    return this.prisma.menuItem.findMany({
+      orderBy: { order: 'asc' },
+      include: { answerOptions: { orderBy: { order: 'asc' } } },
+    });
+  }
+
+  findOne(id: string) {
+    return this.prisma.menuItem.findUnique({
+      where: { id },
+      include: { answerOptions: { orderBy: { order: 'asc' } } },
+    });
   }
 
   create(dto: CreateMenuItemDto) {
-    return this.prisma.menuItem.create({ data: dto });
+    const { answerOptions, ...rest } = dto;
+    return this.prisma.menuItem.create({
+      data: {
+        ...rest,
+        ...(answerOptions
+          ? {
+              answerOptions: {
+                create: answerOptions.map((option, index) => ({
+                  ...option,
+                  order: index,
+                })),
+              },
+            }
+          : {}),
+      },
+      include: { answerOptions: true },
+    });
   }
 
   async update(id: string, dto: UpdateMenuItemDto) {
+    const { answerOptions, ...rest } = dto;
     const result = await this.prisma.menuItem.update({
       where: { id },
-      data: dto,
+      data: {
+        ...rest,
+        ...(answerOptions !== undefined
+          ? {
+              answerOptions: {
+                deleteMany: {},
+                create: answerOptions.map((option, index) => ({
+                  ...option,
+                  order: index,
+                })),
+              },
+            }
+          : {}),
+      },
+      include: { answerOptions: true },
     });
     if (dto.active === false) {
       await this.botSettings.autoDisableIfNoActiveMenuItems();

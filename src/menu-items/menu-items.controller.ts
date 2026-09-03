@@ -24,6 +24,11 @@ export class MenuItemsController {
     return this.service.list();
   }
 
+  @Get(':id')
+  findOne(@Param('id') id: string) {
+    return this.service.findOne(id);
+  }
+
   @Post()
   create(@Body() dto: CreateMenuItemDto) {
     return this.service.create(dto);

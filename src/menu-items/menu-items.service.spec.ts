@@ -12,6 +12,7 @@ describe('MenuItemsService', () => {
     prisma = {
       menuItem: {
         findMany: jest.fn(),
+        findUnique: jest.fn(),
         create: jest.fn(),
         update: jest.fn(),
         delete: jest.fn(),
@@ -32,12 +33,26 @@ describe('MenuItemsService', () => {
     service = moduleRef.get(MenuItemsService);
   });
 
-  it('list() returns items ordered by order ascending', async () => {
+  it('list() includes answerOptions ordered ascending', async () => {
     prisma.menuItem.findMany.mockResolvedValue([]);
     await service.list();
     expect(prisma.menuItem.findMany).toHaveBeenCalledWith({
       orderBy: { order: 'asc' },
+      include: { answerOptions: { orderBy: { order: 'asc' } } },
     });
+  });
+
+  it('findOne() returns a single item with its answer options', async () => {
+    const item = { id: '1', topic: 'Locais de entrega', answerOptions: [] };
+    prisma.menuItem.findUnique.mockResolvedValue(item);
+
+    const result = await service.findOne('1');
+
+    expect(prisma.menuItem.findUnique).toHaveBeenCalledWith({
+      where: { id: '1' },
+      include: { answerOptions: { orderBy: { order: 'asc' } } },
+    });
+    expect(result).toBe(item);
   });
 
   it('create() persists a new item', async () => {
@@ -47,10 +62,44 @@ describe('MenuItemsService', () => {
       reply: 'Todo sábado às 16h!',
       order: 1,
     };
-    prisma.menuItem.create.mockResolvedValue({ id: '1', ...dto, active: true });
+    prisma.menuItem.create.mockResolvedValue({ id: '1', ...dto, active: true, answerOptions: [] });
     const result = await service.create(dto);
-    expect(prisma.menuItem.create).toHaveBeenCalledWith({ data: dto });
+    expect(prisma.menuItem.create).toHaveBeenCalledWith({ data: dto, include: { answerOptions: true } });
     expect(result.topic).toBe('Bingo de Plantas');
+  });
+
+  it('create() with answerOptions nests them as a single create call, deriving order from array position', async () => {
+    const dto = {
+      topic: 'Locais de entrega',
+      type: 'pergunta' as const,
+      order: 0,
+      question: 'Qual seu bairro?',
+      noMatchReply: 'Não entendi, vou te chamar um atendente!',
+      answerOptions: [
+        { keywords: ['catete', 'flamengo'], reply: 'Entregamos aí!' },
+        { keywords: ['niteroi'], reply: 'Ainda não entregamos aí.' },
+      ],
+    };
+    prisma.menuItem.create.mockResolvedValue({ id: '1', ...dto });
+
+    await service.create(dto);
+
+    expect(prisma.menuItem.create).toHaveBeenCalledWith({
+      data: {
+        topic: 'Locais de entrega',
+        type: 'pergunta',
+        order: 0,
+        question: 'Qual seu bairro?',
+        noMatchReply: 'Não entendi, vou te chamar um atendente!',
+        answerOptions: {
+          create: [
+            { keywords: ['catete', 'flamengo'], reply: 'Entregamos aí!', order: 0 },
+            { keywords: ['niteroi'], reply: 'Ainda não entregamos aí.', order: 1 },
+          ],
+        },
+      },
+      include: { answerOptions: true },
+    });
   });
 
   it('update() deactivating an item triggers auto-disable check', async () => {
@@ -63,6 +112,37 @@ describe('MenuItemsService', () => {
     prisma.menuItem.update.mockResolvedValue({ id: '1', active: true });
     await service.update('1', { active: true });
     expect(botSettings.autoDisableIfNoActiveMenuItems).not.toHaveBeenCalled();
+  });
+
+  it('update() with answerOptions replaces the full existing set', async () => {
+    prisma.menuItem.update.mockResolvedValue({ id: '1' });
+
+    await service.update('1', {
+      answerOptions: [{ keywords: ['ipanema'], reply: 'Entregamos!' }],
+    });
+
+    expect(prisma.menuItem.update).toHaveBeenCalledWith({
+      where: { id: '1' },
+      data: {
+        answerOptions: {
+          deleteMany: {},
+          create: [{ keywords: ['ipanema'], reply: 'Entregamos!', order: 0 }],
+        },
+      },
+      include: { answerOptions: true },
+    });
+  });
+
+  it('update() without answerOptions leaves existing answer options untouched', async () => {
+    prisma.menuItem.update.mockResolvedValue({ id: '1', active: true });
+
+    await service.update('1', { active: true });
+
+    expect(prisma.menuItem.update).toHaveBeenCalledWith({
+      where: { id: '1' },
+      data: { active: true },
+      include: { answerOptions: true },
+    });
   });
 
   it('remove() deletes the item and triggers auto-disable check', async () => {
