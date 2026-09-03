@@ -16,8 +16,12 @@ async function main() {
       id: 1,
       botEnabled: false,
       welcomeMessage: 'Oi! Que bom te ver por aqui 🌱 Bem-vinda(o) à Daverdinha — um espaço pra plantar, criar e brindar. Como posso te ajudar hoje?',
+      menuPrompt: 'Como posso te ajudar hoje?',
       deliveryPrompt: 'Qual o bairro ou região da entrega?',
       deliveryWaitMessage: 'Show, a gente atende sua região 🌿 Aguarde só um instante que já te chamamos por aqui pra fechar os detalhes.',
+      deliveryNotCoveredMessage: 'Poxa, ainda não entregamos nessa região 💚',
+      deliveryUnrecognizedMessage: 'Não consegui identificar essa região, vou te chamar um atendente!',
+      invalidAttemptsExceededMessage: 'Não consegui entender sua opção, vou te chamar um atendente!',
     },
   });
 
