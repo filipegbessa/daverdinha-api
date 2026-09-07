@@ -14,11 +14,6 @@ model BotSettings {
   id                             Int      @id @default(1)
   botEnabled                     Boolean  @default(false) @map("bot_enabled")
   welcomeMessage                 String   @map("welcome_message")
-  menuPrompt                     String   @default("Como posso te ajudar hoje?") @map("menu_prompt")
-  deliveryPrompt                 String   @map("delivery_prompt")
-  deliveryWaitMessage            String   @map("delivery_wait_message")
-  deliveryNotCoveredMessage      String   @default("Poxa, ainda não entregamos nessa região 💚") @map("delivery_not_covered_message")
-  deliveryUnrecognizedMessage    String   @default("Não consegui identificar essa região, vou te chamar um atendente!") @map("delivery_unrecognized_message")
   invalidAttemptsExceededMessage String   @default("Não consegui entender sua opção, vou te chamar um atendente!") @map("invalid_attempts_exceeded_message")
   updatedAt                      DateTime @updatedAt @map("updated_at")
 
@@ -33,18 +28,23 @@ enum MenuItemType {
 }
 
 model MenuItem {
-  id                    String                 @id @default(uuid())
-  order                 Int
-  topic                 String
-  type                  MenuItemType
-  reply                 String?
-  question              String?                @map("question")
-  noMatchReply          String?                @map("no_match_reply")
-  active                Boolean                @default(true)
-  createdAt             DateTime               @default(now()) @map("created_at")
-  updatedAt             DateTime               @updatedAt @map("updated_at")
-  answerOptions         MenuItemAnswerOption[]
-  awaitingConversations Conversation[]
+  id                          String                 @id @default(uuid())
+  order                       Int
+  topic                       String
+  type                        MenuItemType
+  isSystem                    Boolean                @default(false) @map("is_system")
+  reply                       String?
+  question                    String?                @map("question")
+  noMatchReply                String?                @map("no_match_reply")
+  deliveryPrompt              String?                @map("delivery_prompt")
+  deliveryConfirmedMessage    String?                @map("delivery_confirmed_message")
+  deliveryNotCoveredMessage   String?                @map("delivery_not_covered_message")
+  deliveryUnrecognizedMessage String?                @map("delivery_unrecognized_message")
+  active                      Boolean                @default(true)
+  createdAt                   DateTime               @default(now()) @map("created_at")
+  updatedAt                   DateTime               @updatedAt @map("updated_at")
+  answerOptions               MenuItemAnswerOption[]
+  awaitingConversations       Conversation[]
 
   @@map("menu_items")
 }

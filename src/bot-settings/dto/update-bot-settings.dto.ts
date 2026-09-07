@@ -11,25 +11,5 @@ export class UpdateBotSettingsDto {
 
   @IsString()
   @IsOptional()
-  menuPrompt?: string;
-
-  @IsString()
-  @IsOptional()
-  deliveryPrompt?: string;
-
-  @IsString()
-  @IsOptional()
-  deliveryWaitMessage?: string;
-
-  @IsString()
-  @IsOptional()
-  deliveryNotCoveredMessage?: string;
-
-  @IsString()
-  @IsOptional()
-  deliveryUnrecognizedMessage?: string;
-
-  @IsString()
-  @IsOptional()
   invalidAttemptsExceededMessage?: string;
 }

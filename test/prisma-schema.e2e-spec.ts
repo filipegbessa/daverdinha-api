@@ -24,14 +24,14 @@ describe('Prisma schema + seed', () => {
     ]);
   });
 
-  it('seeds 3 menu items covering all type values', async () => {
+  it('seeds 3 menu items, one of them the system entrega item', async () => {
     const count = await prisma.menuItem.count();
     expect(count).toBe(3);
     const tipos = await prisma.menuItem.groupBy({ by: ['type'] });
-    expect(tipos.map((t) => t.type).sort()).toEqual([
-      'atendente',
-      'entrega',
-      'texto',
-    ]);
+    expect(tipos.map((t) => t.type).sort()).toEqual(['entrega', 'texto']);
+    const systemCount = await prisma.menuItem.count({
+      where: { isSystem: true },
+    });
+    expect(systemCount).toBe(1);
   });
 });

@@ -40,6 +40,22 @@ export class CreateMenuItemDto {
   @IsOptional()
   noMatchReply?: string;
 
+  @IsString()
+  @IsOptional()
+  deliveryPrompt?: string;
+
+  @IsString()
+  @IsOptional()
+  deliveryConfirmedMessage?: string;
+
+  @IsString()
+  @IsOptional()
+  deliveryNotCoveredMessage?: string;
+
+  @IsString()
+  @IsOptional()
+  deliveryUnrecognizedMessage?: string;
+
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => MenuItemAnswerOptionDto)

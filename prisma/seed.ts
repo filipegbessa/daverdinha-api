@@ -16,11 +16,6 @@ async function main() {
       id: 1,
       botEnabled: false,
       welcomeMessage: 'Oi! Que bom te ver por aqui 🌱 Bem-vinda(o) à Daverdinha — um espaço pra plantar, criar e brindar. Como posso te ajudar hoje?',
-      menuPrompt: 'Como posso te ajudar hoje?',
-      deliveryPrompt: 'Qual o bairro ou região da entrega?',
-      deliveryWaitMessage: 'Show, a gente atende sua região 🌿 Aguarde só um instante que já te chamamos por aqui pra fechar os detalhes.',
-      deliveryNotCoveredMessage: 'Poxa, ainda não entregamos nessa região 💚',
-      deliveryUnrecognizedMessage: 'Não consegui identificar essa região, vou te chamar um atendente!',
       invalidAttemptsExceededMessage: 'Não consegui entender sua opção, vou te chamar um atendente!',
     },
   });
@@ -37,9 +32,34 @@ async function main() {
   }
 
   const menuItems = [
-    { order: 0, topic: 'Locais de entrega', type: 'entrega' as const, reply: null, active: true },
-    { order: 1, topic: 'Bingo de Plantas', type: 'texto' as const, reply: 'Todo sábado às 16h, aqui na loja! 🌱', active: true },
-    { order: 2, topic: 'Falar com um atendente', type: 'atendente' as const, reply: null, active: true },
+    {
+      order: 0,
+      topic: 'Locais de entrega',
+      type: 'entrega' as const,
+      isSystem: true,
+      reply: null,
+      deliveryPrompt: 'Qual o bairro ou região da entrega?',
+      deliveryConfirmedMessage: 'Sim! entregamos na sua região, aguarde um pouco que entro em contato',
+      deliveryNotCoveredMessage: 'infelizmente nao fazemos entregas nessa região',
+      deliveryUnrecognizedMessage: 'Não consegui identificar essa região, vou te chamar um atendente!',
+      active: true,
+    },
+    {
+      order: 1,
+      topic: 'Bingo de Plantas',
+      type: 'texto' as const,
+      isSystem: false,
+      reply: 'Todo sábado às 16h, aqui na loja!',
+      active: true,
+    },
+    {
+      order: 2,
+      topic: 'Falar com um atendente',
+      type: 'texto' as const,
+      isSystem: false,
+      reply: 'Aguarde um pouco que já retorno',
+      active: true,
+    },
   ];
 
   for (const item of menuItems) {
