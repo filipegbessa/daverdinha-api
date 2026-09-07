@@ -18,7 +18,7 @@ Backend do bot de atendimento da Daverdinha (NestJS + Prisma + Postgres).
 4. Rodar `npx prisma migrate deploy` apontando pro banco do Neon antes do primeiro deploy.
 
 **⚠️ CRÍTICO — Ordenação de Deploy:**
-A migration `20260903160212_add_pergunta_type_and_message_fields` (que adiciona 4 novos campos editáveis para mensagens do bot) DEVE ser aplicada ao banco de produção **ANTES** de fazer push desta branch para `main`. Como o Vercel faz auto-deploy em todo push para `main`, se o código for deployado antes da migration ser aplicada, **todos os mensagens de WhatsApp recebidas vão falhar** com erro "column does not exist" (o código tenta selecionar colunas que não existem ainda), levando o bot a ficar totalmente indisponível. Aplique a migration ao banco de Neon em produção primeiro, depois faça push para `main`.
+A migration `20260907220331_init` (que simplifica o modelo de menu item e reduz os campos de `BotSettings`) DEVE ser aplicada ao banco de produção **ANTES** de fazer push desta branch para `main`. Como o Vercel faz auto-deploy em todo push para `main`, se o código for deployado antes da migration ser aplicada, **todas as mensagens de WhatsApp recebidas vão falhar** com erro "column does not exist" (o código tenta acessar colunas que não existem mais), levando o bot a ficar totalmente indisponível. Aplique a migration ao banco de Neon em produção primeiro, depois faça push para `main`.
 
 Migração futura pra Railway (fase de produção): ver `SPEC.md` → "Stack (decidida)".
 
@@ -33,33 +33,33 @@ Migração futura pra Railway (fase de produção): ver `SPEC.md` → "Stack (de
 - `api/index.ts` — entry point serverless usado pelo deploy na Vercel (envolve o `AppModule` num handler Express com instância cacheada entre invocações).
 - `src/main.ts` — entry point usado localmente via `npm run start:dev`.
 
-## Tipos de Menu Item e Configurações
+## Menu Items e Configurações
 
-### Tipos de Menu Item
+### Menu Items
 
-O bot oferece 4 tipos de menu item, cada um com um comportamento diferente:
+O admin cria menu items de forma simplificada: cada item é apenas um **tema (topic) + resposta (reply)**. Internamente, todos os menu items criados pelo admin são do tipo `texto` — não há um seletor de tipo na UI admin.
 
-1. **`texto`** — Resposta direta. O usuário seleciona uma opção e recebe uma resposta prévia antes de ser encaminhado para um atendente.
+Existe um menu item especial **do sistema** ("Locais de entrega", `isSystem: true`, tipo `entrega`), que é:
+- Não-deletável
+- Não-retipável (tipo permanentemente `entrega`)
+- Pré-criado no seed (não aparece no fluxo de criação admin)
+- Responsável por todo o fluxo de verificação de entrega, com suas próprias 4 mensagens (`deliveryPrompt`, `deliveryConfirmedMessage`, `deliveryNotCoveredMessage`, `deliveryUnrecognizedMessage`)
 
-2. **`entrega`** — Subfluxo de entrega. Gerencia informações de entrega de pedidos com mensagens configuráveis para diferentes estados (aguardando resposta, região não coberta, região não reconhecida).
-
-3. **`atendente`** — Handoff para atendente. O usuário pode ser encaminhado imediatamente para um atendente, ou receber uma resposta prévia antes do encaminhamento.
-
-4. **`pergunta`** — Uma pergunta com opções de resposta configuráveis. As opções de resposta (palavras-chave e respostas) são definidas inteiramente pelo administrador via API, sem necessidade de mudanças no código.
+Os tipos de menu item `atendente` e `pergunta` ainda existem e funcionam na engine do bot — permanecem no código e na API. Porém, atualmente não são acessíveis pela UI admin e, portanto, estão **dormentes**. Sua arquitetura foi preservada para uso futuro.
 
 Toda interação com um menu item termina com um handoff para um atendente humano (`paused_human`) — o bot nunca entra em loop por conta própria.
 
-### Campos Editáveis de Configuração (BotSettings)
+### Campos de Configuração (BotSettings)
 
 Os seguintes campos de `BotSettings` são editáveis via API pelo administrador:
 
+- `botEnabled` — Booleano que ativa/desativa o bot
 - `welcomeMessage` — Mensagem de boas-vindas exibida ao iniciar o bot
-- `menuPrompt` — Prompt de instrução para selecionar uma opção do menu
-- `deliveryPrompt` — Prompt específico para o subfluxo de entrega
-- `deliveryWaitMessage` — Mensagem exibida enquanto se aguarda atualização de entrega
-- `deliveryNotCoveredMessage` — Mensagem exibida quando a localização não está coberta para entrega
-- `deliveryUnrecognizedMessage` — Mensagem exibida quando a localização não é reconhecida
 - `invalidAttemptsExceededMessage` — Mensagem exibida quando o usuário excede o número de tentativas inválidas
+
+O prompt do menu ("Como posso te ajudar hoje?") é uma constante hardcoded em `bot-engine.service.ts` e **não é editável via API**.
+
+As 4 mensagens do fluxo de entrega (`deliveryPrompt`, `deliveryConfirmedMessage`, `deliveryNotCoveredMessage`, `deliveryUnrecognizedMessage`) agora residem no menu item do sistema "Locais de entrega" e são editáveis apenas junto com esse item.
 
 > Nota: o módulo `conversations` (histórico de conversas, uso administrativo) foi propositalmente adiado e ainda não existe neste código — não é necessário para o bot funcionar.
 
