@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { BotSettingsService } from '../bot-settings/bot-settings.service';
 import { CreateMenuItemDto } from './dto/create-menu-item.dto';
@@ -47,6 +47,13 @@ export class MenuItemsService {
   }
 
   async update(id: string, dto: UpdateMenuItemDto) {
+    if (dto.type !== undefined) {
+      const existing = await this.prisma.menuItem.findUniqueOrThrow({ where: { id } });
+      if (existing.isSystem && dto.type !== existing.type) {
+        throw new ForbiddenException('Não é possível mudar o tipo de um item de sistema.');
+      }
+    }
+
     const { answerOptions, ...rest } = dto;
     const result = await this.prisma.menuItem.update({
       where: { id },
@@ -73,8 +80,18 @@ export class MenuItemsService {
   }
 
   async remove(id: string) {
+    const item = await this.prisma.menuItem.findUniqueOrThrow({ where: { id } });
+    if (item.isSystem) {
+      throw new ForbiddenException('Não é possível excluir um item de sistema.');
+    }
     await this.prisma.menuItem.delete({ where: { id } });
     await this.botSettings.autoDisableIfNoActiveMenuItems();
+  }
+
+  findSystemDeliveryItem() {
+    return this.prisma.menuItem.findFirstOrThrow({
+      where: { isSystem: true, type: 'entrega' },
+    });
   }
 
   reorder(dto: ReorderMenuItemsDto) {

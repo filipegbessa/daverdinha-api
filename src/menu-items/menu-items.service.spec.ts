@@ -1,4 +1,5 @@
 import { Test } from '@nestjs/testing';
+import { ForbiddenException } from '@nestjs/common';
 import { MenuItemsService } from './menu-items.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { BotSettingsService } from '../bot-settings/bot-settings.service';
@@ -17,6 +18,7 @@ describe('MenuItemsService', () => {
         update: jest.fn(),
         delete: jest.fn(),
         findUniqueOrThrow: jest.fn(),
+        findFirstOrThrow: jest.fn(),
       },
       $transaction: jest.fn(),
     };
@@ -145,11 +147,62 @@ describe('MenuItemsService', () => {
     });
   });
 
+  it('remove() throws ForbiddenException and does not delete when the item is a system item', async () => {
+    prisma.menuItem.findUniqueOrThrow.mockResolvedValue({ id: '1', isSystem: true });
+
+    await expect(service.remove('1')).rejects.toThrow(ForbiddenException);
+    expect(prisma.menuItem.delete).not.toHaveBeenCalled();
+    expect(botSettings.autoDisableIfNoActiveMenuItems).not.toHaveBeenCalled();
+  });
+
   it('remove() deletes the item and triggers auto-disable check', async () => {
+    prisma.menuItem.findUniqueOrThrow.mockResolvedValue({ id: '1', isSystem: false });
     prisma.menuItem.delete.mockResolvedValue({ id: '1' });
+
     await service.remove('1');
+
     expect(prisma.menuItem.delete).toHaveBeenCalledWith({ where: { id: '1' } });
     expect(botSettings.autoDisableIfNoActiveMenuItems).toHaveBeenCalled();
+  });
+
+  it('update() throws ForbiddenException and does not update when changing type on a system item', async () => {
+    prisma.menuItem.findUniqueOrThrow.mockResolvedValue({ id: '1', isSystem: true, type: 'entrega' });
+
+    await expect(service.update('1', { type: 'texto' } as any)).rejects.toThrow(ForbiddenException);
+    expect(prisma.menuItem.update).not.toHaveBeenCalled();
+  });
+
+  it('update() allows changing type on a non-system item', async () => {
+    prisma.menuItem.findUniqueOrThrow.mockResolvedValue({ id: '1', isSystem: false, type: 'texto' });
+    prisma.menuItem.update.mockResolvedValue({ id: '1', type: 'atendente' });
+
+    await service.update('1', { type: 'atendente' } as any);
+
+    expect(prisma.menuItem.update).toHaveBeenCalledWith({
+      where: { id: '1' },
+      data: { type: 'atendente' },
+      include: { answerOptions: true },
+    });
+  });
+
+  it('update() without a type field never checks isSystem', async () => {
+    prisma.menuItem.update.mockResolvedValue({ id: '1', active: true });
+
+    await service.update('1', { active: true });
+
+    expect(prisma.menuItem.findUniqueOrThrow).not.toHaveBeenCalled();
+  });
+
+  it('findSystemDeliveryItem() queries for the system entrega item', async () => {
+    const item = { id: 'sys1', isSystem: true, type: 'entrega' };
+    prisma.menuItem.findFirstOrThrow.mockResolvedValue(item);
+
+    const result = await service.findSystemDeliveryItem();
+
+    expect(prisma.menuItem.findFirstOrThrow).toHaveBeenCalledWith({
+      where: { isSystem: true, type: 'entrega' },
+    });
+    expect(result).toBe(item);
   });
 
   it('reorder() calls update with the right order for each id, in a transaction', async () => {
