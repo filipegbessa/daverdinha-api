@@ -17,6 +17,9 @@ Backend do bot de atendimento da Daverdinha (NestJS + Prisma + Postgres).
 3. O `vercel.json` já direciona todas as rotas pra `api/index.ts` — não precisa configurar build command especial.
 4. Rodar `npx prisma migrate deploy` apontando pro banco do Neon antes do primeiro deploy.
 
+**⚠️ CRÍTICO — Ordenação de Deploy:**
+A migration `20260903160212_add_pergunta_type_and_message_fields` (que adiciona 4 novos campos editáveis para mensagens do bot) DEVE ser aplicada ao banco de produção **ANTES** de fazer push desta branch para `main`. Como o Vercel faz auto-deploy em todo push para `main`, se o código for deployado antes da migration ser aplicada, **todos os mensagens de WhatsApp recebidas vão falhar** com erro "column does not exist" (o código tenta selecionar colunas que não existem ainda), levando o bot a ficar totalmente indisponível. Aplique a migration ao banco de Neon em produção primeiro, depois faça push para `main`.
+
 Migração futura pra Railway (fase de produção): ver `SPEC.md` → "Stack (decidida)".
 
 ## Testes
