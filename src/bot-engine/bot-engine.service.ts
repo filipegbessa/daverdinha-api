@@ -8,6 +8,7 @@ import { normalizeText } from '../common/normalize-text';
 
 const MAX_INVALID_ATTEMPTS = 3;
 const DEFAULT_NO_MATCH_REPLY = 'Não entendi sua resposta, vou te chamar um atendente!';
+const MENU_PROMPT = 'Como posso te ajudar hoje?';
 
 interface IncomingMessage {
   from: string;
@@ -139,7 +140,7 @@ export class BotEngineService {
 
     await this.whatsapp.sendInteractiveList(
       conversation.phone,
-      settings.menuPrompt,
+      MENU_PROMPT,
       'Ver opções',
       items.map((item) => ({ id: item.id, title: item.topic })),
     );
@@ -147,7 +148,7 @@ export class BotEngineService {
       data: {
         conversationId: conversation.id,
         direction: 'outbound',
-        body: [settings.menuPrompt, ...items.map((item) => `- ${item.topic}`)].join(
+        body: [MENU_PROMPT, ...items.map((item) => `- ${item.topic}`)].join(
           '\n',
         ),
       },
