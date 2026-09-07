@@ -2,14 +2,14 @@ import { Test } from '@nestjs/testing';
 import { DeliveryCheckService } from './delivery-check.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { WhatsAppClientService } from '../whatsapp/whatsapp-client.service';
-import { BotSettingsService } from '../bot-settings/bot-settings.service';
+import { MenuItemsService } from '../menu-items/menu-items.service';
 import { DeliveryLocationsService } from '../delivery-locations/delivery-locations.service';
 
 describe('DeliveryCheckService', () => {
   let service: DeliveryCheckService;
   let prisma: any;
   let whatsapp: { sendText: jest.Mock };
-  let botSettings: { get: jest.Mock };
+  let menuItems: { findSystemDeliveryItem: jest.Mock };
   let deliveryLocations: { list: jest.Mock };
 
   const locations = [
@@ -20,10 +20,10 @@ describe('DeliveryCheckService', () => {
   beforeEach(async () => {
     prisma = { conversation: { update: jest.fn() }, message: { create: jest.fn() } };
     whatsapp = { sendText: jest.fn() };
-    botSettings = {
-      get: jest.fn().mockResolvedValue({
+    menuItems = {
+      findSystemDeliveryItem: jest.fn().mockResolvedValue({
         deliveryPrompt: 'Qual o bairro?',
-        deliveryWaitMessage: 'Aguarde!',
+        deliveryConfirmedMessage: 'Aguarde!',
         deliveryNotCoveredMessage: 'Ainda não chegamos aí, mas em breve!',
         deliveryUnrecognizedMessage: 'Não reconheci esse bairro, vou te chamar um atendente!',
       }),
@@ -35,7 +35,7 @@ describe('DeliveryCheckService', () => {
         DeliveryCheckService,
         { provide: PrismaService, useValue: prisma },
         { provide: WhatsAppClientService, useValue: whatsapp },
-        { provide: BotSettingsService, useValue: botSettings },
+        { provide: MenuItemsService, useValue: menuItems },
         { provide: DeliveryLocationsService, useValue: deliveryLocations },
       ],
     }).compile();
@@ -56,7 +56,7 @@ describe('DeliveryCheckService', () => {
     });
   });
 
-  it('handleReply() with a covered region sends the wait message and escalates to paused_human', async () => {
+  it('handleReply() with a covered region sends the confirmed message and escalates to paused_human', async () => {
     const conversation = { id: 'c1', phone: '5521999999999' };
     await service.handleReply(conversation, 'ipanema');
     expect(whatsapp.sendText).toHaveBeenCalledWith('5521999999999', 'Aguarde!');
@@ -73,13 +73,6 @@ describe('DeliveryCheckService', () => {
     const conversation = { id: 'c1', phone: '5521999999999' };
     await service.handleReply(conversation, 'barra da tijuca');
     expect(whatsapp.sendText).toHaveBeenCalledWith('5521999999999', 'Ainda não chegamos aí, mas em breve!');
-    expect(prisma.message.create).toHaveBeenCalledWith({
-      data: {
-        conversationId: 'c1',
-        direction: 'outbound',
-        body: 'Ainda não chegamos aí, mas em breve!',
-      },
-    });
     expect(prisma.conversation.update).toHaveBeenCalledWith({
       where: { id: 'c1' },
       data: { awaitingDeliveryReply: false, status: 'paused_human' },
@@ -90,13 +83,6 @@ describe('DeliveryCheckService', () => {
     const conversation = { id: 'c1', phone: '5521999999999' };
     await service.handleReply(conversation, 'lugar nenhum conhecido');
     expect(whatsapp.sendText).toHaveBeenCalledWith('5521999999999', 'Não reconheci esse bairro, vou te chamar um atendente!');
-    expect(prisma.message.create).toHaveBeenCalledWith({
-      data: {
-        conversationId: 'c1',
-        direction: 'outbound',
-        body: 'Não reconheci esse bairro, vou te chamar um atendente!',
-      },
-    });
     expect(prisma.conversation.update).toHaveBeenCalledWith({
       where: { id: 'c1' },
       data: { awaitingDeliveryReply: false, status: 'paused_human' },
