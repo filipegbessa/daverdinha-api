@@ -5,6 +5,7 @@ import { BotSettingsModule } from '../bot-settings/bot-settings.module';
 import { MenuItemsModule } from '../menu-items/menu-items.module';
 import { WhatsAppClientModule } from '../whatsapp/whatsapp-client.module';
 import { DeliveryLocationsModule } from '../delivery-locations/delivery-locations.module';
+import { CepLookupModule } from '../cep-lookup/cep-lookup.module';
 
 @Module({
   imports: [
@@ -12,6 +13,7 @@ import { DeliveryLocationsModule } from '../delivery-locations/delivery-location
     MenuItemsModule,
     WhatsAppClientModule,
     DeliveryLocationsModule,
+    CepLookupModule,
   ],
   providers: [BotEngineService, DeliveryCheckService],
   exports: [BotEngineService],
