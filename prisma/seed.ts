@@ -100,7 +100,15 @@ async function main() {
   ];
 
   for (const item of menuItems) {
-    await prisma.menuItem.create({ data: item });
+    // No unique constraint on topic (it's admin-editable), so this can't be
+    // a real upsert. Match on the item's natural key instead, and only
+    // create when missing — never overwrite an existing row, since the
+    // admin may have already customized its reply/messages.
+    const where = item.isSystem ? { isSystem: true, type: item.type } : { topic: item.topic };
+    const existing = await prisma.menuItem.findFirst({ where });
+    if (!existing) {
+      await prisma.menuItem.create({ data: item });
+    }
   }
 }
 
