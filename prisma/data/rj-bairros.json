@@ -1,0 +1,10 @@
+[
+  { "regiao": "Zona Sul", "bairro": "Ipanema" },
+  { "regiao": "Zona Sul", "bairro": "Copacabana" },
+  { "regiao": "Zona Sul", "bairro": "Leblon" },
+  { "regiao": "Zona Oeste", "bairro": "Barra da Tijuca" },
+  { "regiao": "Centro", "bairro": "Lapa" },
+  { "regiao": "Centro", "bairro": "Santo Cristo" },
+  { "regiao": "Zona Norte", "bairro": "Tijuca" },
+  { "regiao": "Zona Norte", "bairro": "Vila Isabel" }
+]

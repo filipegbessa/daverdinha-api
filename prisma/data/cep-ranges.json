@@ -1,0 +1,10 @@
+[
+  { "bairro": "Ipanema", "ranges": [{ "start": 22410000, "end": 22471999 }] },
+  { "bairro": "Copacabana", "ranges": [{ "start": 22010000, "end": 22081999 }] },
+  { "bairro": "Leblon", "ranges": [{ "start": 22430000, "end": 22450999 }] },
+  { "bairro": "Barra da Tijuca", "ranges": [{ "start": 22600000, "end": 22793999 }] },
+  { "bairro": "Lapa", "ranges": [{ "start": 20021000, "end": 20021999 }] },
+  { "bairro": "Santo Cristo", "ranges": [{ "start": 20220000, "end": 20220999 }] },
+  { "bairro": "Tijuca", "ranges": [{ "start": 20510000, "end": 20550999 }] },
+  { "bairro": "Vila Isabel", "ranges": [{ "start": 20551000, "end": 20560999 }] }
+]
