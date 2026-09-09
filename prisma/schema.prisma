@@ -37,6 +37,7 @@ model MenuItem {
   question                    String?                @map("question")
   noMatchReply                String?                @map("no_match_reply")
   deliveryPrompt              String?                @map("delivery_prompt")
+  deliveryRetryMessage        String?                @map("delivery_retry_message")
   deliveryConfirmedMessage    String?                @map("delivery_confirmed_message")
   deliveryNotCoveredMessage   String?                @map("delivery_not_covered_message")
   deliveryUnrecognizedMessage String?                @map("delivery_unrecognized_message")
@@ -62,14 +63,26 @@ model MenuItemAnswerOption {
 }
 
 model DeliveryLocation {
-  id         String   @id @default(uuid())
+  id         String     @id @default(uuid())
   zone       String
-  regionName String   @map("region_name")
-  covered    Boolean  @default(true)
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
+  regionName String     @unique @map("region_name")
+  covered    Boolean    @default(true)
+  cepRanges  CepRange[]
+  createdAt  DateTime   @default(now()) @map("created_at")
+  updatedAt  DateTime   @updatedAt @map("updated_at")
 
   @@map("delivery_locations")
+}
+
+model CepRange {
+  id                 Int              @id @default(autoincrement())
+  startCep           Int              @map("start_cep")
+  endCep             Int              @map("end_cep")
+  deliveryLocationId String           @map("delivery_location_id")
+  deliveryLocation   DeliveryLocation @relation(fields: [deliveryLocationId], references: [id], onDelete: Cascade)
+
+  @@index([startCep, endCep])
+  @@map("cep_ranges")
 }
 
 enum ConversationStatus {
