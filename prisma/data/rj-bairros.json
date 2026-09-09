@@ -1,10 +1,642 @@
 [
-  { "regiao": "Zona Sul", "bairro": "Ipanema" },
-  { "regiao": "Zona Sul", "bairro": "Copacabana" },
-  { "regiao": "Zona Sul", "bairro": "Leblon" },
-  { "regiao": "Zona Oeste", "bairro": "Barra da Tijuca" },
-  { "regiao": "Centro", "bairro": "Lapa" },
-  { "regiao": "Centro", "bairro": "Santo Cristo" },
-  { "regiao": "Zona Norte", "bairro": "Tijuca" },
-  { "regiao": "Zona Norte", "bairro": "Vila Isabel" }
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Abolição"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Acari"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Água Santa"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Alto Da Boa Vista"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Anchieta"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Andaraí"
+  },
+  {
+    "regiao": "Zona Oeste",
+    "bairro": "Anil"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Bancários"
+  },
+  {
+    "regiao": "Zona Oeste",
+    "bairro": "Bangu"
+  },
+  {
+    "regiao": "Zona Oeste",
+    "bairro": "Barra Da Tijuca"
+  },
+  {
+    "regiao": "Zona Oeste",
+    "bairro": "Barra De Guaratiba"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Barros Filho"
+  },
+  {
+    "regiao": "Centro",
+    "bairro": "Benfica"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Bento Ribeiro"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Bonsucesso"
+  },
+  {
+    "regiao": "Zona Sul",
+    "bairro": "Botafogo"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Brás De Pina"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Cachambi"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Cacuia"
+  },
+  {
+    "regiao": "Centro",
+    "bairro": "Caju"
+  },
+  {
+    "regiao": "Zona Oeste",
+    "bairro": "Camorim"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Campinho"
+  },
+  {
+    "regiao": "Zona Oeste",
+    "bairro": "Campo Dos Afonsos"
+  },
+  {
+    "regiao": "Zona Oeste",
+    "bairro": "Campo Grande"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Cascadura"
+  },
+  {
+    "regiao": "Zona Sul",
+    "bairro": "Catete"
+  },
+  {
+    "regiao": "Centro",
+    "bairro": "Catumbi"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Cavalcanti"
+  },
+  {
+    "regiao": "Centro",
+    "bairro": "Centro"
+  },
+  {
+    "regiao": "Zona Oeste",
+    "bairro": "Cidade De Deus"
+  },
+  {
+    "regiao": "Centro",
+    "bairro": "Cidade Nova"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Cidade Universitária"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Cocotá"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Coelho Neto"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Colégio"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Complexo do Alemão"
+  },
+  {
+    "regiao": "Zona Sul",
+    "bairro": "Copacabana"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Cordovil"
+  },
+  {
+    "regiao": "Zona Sul",
+    "bairro": "Cosme Velho"
+  },
+  {
+    "regiao": "Zona Oeste",
+    "bairro": "Cosmos"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Costa Barros"
+  },
+  {
+    "regiao": "Zona Oeste",
+    "bairro": "Curicica"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Del Castilho"
+  },
+  {
+    "regiao": "Zona Oeste",
+    "bairro": "Deodoro"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Encantado"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Engenheiro Leal"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Engenho Da Rainha"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Engenho De Dentro"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Engenho Novo"
+  },
+  {
+    "regiao": "Centro",
+    "bairro": "Estácio"
+  },
+  {
+    "regiao": "Zona Sul",
+    "bairro": "Flamengo"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Freguesia (Ilha)"
+  },
+  {
+    "regiao": "Zona Oeste",
+    "bairro": "Freguesia (Jacarepaguá)"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Galeão"
+  },
+  {
+    "regiao": "Centro",
+    "bairro": "Gamboa"
+  },
+  {
+    "regiao": "Zona Oeste",
+    "bairro": "Gardênia Azul"
+  },
+  {
+    "regiao": "Zona Sul",
+    "bairro": "Gávea"
+  },
+  {
+    "regiao": "Zona Oeste",
+    "bairro": "Gericinó"
+  },
+  {
+    "regiao": "Zona Sul",
+    "bairro": "Glória"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Grajaú"
+  },
+  {
+    "regiao": "Zona Oeste",
+    "bairro": "Grumari"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Guadalupe"
+  },
+  {
+    "regiao": "Zona Oeste",
+    "bairro": "Guaratiba"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Higienópolis"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Honório Gurgel"
+  },
+  {
+    "regiao": "Zona Sul",
+    "bairro": "Humaitá"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Inhaúma"
+  },
+  {
+    "regiao": "Zona Oeste",
+    "bairro": "Inhoaíba"
+  },
+  {
+    "regiao": "Zona Sul",
+    "bairro": "Ipanema"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Irajá"
+  },
+  {
+    "regiao": "Zona Oeste",
+    "bairro": "Itanhangá"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Jacaré"
+  },
+  {
+    "regiao": "Zona Oeste",
+    "bairro": "Jacarepaguá"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Jacarezinho"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Jardim América"
+  },
+  {
+    "regiao": "Zona Sul",
+    "bairro": "Jardim Botânico"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Jardim Carioca"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Jardim Guanabara"
+  },
+  {
+    "regiao": "Zona Oeste",
+    "bairro": "Jardim Sulacap"
+  },
+  {
+    "regiao": "Zona Oeste",
+    "bairro": "Joá"
+  },
+  {
+    "regiao": "Zona Sul",
+    "bairro": "Lagoa"
+  },
+  {
+    "regiao": "Zona Sul",
+    "bairro": "Laranjeiras"
+  },
+  {
+    "regiao": "Zona Sul",
+    "bairro": "Leblon"
+  },
+  {
+    "regiao": "Zona Sul",
+    "bairro": "Leme"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Lins De Vasconcelos"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Madureira"
+  },
+  {
+    "regiao": "Zona Oeste",
+    "bairro": "Magalhães Bastos"
+  },
+  {
+    "regiao": "Centro",
+    "bairro": "Mangueira"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Manguinhos"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Maracanã"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Maré"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Marechal Hermes"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Maria Da Graça"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Méier"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Moneró"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Olaria"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Osvaldo Cruz"
+  },
+  {
+    "regiao": "Zona Oeste",
+    "bairro": "Paciência"
+  },
+  {
+    "regiao": "Zona Oeste",
+    "bairro": "Padre Miguel"
+  },
+  {
+    "regiao": "Centro",
+    "bairro": "Paquetá"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Parada De Lucas"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Parque Anchieta"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Parque Colúmbia"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Pavuna"
+  },
+  {
+    "regiao": "Zona Oeste",
+    "bairro": "Pechincha"
+  },
+  {
+    "regiao": "Zona Oeste",
+    "bairro": "Pedra De Guaratiba"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Penha"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Penha Circular"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Piedade"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Pilares"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Pitangueiras"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Portuguesa"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Praça Da Bandeira"
+  },
+  {
+    "regiao": "Zona Oeste",
+    "bairro": "Praça Seca"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Praia Da Bandeira"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Quintino Bocaiúva"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Ramos"
+  },
+  {
+    "regiao": "Zona Oeste",
+    "bairro": "Realengo"
+  },
+  {
+    "regiao": "Zona Oeste",
+    "bairro": "Recreio Dos Bandeirantes"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Riachuelo"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Ribeira"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Ricardo De Albuquerque"
+  },
+  {
+    "regiao": "Centro",
+    "bairro": "Rio Comprido"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Rocha"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Rocha Miranda"
+  },
+  {
+    "regiao": "Zona Sul",
+    "bairro": "Rocinha"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Sampaio"
+  },
+  {
+    "regiao": "Zona Oeste",
+    "bairro": "Santa Cruz"
+  },
+  {
+    "regiao": "Centro",
+    "bairro": "Santa Teresa"
+  },
+  {
+    "regiao": "Zona Oeste",
+    "bairro": "Santíssimo"
+  },
+  {
+    "regiao": "Centro",
+    "bairro": "Santo Cristo"
+  },
+  {
+    "regiao": "Zona Sul",
+    "bairro": "São Conrado"
+  },
+  {
+    "regiao": "Centro",
+    "bairro": "São Cristóvão"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "São Francisco Xavier"
+  },
+  {
+    "regiao": "Centro",
+    "bairro": "Saúde"
+  },
+  {
+    "regiao": "Zona Oeste",
+    "bairro": "Senador Camará"
+  },
+  {
+    "regiao": "Zona Oeste",
+    "bairro": "Senador Vasconcelos"
+  },
+  {
+    "regiao": "Zona Oeste",
+    "bairro": "Sepetiba"
+  },
+  {
+    "regiao": "Zona Oeste",
+    "bairro": "Tanque"
+  },
+  {
+    "regiao": "Zona Oeste",
+    "bairro": "Taquara"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Tauá"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Tijuca"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Todos Os Santos"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Tomás Coelho"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Turiaçú"
+  },
+  {
+    "regiao": "Zona Sul",
+    "bairro": "Urca"
+  },
+  {
+    "regiao": "Zona Oeste",
+    "bairro": "Vargem Grande"
+  },
+  {
+    "regiao": "Zona Oeste",
+    "bairro": "Vargem Pequena"
+  },
+  {
+    "regiao": "Centro",
+    "bairro": "Vasco Da Gama"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Vaz Lobo"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Vicente De Carvalho"
+  },
+  {
+    "regiao": "Zona Sul",
+    "bairro": "Vidigal"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Vigário Geral"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Vila Da Penha"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Vila Isabel"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Vila Kosmos"
+  },
+  {
+    "regiao": "Zona Oeste",
+    "bairro": "Vila Militar"
+  },
+  {
+    "regiao": "Zona Oeste",
+    "bairro": "Vila Valqueire"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Vista Alegre"
+  },
+  {
+    "regiao": "Zona Norte",
+    "bairro": "Zumbi"
+  }
 ]

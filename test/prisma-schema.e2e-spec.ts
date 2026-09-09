@@ -13,11 +13,12 @@ describe('Prisma schema + seed', () => {
   });
 
   it('seeds delivery locations from the fixture rj-bairros.json, covering 4 zones', async () => {
-    // Currently 8 sample bairros (prisma/data/rj-bairros.json). Update this
-    // count and zone list when that file is replaced with the full official
-    // ~160-bairro Data.Rio dataset before a production seed.
+    // Full official IPP bairro list (161 bairros mapped to Áreas de
+    // Planejamento 1-5, cross-referenced against the popular Zona
+    // Sul/Norte/Oeste/Centro convention) — see
+    // prisma/data/rj-bairros.json.
     const count = await prisma.deliveryLocation.count();
-    expect(count).toBe(8);
+    expect(count).toBe(160);
     const zonas = await prisma.deliveryLocation.groupBy({ by: ['zone'] });
     expect(zonas.map((z) => z.zone).sort()).toEqual([
       'Centro',
