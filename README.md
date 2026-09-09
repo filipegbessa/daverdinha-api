@@ -43,7 +43,7 @@ Existe um menu item especial **do sistema** ("Locais de entrega", `isSystem: tru
 - Não-deletável
 - Não-retipável (tipo permanentemente `entrega`)
 - Pré-criado no seed (não aparece no fluxo de criação admin)
-- Responsável por todo o fluxo de verificação de entrega, com suas próprias 4 mensagens (`deliveryPrompt`, `deliveryConfirmedMessage`, `deliveryNotCoveredMessage`, `deliveryUnrecognizedMessage`)
+- Responsável por todo o fluxo de verificação de entrega, com suas próprias 5 mensagens (`deliveryPrompt`, `deliveryRetryMessage`, `deliveryConfirmedMessage`, `deliveryNotCoveredMessage`, `deliveryUnrecognizedMessage`)
 
 Os tipos de menu item `atendente` e `pergunta` ainda existem e funcionam na engine do bot — permanecem no código e na API. Porém, atualmente não são acessíveis pela UI admin e, portanto, estão **dormentes**. Sua arquitetura foi preservada para uso futuro.
 
@@ -59,7 +59,32 @@ Os seguintes campos de `BotSettings` são editáveis via API pelo administrador:
 
 O prompt do menu ("Como posso te ajudar hoje?") é uma constante hardcoded em `bot-engine.service.ts` e **não é editável via API**.
 
-As 4 mensagens do fluxo de entrega (`deliveryPrompt`, `deliveryConfirmedMessage`, `deliveryNotCoveredMessage`, `deliveryUnrecognizedMessage`) agora residem no menu item do sistema "Locais de entrega" e são editáveis apenas junto com esse item.
+As 5 mensagens do fluxo de entrega (`deliveryPrompt`, `deliveryRetryMessage`, `deliveryConfirmedMessage`, `deliveryNotCoveredMessage`, `deliveryUnrecognizedMessage`) agora residem no menu item do sistema "Locais de entrega" e são editáveis apenas junto com esse item.
+
+## Locais de Entrega e Verificação por CEP (módulo `delivery-locations`)
+
+`DeliveryLocation` deixou de ser uma lista editável pelo admin e passou a ser uma lista fixa e oficial de bairros do Rio, agrupados por região administrativa (`zone`) — populada pelo seed a partir dos arquivos de dados descritos abaixo. A API só permite:
+
+- `GET /delivery-locations` — lista todos os bairros oficiais, cada um com suas faixas de CEP (`cepRanges`), ordenados por `zone` e depois por `regionName`.
+- `PATCH /delivery-locations/:id` — alterna o campo `covered` (se aquele bairro é ou não atendido). Não existe mais criação nem remoção de `DeliveryLocation` pela API — a lista só muda via seed/migração.
+
+### Fluxo de verificação de entrega no bot
+
+O bot não pergunta mais o nome do bairro: agora ele pede o **CEP** do cliente (`deliveryPrompt`) e resolve a cobertura em duas etapas:
+
+1. **Local** — o CEP é comparado contra as faixas seedadas na tabela `CepRange` de cada `DeliveryLocation`. Se cair dentro de alguma faixa, a cobertura (`covered`) já é decidida ali, sem chamada externa.
+2. **Fallback via API** — se o CEP não cair em nenhuma faixa seedada, o `CepLookupService` consulta a BrasilAPI (`GET /api/cep/v2/{cep}`) pra obter o bairro correspondente, que então é comparado (normalizado) contra os `regionName` cadastrados.
+
+Um CEP é considerado **não resolvido** tanto quando o formato é inválido (diferente de 8 dígitos) quanto quando a consulta à BrasilAPI falha ou não retorna bairro. Nesse caso o bot responde com `deliveryRetryMessage` e dá mais uma chance ao cliente; se a segunda tentativa também não resolver, o bot desiste e passa a conversa pro atendimento humano (`deliveryUnrecognizedMessage`, status `paused_human`) — igual ao comportamento de excesso de tentativas inválidas do resto do bot.
+
+### Pipeline de dados (CNEFE → faixas de CEP)
+
+A cobertura por CEP depende de dois arquivos em `prisma/data/`, montados em duas etapas:
+
+- `scripts/generate-cep-ranges.ts` — rodado manualmente contra um extrato real do CNEFE (Cadastro Nacional de Endereços para Fins Estatísticos, IBGE), calcula a faixa mín/máx de CEP observada por bairro e escreve o resultado em `prisma/data/cep-ranges.json`. Tem suíte de testes própria, executada via `npm run test:scripts` (separado do `npm test` porque roda fora do contexto do Nest).
+- `prisma/data/rj-bairros.json` — lista de bairros + região administrativa usada pelo seed pra popular `DeliveryLocation`.
+
+⚠️ **Os dois arquivos estão hoje com dados de amostra** (8 bairros reais do Rio, escolhidos pra exercitar a estrutura, não a cobertura real da cidade). Antes de rodar o seed em produção, alguém precisa substituir `prisma/data/rj-bairros.json` pela lista oficial completa (a base de bairros do Data.Rio) e gerar um `prisma/data/cep-ranges.json` de verdade, rodando `generate-cep-ranges.ts` contra um extrato real do CNEFE.
 
 ## Conversas (módulo `conversations`)
 
