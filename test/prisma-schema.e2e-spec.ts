@@ -12,14 +12,17 @@ describe('Prisma schema + seed', () => {
     expect(count).toBe(1);
   });
 
-  it('seeds 28 delivery locations covering 4 zones', async () => {
+  it('seeds delivery locations from the fixture rj-bairros.json, covering 4 zones', async () => {
+    // Currently 8 sample bairros (prisma/data/rj-bairros.json). Update this
+    // count and zone list when that file is replaced with the full official
+    // ~160-bairro Data.Rio dataset before a production seed.
     const count = await prisma.deliveryLocation.count();
-    expect(count).toBe(28);
+    expect(count).toBe(8);
     const zonas = await prisma.deliveryLocation.groupBy({ by: ['zone'] });
     expect(zonas.map((z) => z.zone).sort()).toEqual([
       'Centro',
       'Zona Norte',
-      'Zona Portuária',
+      'Zona Oeste',
       'Zona Sul',
     ]);
   });
