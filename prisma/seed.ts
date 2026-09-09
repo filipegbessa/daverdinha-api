@@ -1,12 +1,56 @@
 // prisma/seed.ts
 import { PrismaClient } from '@prisma/client';
+import * as fs from 'fs';
+import * as path from 'path';
+import { normalizeText } from '../src/common/normalize-text';
 
 const prisma = new PrismaClient();
 
-const ZONA_SUL = ['Botafogo', 'Catete', 'Copacabana', 'Cosme Velho', 'Flamengo', 'Gávea', 'Humaitá', 'Ipanema', 'Jardim Botânico', 'Lagoa', 'Laranjeiras', 'Leblon', 'São Conrado'];
-const CENTRO = ['Cruz Vermelha', 'Lapa', 'Bairro de Fátima', 'Gamboa', 'Saúde', 'Santo Cristo', 'Estácio'];
-const ZONA_PORTUARIA = ['toda a região'];
-const ZONA_NORTE = ['São Cristóvão', 'Praça da Bandeira', 'Tijuca', 'Grajaú', 'Maracanã', 'Vila Isabel', 'Andaraí'];
+interface BairroRow {
+  regiao: string;
+  bairro: string;
+}
+
+interface CepRangeRow {
+  bairro: string;
+  ranges: { start: number; end: number }[];
+}
+
+async function seedDeliveryLocations() {
+  const bairros: BairroRow[] = JSON.parse(
+    fs.readFileSync(path.join(__dirname, 'data', 'rj-bairros.json'), 'utf-8'),
+  );
+  const rangesByBairro: CepRangeRow[] = JSON.parse(
+    fs.readFileSync(path.join(__dirname, 'data', 'cep-ranges.json'), 'utf-8'),
+  );
+
+  const existing = await prisma.deliveryLocation.findMany();
+  const coveredByLegacyName = new Map(
+    existing.map((loc) => [normalizeText(loc.regionName), loc.covered]),
+  );
+
+  for (const { regiao, bairro } of bairros) {
+    const isNew = !(await prisma.deliveryLocation.findUnique({ where: { regionName: bairro } }));
+    const location = await prisma.deliveryLocation.upsert({
+      where: { regionName: bairro },
+      update: { zone: regiao },
+      create: {
+        zone: regiao,
+        regionName: bairro,
+        covered: coveredByLegacyName.get(normalizeText(bairro)) ?? false,
+      },
+    });
+    if (!isNew) continue; // never touch `covered` on a bairro that already existed — preserves admin toggles
+
+    const rangeRow = rangesByBairro.find((r) => normalizeText(r.bairro) === normalizeText(bairro));
+    if (!rangeRow) continue;
+    for (const range of rangeRow.ranges) {
+      await prisma.cepRange.create({
+        data: { startCep: range.start, endCep: range.end, deliveryLocationId: location.id },
+      });
+    }
+  }
+}
 
 async function main() {
   await prisma.botSettings.upsert({
@@ -20,16 +64,7 @@ async function main() {
     },
   });
 
-  const rows = [
-    ...ZONA_SUL.map((regionName) => ({ zone: 'Zona Sul', regionName, covered: true })),
-    ...CENTRO.map((regionName) => ({ zone: 'Centro', regionName, covered: true })),
-    ...ZONA_PORTUARIA.map((regionName) => ({ zone: 'Zona Portuária', regionName, covered: true })),
-    ...ZONA_NORTE.map((regionName) => ({ zone: 'Zona Norte', regionName, covered: true })),
-  ];
-
-  for (const row of rows) {
-    await prisma.deliveryLocation.create({ data: row });
-  }
+  await seedDeliveryLocations();
 
   const menuItems = [
     {
