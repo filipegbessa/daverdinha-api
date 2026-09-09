@@ -26,10 +26,24 @@ describe('ConversationsService', () => {
     service = moduleRef.get(ConversationsService);
   });
 
-  it('list() returns conversations ordered by updatedAt desc, without messages', async () => {
-    prisma.conversation.findMany.mockResolvedValue([]);
-    await service.list();
-    expect(prisma.conversation.findMany).toHaveBeenCalledWith({ orderBy: { updatedAt: 'desc' } });
+  it('list() returns conversations ordered by updatedAt desc, each annotated with unread', async () => {
+    prisma.conversation.findMany.mockResolvedValue([
+      { id: '1', phone: '5521999999999', messages: [{ direction: 'inbound' }] },
+      { id: '2', phone: '5521988888888', messages: [{ direction: 'outbound' }] },
+      { id: '3', phone: '5521977777777', messages: [] },
+    ]);
+
+    const result = await service.list();
+
+    expect(prisma.conversation.findMany).toHaveBeenCalledWith({
+      orderBy: { updatedAt: 'desc' },
+      include: { messages: { orderBy: { createdAt: 'desc' }, take: 1 } },
+    });
+    expect(result).toEqual([
+      { id: '1', phone: '5521999999999', unread: true },
+      { id: '2', phone: '5521988888888', unread: false },
+      { id: '3', phone: '5521977777777', unread: false },
+    ]);
   });
 
   it('getWithMessages() returns the conversation with its messages ordered chronologically', async () => {

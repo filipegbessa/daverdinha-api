@@ -9,8 +9,15 @@ export class ConversationsService {
     private readonly whatsapp: WhatsAppClientService,
   ) {}
 
-  list() {
-    return this.prisma.conversation.findMany({ orderBy: { updatedAt: 'desc' } });
+  async list() {
+    const conversations = await this.prisma.conversation.findMany({
+      orderBy: { updatedAt: 'desc' },
+      include: { messages: { orderBy: { createdAt: 'desc' }, take: 1 } },
+    });
+    return conversations.map(({ messages, ...conversation }) => ({
+      ...conversation,
+      unread: messages[0]?.direction === 'inbound',
+    }));
   }
 
   async getWithMessages(id: string) {
