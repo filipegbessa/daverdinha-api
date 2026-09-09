@@ -9,6 +9,7 @@ import { normalizeText } from '../common/normalize-text';
 const MAX_INVALID_ATTEMPTS = 3;
 const DEFAULT_NO_MATCH_REPLY = 'Não entendi sua resposta, vou te chamar um atendente!';
 const MENU_PROMPT = 'Como posso te ajudar hoje?';
+const STALE_HANDOFF_MS = 30 * 24 * 60 * 60 * 1000;
 
 interface IncomingMessage {
   from: string;
@@ -59,6 +60,19 @@ export class BotEngineService {
     }
 
     if (conversation.status === 'paused_human') {
+      const isStale = Date.now() - conversation.updatedAt.getTime() > STALE_HANDOFF_MS;
+      if (!isStale) {
+        return;
+      }
+      await this.prisma.conversation.update({
+        where: { id: conversation.id },
+        data: {
+          status: 'bot_active',
+          invalidAttempts: 0,
+          awaitingDeliveryReply: false,
+          awaitingMenuItemAnswerId: null,
+        },
+      });
       return;
     }
 

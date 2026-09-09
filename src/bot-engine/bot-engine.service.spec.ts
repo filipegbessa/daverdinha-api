@@ -203,11 +203,39 @@ describe('BotEngineService', () => {
   });
 
   it('does nothing when the conversation is paused_human (handoff to human already happened)', async () => {
-    const conversation = { id: 'c1', phone: '5521999999999', status: 'paused_human', invalidAttempts: 0, awaitingDeliveryReply: false };
+    const conversation = { id: 'c1', phone: '5521999999999', status: 'paused_human', invalidAttempts: 0, awaitingDeliveryReply: false, updatedAt: new Date() };
     prisma.conversation.findFirst.mockResolvedValue(conversation);
 
     await service.handleIncomingMessage(textMessagePayload('5521999999999', 'oi de novo'));
 
+    expect(whatsapp.sendText).not.toHaveBeenCalled();
+    expect(whatsapp.sendInteractiveList).not.toHaveBeenCalled();
+    expect(prisma.conversation.update).not.toHaveBeenCalled();
+  });
+
+  it('reactivates a stale paused_human conversation (30+ days) instead of staying silent', async () => {
+    const staleDate = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000);
+    const conversation = {
+      id: 'c1',
+      phone: '5521999999999',
+      status: 'paused_human',
+      invalidAttempts: 2,
+      awaitingDeliveryReply: false,
+      updatedAt: staleDate,
+    };
+    prisma.conversation.findFirst.mockResolvedValue(conversation);
+
+    await service.handleIncomingMessage(textMessagePayload('5521999999999', 'oi, ainda dá pra comprar?'));
+
+    expect(prisma.conversation.update).toHaveBeenCalledWith({
+      where: { id: 'c1' },
+      data: {
+        status: 'bot_active',
+        invalidAttempts: 0,
+        awaitingDeliveryReply: false,
+        awaitingMenuItemAnswerId: null,
+      },
+    });
     expect(whatsapp.sendText).not.toHaveBeenCalled();
     expect(whatsapp.sendInteractiveList).not.toHaveBeenCalled();
   });

@@ -61,6 +61,19 @@ O prompt do menu ("Como posso te ajudar hoje?") é uma constante hardcoded em `b
 
 As 4 mensagens do fluxo de entrega (`deliveryPrompt`, `deliveryConfirmedMessage`, `deliveryNotCoveredMessage`, `deliveryUnrecognizedMessage`) agora residem no menu item do sistema "Locais de entrega" e são editáveis apenas junto com esse item.
 
-> Nota: o módulo `conversations` (histórico de conversas, uso administrativo) foi propositalmente adiado e ainda não existe neste código — não é necessário para o bot funcionar.
+## Conversas (módulo `conversations`)
+
+Dá ao admin visão e controle manual sobre as conversas do bot:
+
+- `GET /conversations` — lista todas as conversas.
+- `GET /conversations/:id` — detalhe de uma conversa com o histórico de mensagens.
+- `PATCH /conversations/:id` — edita o nome do contato (sem pré-condição de status).
+- `POST /conversations/:id/reply` — envia uma mensagem de texto ao cliente via WhatsApp. Só funciona em conversas com status `paused_human`; fora disso retorna `400`.
+- `POST /conversations/:id/pause` — transfere a conversa do bot pro atendimento humano (`bot_active` → `paused_human`). Só funciona em conversas com status `bot_active`; fora disso retorna `400`.
+- `POST /conversations/:id/reactivate` — devolve a conversa pro bot (`paused_human` → `bot_active`), resetando `invalidAttempts`, `awaitingDeliveryReply` e `awaitingMenuItemAnswerId`. Só funciona em conversas com status `paused_human`; fora disso retorna `400`.
+
+Além da reativação manual, uma conversa `paused_human` parada há 30 dias ou mais (contados a partir da última atualização da conversa) é reativada automaticamente e silenciosamente assim que chega a próxima mensagem do cliente — sem enviar nenhum aviso ao cliente, seja na reativação manual ou na automática.
+
+Esses endpoints existem porque o número de WhatsApp do projeto não pode adotar retroativamente o recurso de "coexistência" do app/Cloud API da Meta (ele exige partir de uma conta de app do WhatsApp Business ativa, que este número não tem mais) — então o admin precisa da própria forma de responder pelo WhatsApp e de mover uma conversa entre bot e atendimento humano.
 
 Ver `docs/superpowers/plans/2026-08-31-da-verdinha-api-backend.md` e `SPEC.md` (raiz do monorepo) para o desenho completo.

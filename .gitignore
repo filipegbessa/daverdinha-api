@@ -36,3 +36,4 @@ logs/
 *.log
 .vercel
 .env*
+.worktrees/
