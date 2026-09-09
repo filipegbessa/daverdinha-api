@@ -30,7 +30,6 @@ async function seedDeliveryLocations() {
   );
 
   for (const { regiao, bairro } of bairros) {
-    const isNew = !(await prisma.deliveryLocation.findUnique({ where: { regionName: bairro } }));
     const location = await prisma.deliveryLocation.upsert({
       where: { regionName: bairro },
       update: { zone: regiao },
@@ -40,7 +39,9 @@ async function seedDeliveryLocations() {
         covered: coveredByLegacyName.get(normalizeText(bairro)) ?? false,
       },
     });
-    if (!isNew) continue; // never touch `covered` on a bairro that already existed — preserves admin toggles
+
+    const hasRanges = (await prisma.cepRange.count({ where: { deliveryLocationId: location.id } })) > 0;
+    if (hasRanges) continue; // ranges already seeded for this bairro — never duplicate them
 
     const rangeRow = rangesByBairro.find((r) => normalizeText(r.bairro) === normalizeText(bairro));
     if (!rangeRow) continue;
@@ -73,10 +74,11 @@ async function main() {
       type: 'entrega' as const,
       isSystem: true,
       reply: null,
-      deliveryPrompt: 'Qual o bairro ou região da entrega?',
-      deliveryConfirmedMessage: 'Sim! entregamos na sua região, aguarde um pouco que entro em contato',
-      deliveryNotCoveredMessage: 'infelizmente nao fazemos entregas nessa região',
-      deliveryUnrecognizedMessage: 'Não consegui identificar essa região, vou te chamar um atendente!',
+      deliveryPrompt: 'Qual o CEP para entrega?',
+      deliveryConfirmedMessage: 'Sim! entregamos aí, aguarde um pouco que entro em contato',
+      deliveryNotCoveredMessage: 'Infelizmente ainda não fazemos entregas nesse endereço',
+      deliveryRetryMessage: 'Esse não é um CEP válido, quer tentar novamente?',
+      deliveryUnrecognizedMessage: 'Não consegui identificar seu CEP, vou te chamar um atendente!',
       active: true,
     },
     {

@@ -46,6 +46,10 @@ export class CreateMenuItemDto {
 
   @IsString()
   @IsOptional()
+  deliveryRetryMessage?: string;
+
+  @IsString()
+  @IsOptional()
   deliveryConfirmedMessage?: string;
 
   @IsString()

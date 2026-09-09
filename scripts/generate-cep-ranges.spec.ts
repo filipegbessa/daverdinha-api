@@ -9,5 +9,6 @@ describe('computeCepRangesFromCnefe', () => {
 
     expect(result['Ipanema']).toEqual([{ start: 22410000, end: 22471000 }]);
     expect(result['Barra da Tijuca']).toEqual([{ start: 22600000, end: 22793000 }]);
+    expect(result['Ipanema'][0].start).not.toBe(0);
   });
 });

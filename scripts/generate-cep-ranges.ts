@@ -38,9 +38,10 @@ export async function computeCepRangesFromCnefe(
       );
     }
 
-    const cep = Number(fields[cepIndex]);
+    const rawCep = fields[cepIndex]?.trim();
     const bairro = fields[bairroIndex]?.trim();
-    if (!bairro || Number.isNaN(cep)) continue;
+    if (!bairro || !rawCep || !/^\d{8}$/.test(rawCep)) continue;
+    const cep = Number(rawCep);
 
     const current = rangeByBairro[bairro];
     if (!current) {
