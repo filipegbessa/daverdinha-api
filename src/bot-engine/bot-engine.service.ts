@@ -59,6 +59,20 @@ export class BotEngineService {
       });
     }
 
+    if (message.text?.body && normalizeText(message.text.body) === 'menu') {
+      await this.prisma.conversation.update({
+        where: { id: conversation.id },
+        data: {
+          status: 'bot_active',
+          invalidAttempts: 0,
+          awaitingDeliveryReply: false,
+          awaitingMenuItemAnswerId: null,
+        },
+      });
+      await this.showMenu(conversation);
+      return;
+    }
+
     if (conversation.status === 'paused_human') {
       const isStale = Date.now() - conversation.updatedAt.getTime() > STALE_HANDOFF_MS;
       if (!isStale) {

@@ -240,6 +240,84 @@ describe('BotEngineService', () => {
     expect(whatsapp.sendInteractiveList).not.toHaveBeenCalled();
   });
 
+  it('typing exactly "menu" resets a paused_human conversation and shows the menu', async () => {
+    const conversation = {
+      id: 'c1',
+      phone: '5521999999999',
+      status: 'paused_human',
+      invalidAttempts: 2,
+      awaitingDeliveryReply: true,
+      updatedAt: new Date(),
+    };
+    prisma.conversation.findFirst.mockResolvedValue(conversation);
+
+    await service.handleIncomingMessage(textMessagePayload('5521999999999', 'Menú'));
+
+    expect(prisma.conversation.update).toHaveBeenCalledWith({
+      where: { id: 'c1' },
+      data: {
+        status: 'bot_active',
+        invalidAttempts: 0,
+        awaitingDeliveryReply: false,
+        awaitingMenuItemAnswerId: null,
+      },
+    });
+    expect(whatsapp.sendText).toHaveBeenCalledWith('5521999999999', 'Bem-vinda(o)!');
+    expect(whatsapp.sendInteractiveList).toHaveBeenCalled();
+  });
+
+  it('typing exactly "menu" works even when the bot is globally disabled', async () => {
+    botSettings.get.mockResolvedValue({ botEnabled: false, welcomeMessage: 'Bem-vinda(o)!' });
+    const conversation = {
+      id: 'c1',
+      phone: '5521999999999',
+      status: 'bot_active',
+      invalidAttempts: 0,
+      awaitingDeliveryReply: false,
+      updatedAt: new Date(),
+    };
+    prisma.conversation.findFirst.mockResolvedValue(conversation);
+
+    await service.handleIncomingMessage(textMessagePayload('5521999999999', 'menu'));
+
+    expect(whatsapp.sendInteractiveList).toHaveBeenCalled();
+  });
+
+  it('typing exactly "menu" cancels an in-progress delivery sub-flow instead of being treated as an address', async () => {
+    const conversation = {
+      id: 'c1',
+      phone: '5521999999999',
+      status: 'bot_active',
+      invalidAttempts: 0,
+      awaitingDeliveryReply: true,
+      updatedAt: new Date(),
+    };
+    prisma.conversation.findFirst.mockResolvedValue(conversation);
+
+    await service.handleIncomingMessage(textMessagePayload('5521999999999', 'menu'));
+
+    expect(deliveryCheck.handleReply).not.toHaveBeenCalled();
+    expect(whatsapp.sendInteractiveList).toHaveBeenCalled();
+  });
+
+  it('a message that merely mentions "menu" (not an exact match) is not treated as the reset keyword', async () => {
+    // Falls through to the normal invalid-selection path instead (which
+    // itself re-shows the menu as a hint) — the distinguishing signal is
+    // the *attempt counter*, not whether the menu gets sent.
+    const conversation = { id: 'c1', phone: '5521999999999', status: 'bot_active', invalidAttempts: 0, awaitingDeliveryReply: false };
+    prisma.conversation.findFirst.mockResolvedValue(conversation);
+
+    await service.handleIncomingMessage(textMessagePayload('5521999999999', 'vocês têm menu vegano?'));
+
+    expect(prisma.conversation.update).toHaveBeenCalledWith({
+      where: { id: 'c1' },
+      data: { invalidAttempts: 1 },
+    });
+    expect(prisma.conversation.update).not.toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ invalidAttempts: 0 }) }),
+    );
+  });
+
   it('when the bot is disabled, sends nothing and marks the conversation as paused_human', async () => {
     botSettings.get.mockResolvedValue({ botEnabled: false, welcomeMessage: 'Bem-vinda(o)!' });
     const conversation = { id: 'c1', phone: '5521999999999', status: 'bot_active', invalidAttempts: 0, awaitingDeliveryReply: false };
