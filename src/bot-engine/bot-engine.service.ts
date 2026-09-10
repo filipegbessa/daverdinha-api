@@ -96,6 +96,16 @@ export class BotEngineService {
       return;
     }
 
+    // The delivery-location sub-flow (however it started — order, menu
+    // item, or catalog referral) is a short closed loop that always ends
+    // in a human handoff, so a reply keeps it moving regardless of the
+    // bot's enabled/paused state — otherwise the customer's answer to
+    // "qual seu CEP?" would go unanswered.
+    if (conversation.awaitingDeliveryReply && message.text?.body) {
+      await this.deliveryCheck.handleReply(conversation, message.text.body);
+      return;
+    }
+
     if (conversation.status === 'paused_human') {
       const isStale = Date.now() - conversation.updatedAt.getTime() > STALE_HANDOFF_MS;
       if (!isStale) {
@@ -130,11 +140,6 @@ export class BotEngineService {
 
     if (message.type && message.type !== 'text' && message.type !== 'interactive') {
       await this.handleUnsupportedMessage(conversation, settings);
-      return;
-    }
-
-    if (conversation.awaitingDeliveryReply && message.text?.body) {
-      await this.deliveryCheck.handleReply(conversation, message.text.body);
       return;
     }
 

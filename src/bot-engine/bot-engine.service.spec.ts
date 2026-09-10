@@ -400,6 +400,35 @@ describe('BotEngineService', () => {
     expect(prisma.conversation.update).not.toHaveBeenCalled();
   });
 
+  it('processes a delivery-reply even when the bot is globally disabled — the sub-flow is a closed loop that must resolve before handoff', async () => {
+    botSettings.get.mockResolvedValue({ botEnabled: false, welcomeMessage: 'Bem-vinda(o)!' });
+    const conversation = { id: 'c1', phone: '5521999999999', status: 'bot_active', invalidAttempts: 0, awaitingDeliveryReply: true };
+    prisma.conversation.findFirst.mockResolvedValue(conversation);
+
+    await service.handleIncomingMessage(textMessagePayload('5521999999999', '20220-030'));
+
+    expect(deliveryCheck.handleReply).toHaveBeenCalledWith(conversation, '20220-030');
+    expect(prisma.conversation.update).not.toHaveBeenCalledWith(
+      expect.objectContaining({ data: { status: 'paused_human' } }),
+    );
+  });
+
+  it('processes a delivery-reply even when the conversation is already paused_human', async () => {
+    const conversation = {
+      id: 'c1',
+      phone: '5521999999999',
+      status: 'paused_human',
+      invalidAttempts: 0,
+      awaitingDeliveryReply: true,
+      updatedAt: new Date(),
+    };
+    prisma.conversation.findFirst.mockResolvedValue(conversation);
+
+    await service.handleIncomingMessage(textMessagePayload('5521999999999', '20220-030'));
+
+    expect(deliveryCheck.handleReply).toHaveBeenCalledWith(conversation, '20220-030');
+  });
+
   it('a message with context.referred_product creates the conversation with entry_point catalog and skips the menu', async () => {
     prisma.conversation.findFirst.mockResolvedValue(null);
     prisma.conversation.create.mockResolvedValue({ id: 'c1', phone: '5521999999999', status: 'bot_active', invalidAttempts: 0, awaitingDeliveryReply: false });
