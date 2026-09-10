@@ -17,6 +17,12 @@ const STALE_HANDOFF_MS = 30 * 24 * 60 * 60 * 1000;
 // ignored entirely for now, pending a dedicated image flow.
 const INVALID_CONTENT_LABEL = '[Conteúdo inválido]';
 
+function formatCurrency(amount: string, currency: string): string {
+  const value = Number(amount);
+  if (Number.isNaN(value)) return `${currency} ${amount}`;
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency }).format(value).replace(/ /g, ' ');
+}
+
 interface OrderProductItem {
   product_retailer_id: string;
   quantity: string;
@@ -51,6 +57,15 @@ export class BotEngineService {
       message.from,
       !!message.referredProductId,
     );
+
+    // Catalog orders get a bot reply unconditionally — even with the bot
+    // disabled or the conversation already handed off to a human — since
+    // the confirmation is about the order, not the general chat flow.
+    if (message.type === 'order') {
+      const settings = await this.botSettings.get();
+      await this.handleOrderMessage(conversation, settings, message.order);
+      return;
+    }
 
     if (message.text?.body) {
       await this.prisma.message.create({
@@ -110,11 +125,6 @@ export class BotEngineService {
         where: { id: conversation.id },
         data: { status: 'paused_human' },
       });
-      return;
-    }
-
-    if (message.type === 'order') {
-      await this.handleOrderMessage(conversation, settings, message.order);
       return;
     }
 
@@ -191,11 +201,21 @@ export class BotEngineService {
   private async handleOrderMessage(
     conversation: { id: string; phone: string },
     settings: { orderReceivedMessage: string },
-    order: { product_items?: OrderProductItem[] } | undefined,
+    order: { catalog_id?: string; product_items?: OrderProductItem[] } | undefined,
   ) {
-    const lines = (order?.product_items ?? []).map((item) => {
-      const price = item.item_price && item.currency ? ` — ${item.currency} ${item.item_price}` : '';
-      return `- Produto ${item.product_retailer_id} x${item.quantity}${price}`;
+    const items = order?.product_items ?? [];
+    const productNames = order?.catalog_id
+      ? await this.whatsapp.getProductNames(
+          order.catalog_id,
+          items.map((item) => item.product_retailer_id),
+        )
+      : {};
+
+    const lines = items.map((item) => {
+      const name = productNames[item.product_retailer_id] ?? item.product_retailer_id;
+      const price =
+        item.item_price && item.currency ? ` — ${formatCurrency(item.item_price, item.currency)}` : '';
+      return `- ${name} x${item.quantity}${price}`;
     });
     const body = ['Pedido pelo catálogo:', ...lines].join('\n');
 

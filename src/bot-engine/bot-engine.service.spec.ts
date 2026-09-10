@@ -62,7 +62,7 @@ function orderMessagePayload(
 describe('BotEngineService', () => {
   let service: BotEngineService;
   let prisma: any;
-  let whatsapp: { sendText: jest.Mock; sendInteractiveList: jest.Mock };
+  let whatsapp: { sendText: jest.Mock; sendInteractiveList: jest.Mock; getProductNames: jest.Mock };
   let botSettings: { get: jest.Mock };
   let menuItems: { list: jest.Mock; findOne: jest.Mock };
   let deliveryCheck: { start: jest.Mock; handleReply: jest.Mock };
@@ -79,7 +79,7 @@ describe('BotEngineService', () => {
       conversation: { findFirst: jest.fn(), create: jest.fn(), update: jest.fn() },
       message: { create: jest.fn() },
     };
-    whatsapp = { sendText: jest.fn(), sendInteractiveList: jest.fn() };
+    whatsapp = { sendText: jest.fn(), sendInteractiveList: jest.fn(), getProductNames: jest.fn().mockResolvedValue({}) };
     botSettings = {
       get: jest.fn().mockResolvedValue({
         botEnabled: true,
@@ -677,9 +677,10 @@ describe('BotEngineService', () => {
       expect(prisma.conversation.update).not.toHaveBeenCalled();
     });
 
-    it('a catalog order message lists the product items (by retailer id), tags the message as an order, and hands off to a human', async () => {
+    it('a catalog order message looks up the product name, formats the price as R$, tags the message as an order, and hands off to a human', async () => {
       const conversation = { id: 'c1', phone: '5521999999999', status: 'bot_active', invalidAttempts: 0, awaitingDeliveryReply: false };
       prisma.conversation.findFirst.mockResolvedValue(conversation);
+      whatsapp.getProductNames.mockResolvedValue({ 'vaso-01': 'Vaso de Cerâmica' });
 
       await service.handleIncomingMessage(
         orderMessagePayload('5521999999999', [
@@ -687,12 +688,13 @@ describe('BotEngineService', () => {
         ]),
       );
 
+      expect(whatsapp.getProductNames).toHaveBeenCalledWith('cat1', ['vaso-01']);
       expect(prisma.message.create).toHaveBeenCalledWith({
         data: {
           conversationId: 'c1',
           direction: 'inbound',
           kind: 'order',
-          body: 'Pedido pelo catálogo:\n- Produto vaso-01 x2 — BRL 35.00',
+          body: 'Pedido pelo catálogo:\n- Vaso de Cerâmica x2 — R$ 35,00',
         },
       });
       expect(whatsapp.sendText).toHaveBeenCalledWith(
@@ -705,9 +707,30 @@ describe('BotEngineService', () => {
       });
     });
 
+    it('falls back to the retailer id when the catalog lookup has no name for it', async () => {
+      const conversation = { id: 'c1', phone: '5521999999999', status: 'bot_active', invalidAttempts: 0, awaitingDeliveryReply: false };
+      prisma.conversation.findFirst.mockResolvedValue(conversation);
+      whatsapp.getProductNames.mockResolvedValue({});
+
+      await service.handleIncomingMessage(
+        orderMessagePayload('5521999999999', [
+          { product_retailer_id: 'vaso-01', quantity: '2', item_price: '35.00', currency: 'BRL' },
+        ]),
+      );
+
+      const orderMessageCall = prisma.message.create.mock.calls.find(
+        ([{ data }]: [{ data: { body: string; direction: string } }]) => data.direction === 'inbound',
+      );
+      expect(orderMessageCall[0].data.body).toBe('Pedido pelo catálogo:\n- vaso-01 x2 — R$ 35,00');
+    });
+
     it('a catalog order with multiple items lists every line', async () => {
       const conversation = { id: 'c1', phone: '5521999999999', status: 'bot_active', invalidAttempts: 0, awaitingDeliveryReply: false };
       prisma.conversation.findFirst.mockResolvedValue(conversation);
+      whatsapp.getProductNames.mockResolvedValue({
+        'vaso-01': 'Vaso de Cerâmica',
+        'muda-samambaia': 'Muda de Samambaia',
+      });
 
       await service.handleIncomingMessage(
         orderMessagePayload('5521999999999', [
@@ -720,7 +743,40 @@ describe('BotEngineService', () => {
         ([{ data }]: [{ data: { body: string; direction: string } }]) => data.direction === 'inbound',
       );
       expect(orderMessageCall[0].data.body).toBe(
-        'Pedido pelo catálogo:\n- Produto vaso-01 x2 — BRL 35.00\n- Produto muda-samambaia x1 — BRL 18.50',
+        'Pedido pelo catálogo:\n- Vaso de Cerâmica x2 — R$ 35,00\n- Muda de Samambaia x1 — R$ 18,50',
+      );
+    });
+
+    it('still answers a catalog order even when the conversation is already paused_human', async () => {
+      const conversation = { id: 'c1', phone: '5521999999999', status: 'paused_human', invalidAttempts: 0, awaitingDeliveryReply: false, updatedAt: new Date() };
+      prisma.conversation.findFirst.mockResolvedValue(conversation);
+
+      await service.handleIncomingMessage(
+        orderMessagePayload('5521999999999', [
+          { product_retailer_id: 'vaso-01', quantity: '1', item_price: '35.00', currency: 'BRL' },
+        ]),
+      );
+
+      expect(whatsapp.sendText).toHaveBeenCalledWith(
+        '5521999999999',
+        'Aceito! Recebemos seu pedido, já vamos confirmar com você.',
+      );
+    });
+
+    it('still answers a catalog order even when the bot is globally disabled', async () => {
+      botSettings.get.mockResolvedValue({ botEnabled: false, orderReceivedMessage: 'Aceito! Recebemos seu pedido, já vamos confirmar com você.' });
+      const conversation = { id: 'c1', phone: '5521999999999', status: 'bot_active', invalidAttempts: 0, awaitingDeliveryReply: false };
+      prisma.conversation.findFirst.mockResolvedValue(conversation);
+
+      await service.handleIncomingMessage(
+        orderMessagePayload('5521999999999', [
+          { product_retailer_id: 'vaso-01', quantity: '1', item_price: '35.00', currency: 'BRL' },
+        ]),
+      );
+
+      expect(whatsapp.sendText).toHaveBeenCalledWith(
+        '5521999999999',
+        'Aceito! Recebemos seu pedido, já vamos confirmar com você.',
       );
     });
   });
