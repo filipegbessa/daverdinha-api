@@ -10,12 +10,17 @@ CREATE TYPE "EntryPoint" AS ENUM ('menu', 'catalog');
 -- CreateEnum
 CREATE TYPE "MessageDirection" AS ENUM ('inbound', 'outbound');
 
+-- CreateEnum
+CREATE TYPE "MessageKind" AS ENUM ('text', 'invalid_content', 'order');
+
 -- CreateTable
 CREATE TABLE "bot_settings" (
     "id" INTEGER NOT NULL DEFAULT 1,
     "bot_enabled" BOOLEAN NOT NULL DEFAULT false,
     "welcome_message" TEXT NOT NULL,
     "invalid_attempts_exceeded_message" TEXT NOT NULL DEFAULT 'Não consegui entender sua opção, vou te chamar um atendente!',
+    "media_received_message" TEXT NOT NULL DEFAULT 'Esse tipo de mensagem não é válido por aqui, vou te chamar um atendente!',
+    "order_received_message" TEXT NOT NULL DEFAULT 'Aceito! Recebemos seu pedido, já vamos confirmar com você.',
     "updated_at" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "bot_settings_pkey" PRIMARY KEY ("id")
@@ -98,6 +103,7 @@ CREATE TABLE "messages" (
     "id" TEXT NOT NULL,
     "conversation_id" TEXT NOT NULL,
     "direction" "MessageDirection" NOT NULL,
+    "kind" "MessageKind" NOT NULL DEFAULT 'text',
     "body" TEXT NOT NULL,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
