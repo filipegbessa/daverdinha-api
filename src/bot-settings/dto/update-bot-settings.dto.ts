@@ -12,4 +12,12 @@ export class UpdateBotSettingsDto {
   @IsString()
   @IsOptional()
   invalidAttemptsExceededMessage?: string;
+
+  @IsString()
+  @IsOptional()
+  mediaReceivedMessage?: string;
+
+  @IsString()
+  @IsOptional()
+  orderReceivedMessage?: string;
 }

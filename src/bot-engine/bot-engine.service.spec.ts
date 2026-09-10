@@ -22,6 +22,43 @@ function textMessagePayload(from: string, text: string) {
   };
 }
 
+function mediaMessagePayload(from: string, type: string) {
+  return {
+    entry: [
+      {
+        changes: [
+          {
+            value: {
+              messages: [{ from, type, [type]: { id: 'media123' } }],
+            },
+          },
+        ],
+      },
+    ],
+  };
+}
+
+function orderMessagePayload(
+  from: string,
+  productItems: { product_retailer_id: string; quantity: string; item_price?: string; currency?: string }[],
+) {
+  return {
+    entry: [
+      {
+        changes: [
+          {
+            value: {
+              messages: [
+                { from, type: 'order', order: { catalog_id: 'cat1', product_items: productItems } },
+              ],
+            },
+          },
+        ],
+      },
+    ],
+  };
+}
+
 describe('BotEngineService', () => {
   let service: BotEngineService;
   let prisma: any;
@@ -48,6 +85,8 @@ describe('BotEngineService', () => {
         botEnabled: true,
         welcomeMessage: 'Bem-vinda(o)!',
         invalidAttemptsExceededMessage: 'Vou te chamar um atendente, só um instante!',
+        mediaReceivedMessage: 'Esse tipo de mensagem não é válido por aqui, vou te chamar um atendente!',
+        orderReceivedMessage: 'Aceito! Recebemos seu pedido, já vamos confirmar com você.',
       }),
     };
     menuItems = { list: jest.fn().mockResolvedValue(activeMenu), findOne: jest.fn() };
@@ -558,5 +597,149 @@ describe('BotEngineService', () => {
       'Ver opções',
       expect.any(Array),
     );
+  });
+
+  describe('unsupported message types (media, order)', () => {
+    it('an image message is ignored entirely for now (no persistence, no reply, no handoff)', async () => {
+      const conversation = { id: 'c1', phone: '5521999999999', status: 'bot_active', invalidAttempts: 0, awaitingDeliveryReply: false };
+      prisma.conversation.findFirst.mockResolvedValue(conversation);
+
+      await service.handleIncomingMessage(mediaMessagePayload('5521999999999', 'image'));
+
+      expect(prisma.message.create).not.toHaveBeenCalled();
+      expect(whatsapp.sendText).not.toHaveBeenCalled();
+      expect(prisma.conversation.update).not.toHaveBeenCalled();
+    });
+
+    it('an audio message is persisted with a unified invalid-content label and hands off to a human', async () => {
+      const conversation = { id: 'c1', phone: '5521999999999', status: 'bot_active', invalidAttempts: 0, awaitingDeliveryReply: false };
+      prisma.conversation.findFirst.mockResolvedValue(conversation);
+
+      await service.handleIncomingMessage(mediaMessagePayload('5521999999999', 'audio'));
+
+      expect(prisma.message.create).toHaveBeenCalledWith({
+        data: { conversationId: 'c1', direction: 'inbound', kind: 'invalid_content', body: '[Conteúdo inválido]' },
+      });
+      expect(whatsapp.sendText).toHaveBeenCalledWith(
+        '5521999999999',
+        'Esse tipo de mensagem não é válido por aqui, vou te chamar um atendente!',
+      );
+      expect(prisma.message.create).toHaveBeenCalledWith({
+        data: {
+          conversationId: 'c1',
+          direction: 'outbound',
+          body: 'Esse tipo de mensagem não é válido por aqui, vou te chamar um atendente!',
+        },
+      });
+      expect(prisma.conversation.update).toHaveBeenCalledWith({
+        where: { id: 'c1' },
+        data: { status: 'paused_human' },
+      });
+    });
+
+    it('a sticker message is persisted with the same unified invalid-content label and hands off', async () => {
+      const conversation = { id: 'c1', phone: '5521999999999', status: 'bot_active', invalidAttempts: 0, awaitingDeliveryReply: false };
+      prisma.conversation.findFirst.mockResolvedValue(conversation);
+
+      await service.handleIncomingMessage(mediaMessagePayload('5521999999999', 'sticker'));
+
+      expect(prisma.message.create).toHaveBeenCalledWith({
+        data: { conversationId: 'c1', direction: 'inbound', kind: 'invalid_content', body: '[Conteúdo inválido]' },
+      });
+      expect(prisma.conversation.update).toHaveBeenCalledWith({
+        where: { id: 'c1' },
+        data: { status: 'paused_human' },
+      });
+    });
+
+    it('a video message is persisted with the same unified invalid-content label and hands off', async () => {
+      const conversation = { id: 'c1', phone: '5521999999999', status: 'bot_active', invalidAttempts: 0, awaitingDeliveryReply: false };
+      prisma.conversation.findFirst.mockResolvedValue(conversation);
+
+      await service.handleIncomingMessage(mediaMessagePayload('5521999999999', 'video'));
+
+      expect(prisma.message.create).toHaveBeenCalledWith({
+        data: { conversationId: 'c1', direction: 'inbound', kind: 'invalid_content', body: '[Conteúdo inválido]' },
+      });
+      expect(prisma.conversation.update).toHaveBeenCalledWith({
+        where: { id: 'c1' },
+        data: { status: 'paused_human' },
+      });
+    });
+
+    it('an unrecognized message type still gets the same invalid-content treatment, instead of being silently dropped', async () => {
+      const conversation = { id: 'c1', phone: '5521999999999', status: 'bot_active', invalidAttempts: 0, awaitingDeliveryReply: false };
+      prisma.conversation.findFirst.mockResolvedValue(conversation);
+
+      await service.handleIncomingMessage(mediaMessagePayload('5521999999999', 'unknown_future_type'));
+
+      expect(prisma.message.create).toHaveBeenCalledWith({
+        data: { conversationId: 'c1', direction: 'inbound', kind: 'invalid_content', body: '[Conteúdo inválido]' },
+      });
+      expect(prisma.conversation.update).toHaveBeenCalledWith({
+        where: { id: 'c1' },
+        data: { status: 'paused_human' },
+      });
+    });
+
+    it('an audio message overrides an in-progress delivery-CEP wait and hands off immediately, instead of being treated as the CEP reply', async () => {
+      const conversation = { id: 'c1', phone: '5521999999999', status: 'bot_active', invalidAttempts: 0, awaitingDeliveryReply: true };
+      prisma.conversation.findFirst.mockResolvedValue(conversation);
+
+      await service.handleIncomingMessage(mediaMessagePayload('5521999999999', 'audio'));
+
+      expect(deliveryCheck.handleReply).not.toHaveBeenCalled();
+      expect(prisma.conversation.update).toHaveBeenCalledWith({
+        where: { id: 'c1' },
+        data: { status: 'paused_human' },
+      });
+    });
+
+    it('a catalog order message lists the product items (by retailer id), tags the message as an order, and hands off to a human', async () => {
+      const conversation = { id: 'c1', phone: '5521999999999', status: 'bot_active', invalidAttempts: 0, awaitingDeliveryReply: false };
+      prisma.conversation.findFirst.mockResolvedValue(conversation);
+
+      await service.handleIncomingMessage(
+        orderMessagePayload('5521999999999', [
+          { product_retailer_id: 'vaso-01', quantity: '2', item_price: '35.00', currency: 'BRL' },
+        ]),
+      );
+
+      expect(prisma.message.create).toHaveBeenCalledWith({
+        data: {
+          conversationId: 'c1',
+          direction: 'inbound',
+          kind: 'order',
+          body: 'Pedido pelo catálogo:\n- Produto vaso-01 x2 — BRL 35.00',
+        },
+      });
+      expect(whatsapp.sendText).toHaveBeenCalledWith(
+        '5521999999999',
+        'Aceito! Recebemos seu pedido, já vamos confirmar com você.',
+      );
+      expect(prisma.conversation.update).toHaveBeenCalledWith({
+        where: { id: 'c1' },
+        data: { status: 'paused_human' },
+      });
+    });
+
+    it('a catalog order with multiple items lists every line', async () => {
+      const conversation = { id: 'c1', phone: '5521999999999', status: 'bot_active', invalidAttempts: 0, awaitingDeliveryReply: false };
+      prisma.conversation.findFirst.mockResolvedValue(conversation);
+
+      await service.handleIncomingMessage(
+        orderMessagePayload('5521999999999', [
+          { product_retailer_id: 'vaso-01', quantity: '2', item_price: '35.00', currency: 'BRL' },
+          { product_retailer_id: 'muda-samambaia', quantity: '1', item_price: '18.50', currency: 'BRL' },
+        ]),
+      );
+
+      const orderMessageCall = prisma.message.create.mock.calls.find(
+        ([{ data }]: [{ data: { body: string; direction: string } }]) => data.direction === 'inbound',
+      );
+      expect(orderMessageCall[0].data.body).toBe(
+        'Pedido pelo catálogo:\n- Produto vaso-01 x2 — BRL 35.00\n- Produto muda-samambaia x1 — BRL 18.50',
+      );
+    });
   });
 });

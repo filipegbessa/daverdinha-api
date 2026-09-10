@@ -15,6 +15,8 @@ model BotSettings {
   botEnabled                     Boolean  @default(false) @map("bot_enabled")
   welcomeMessage                 String   @map("welcome_message")
   invalidAttemptsExceededMessage String   @default("Não consegui entender sua opção, vou te chamar um atendente!") @map("invalid_attempts_exceeded_message")
+  mediaReceivedMessage           String   @default("Esse tipo de mensagem não é válido por aqui, vou te chamar um atendente!") @map("media_received_message")
+  orderReceivedMessage           String   @default("Aceito! Recebemos seu pedido, já vamos confirmar com você.") @map("order_received_message")
   updatedAt                      DateTime @updatedAt @map("updated_at")
 
   @@map("bot_settings")
@@ -117,11 +119,18 @@ enum MessageDirection {
   outbound
 }
 
+enum MessageKind {
+  text
+  invalid_content
+  order
+}
+
 model Message {
   id             String           @id @default(uuid())
   conversationId String           @map("conversation_id")
   conversation   Conversation     @relation(fields: [conversationId], references: [id])
   direction      MessageDirection
+  kind           MessageKind      @default(text)
   body           String
   createdAt      DateTime         @default(now()) @map("created_at")
 

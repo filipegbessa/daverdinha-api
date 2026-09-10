@@ -62,6 +62,8 @@ async function main() {
       botEnabled: false,
       welcomeMessage: 'Oi! Que bom te ver por aqui 🌱 Bem-vinda(o) à Daverdinha — um espaço pra plantar, criar e brindar. Como posso te ajudar hoje?',
       invalidAttemptsExceededMessage: 'Não consegui entender sua opção, vou te chamar um atendente!',
+      mediaReceivedMessage: 'Esse tipo de mensagem não é válido por aqui, vou te chamar um atendente!',
+      orderReceivedMessage: 'Aceito! Recebemos seu pedido, já vamos confirmar com você.',
     },
   });
 

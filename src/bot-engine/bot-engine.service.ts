@@ -11,11 +11,25 @@ const DEFAULT_NO_MATCH_REPLY = 'Não entendi sua resposta, vou te chamar um aten
 const MENU_PROMPT = 'Como posso te ajudar hoje?';
 const STALE_HANDOFF_MS = 30 * 24 * 60 * 60 * 1000;
 
+// Persisted as a stand-in for the actual content on any message type the bot
+// can't interpret (audio/sticker/video/etc — we never download or store the
+// media itself). `image` is deliberately excluded from this bucket — it's
+// ignored entirely for now, pending a dedicated image flow.
+const INVALID_CONTENT_LABEL = '[Conteúdo inválido]';
+
+interface OrderProductItem {
+  product_retailer_id: string;
+  quantity: string;
+  item_price?: string;
+  currency?: string;
+}
+
 interface IncomingMessage {
   from: string;
-  type: 'text' | 'interactive';
+  type: string;
   text?: { body: string };
   interactive?: { list_reply?: { id: string; title?: string } };
+  order?: { catalog_id?: string; product_items?: OrderProductItem[] };
   referredProductId?: string;
 }
 
@@ -99,6 +113,22 @@ export class BotEngineService {
       return;
     }
 
+    if (message.type === 'order') {
+      await this.handleOrderMessage(conversation, settings, message.order);
+      return;
+    }
+
+    // 'image' is deliberately left out of the invalid-content bucket below —
+    // ignored entirely for now, a dedicated image flow comes later.
+    if (message.type === 'image') {
+      return;
+    }
+
+    if (message.type && message.type !== 'text' && message.type !== 'interactive') {
+      await this.handleUnsupportedMessage(conversation, settings);
+      return;
+    }
+
     if (conversation.awaitingDeliveryReply && message.text?.body) {
       await this.deliveryCheck.handleReply(conversation, message.text.body);
       return;
@@ -131,8 +161,55 @@ export class BotEngineService {
       type: raw.type,
       text: raw.text,
       interactive: raw.interactive,
+      order: raw.order,
       referredProductId: raw.context?.referred_product?.product_retailer_id,
     };
+  }
+
+  private async handleUnsupportedMessage(
+    conversation: { id: string; phone: string },
+    settings: { mediaReceivedMessage: string },
+  ) {
+    await this.prisma.message.create({
+      data: {
+        conversationId: conversation.id,
+        direction: 'inbound',
+        kind: 'invalid_content',
+        body: INVALID_CONTENT_LABEL,
+      },
+    });
+    await this.whatsapp.sendText(conversation.phone, settings.mediaReceivedMessage);
+    await this.prisma.message.create({
+      data: { conversationId: conversation.id, direction: 'outbound', body: settings.mediaReceivedMessage },
+    });
+    await this.prisma.conversation.update({
+      where: { id: conversation.id },
+      data: { status: 'paused_human' },
+    });
+  }
+
+  private async handleOrderMessage(
+    conversation: { id: string; phone: string },
+    settings: { orderReceivedMessage: string },
+    order: { product_items?: OrderProductItem[] } | undefined,
+  ) {
+    const lines = (order?.product_items ?? []).map((item) => {
+      const price = item.item_price && item.currency ? ` — ${item.currency} ${item.item_price}` : '';
+      return `- Produto ${item.product_retailer_id} x${item.quantity}${price}`;
+    });
+    const body = ['Pedido pelo catálogo:', ...lines].join('\n');
+
+    await this.prisma.message.create({
+      data: { conversationId: conversation.id, direction: 'inbound', kind: 'order', body },
+    });
+    await this.whatsapp.sendText(conversation.phone, settings.orderReceivedMessage);
+    await this.prisma.message.create({
+      data: { conversationId: conversation.id, direction: 'outbound', body: settings.orderReceivedMessage },
+    });
+    await this.prisma.conversation.update({
+      where: { id: conversation.id },
+      data: { status: 'paused_human' },
+    });
   }
 
   private async resolveConversation(phone: string, isCatalogEntry: boolean) {
