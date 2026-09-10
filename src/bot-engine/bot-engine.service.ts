@@ -226,10 +226,11 @@ export class BotEngineService {
     await this.prisma.message.create({
       data: { conversationId: conversation.id, direction: 'outbound', body: settings.orderReceivedMessage },
     });
-    await this.prisma.conversation.update({
-      where: { id: conversation.id },
-      data: { status: 'paused_human' },
-    });
+
+    // Hand off to a human only happens once the delivery-location sub-flow
+    // resolves (covered/not covered/unrecognized after retries) — by then
+    // the attendant has both the order and whether we deliver there.
+    await this.deliveryCheck.start(conversation);
   }
 
   private async resolveConversation(phone: string, isCatalogEntry: boolean) {

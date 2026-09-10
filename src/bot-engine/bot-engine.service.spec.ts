@@ -677,7 +677,7 @@ describe('BotEngineService', () => {
       expect(prisma.conversation.update).not.toHaveBeenCalled();
     });
 
-    it('a catalog order message looks up the product name, formats the price as R$, tags the message as an order, and hands off to a human', async () => {
+    it('a catalog order message looks up the product name, formats the price as R$, tags the message as an order, and starts the delivery-location flow', async () => {
       const conversation = { id: 'c1', phone: '5521999999999', status: 'bot_active', invalidAttempts: 0, awaitingDeliveryReply: false };
       prisma.conversation.findFirst.mockResolvedValue(conversation);
       whatsapp.getProductNames.mockResolvedValue({ 'vaso-01': 'Vaso de Cerâmica' });
@@ -701,10 +701,12 @@ describe('BotEngineService', () => {
         '5521999999999',
         'Aceito! Recebemos seu pedido, já vamos confirmar com você.',
       );
-      expect(prisma.conversation.update).toHaveBeenCalledWith({
-        where: { id: 'c1' },
-        data: { status: 'paused_human' },
-      });
+      // Handoff to a human happens later, once the delivery-location
+      // sub-flow resolves — not immediately after the order confirmation.
+      expect(prisma.conversation.update).not.toHaveBeenCalledWith(
+        expect.objectContaining({ data: { status: 'paused_human' } }),
+      );
+      expect(deliveryCheck.start).toHaveBeenCalledWith(conversation);
     });
 
     it('falls back to the retailer id when the catalog lookup has no name for it', async () => {
@@ -761,6 +763,7 @@ describe('BotEngineService', () => {
         '5521999999999',
         'Aceito! Recebemos seu pedido, já vamos confirmar com você.',
       );
+      expect(deliveryCheck.start).toHaveBeenCalledWith(conversation);
     });
 
     it('still answers a catalog order even when the bot is globally disabled', async () => {
@@ -778,6 +781,7 @@ describe('BotEngineService', () => {
         '5521999999999',
         'Aceito! Recebemos seu pedido, já vamos confirmar com você.',
       );
+      expect(deliveryCheck.start).toHaveBeenCalledWith(conversation);
     });
   });
 });
