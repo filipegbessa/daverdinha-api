@@ -111,10 +111,20 @@ CREATE TABLE "messages" (
 );
 
 -- CreateTable
-CREATE TABLE "order_items" (
+CREATE TABLE "orders" (
     "id" TEXT NOT NULL,
+    "conversation_id" TEXT NOT NULL,
     "message_id" TEXT NOT NULL,
     "catalog_id" TEXT NOT NULL,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "orders_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "order_items" (
+    "id" TEXT NOT NULL,
+    "order_id" TEXT NOT NULL,
     "product_retailer_id" TEXT NOT NULL,
     "product_name" TEXT,
     "quantity" INTEGER NOT NULL,
@@ -131,6 +141,9 @@ CREATE UNIQUE INDEX "delivery_locations_region_name_key" ON "delivery_locations"
 -- CreateIndex
 CREATE INDEX "cep_ranges_start_cep_end_cep_idx" ON "cep_ranges"("start_cep", "end_cep");
 
+-- CreateIndex
+CREATE UNIQUE INDEX "orders_message_id_key" ON "orders"("message_id");
+
 -- AddForeignKey
 ALTER TABLE "menu_item_answer_options" ADD CONSTRAINT "menu_item_answer_options_menu_item_id_fkey" FOREIGN KEY ("menu_item_id") REFERENCES "menu_items"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
@@ -144,4 +157,10 @@ ALTER TABLE "conversations" ADD CONSTRAINT "conversations_awaiting_menu_item_ans
 ALTER TABLE "messages" ADD CONSTRAINT "messages_conversation_id_fkey" FOREIGN KEY ("conversation_id") REFERENCES "conversations"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "order_items" ADD CONSTRAINT "order_items_message_id_fkey" FOREIGN KEY ("message_id") REFERENCES "messages"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "orders" ADD CONSTRAINT "orders_conversation_id_fkey" FOREIGN KEY ("conversation_id") REFERENCES "conversations"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "orders" ADD CONSTRAINT "orders_message_id_fkey" FOREIGN KEY ("message_id") REFERENCES "messages"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "order_items" ADD CONSTRAINT "order_items_order_id_fkey" FOREIGN KEY ("order_id") REFERENCES "orders"("id") ON DELETE CASCADE ON UPDATE CASCADE;

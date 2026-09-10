@@ -205,22 +205,26 @@ export class BotEngineService {
         )
       : {};
 
-    await this.prisma.message.create({
-      data: {
-        conversationId: conversation.id,
-        direction: 'inbound',
-        kind: 'order',
-        orderItems: {
-          create: items.map((item) => ({
-            catalogId: order?.catalog_id ?? '',
-            productRetailerId: item.product_retailer_id,
-            productName: productNames[item.product_retailer_id],
-            quantity: Number(item.quantity),
-            unitPrice: item.item_price,
-            currency: item.currency,
-          })),
+    await this.prisma.$transaction(async (tx) => {
+      const message = await tx.message.create({
+        data: { conversationId: conversation.id, direction: 'inbound', kind: 'order' },
+      });
+      await tx.order.create({
+        data: {
+          conversationId: conversation.id,
+          messageId: message.id,
+          catalogId: order?.catalog_id ?? '',
+          items: {
+            create: items.map((item) => ({
+              productRetailerId: item.product_retailer_id,
+              productName: productNames[item.product_retailer_id],
+              quantity: Number(item.quantity),
+              unitPrice: item.item_price,
+              currency: item.currency,
+            })),
+          },
         },
-      },
+      });
     });
     await this.whatsapp.sendText(conversation.phone, settings.orderReceivedMessage);
     await this.prisma.message.create({

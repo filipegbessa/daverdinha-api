@@ -77,7 +77,9 @@ describe('BotEngineService', () => {
   beforeEach(async () => {
     prisma = {
       conversation: { findFirst: jest.fn(), create: jest.fn(), update: jest.fn() },
-      message: { create: jest.fn() },
+      message: { create: jest.fn().mockResolvedValue({ id: 'msg1' }) },
+      order: { create: jest.fn() },
+      $transaction: jest.fn((callback: (tx: any) => Promise<unknown>) => callback(prisma)),
     };
     whatsapp = { sendText: jest.fn(), sendInteractiveList: jest.fn(), getProductNames: jest.fn().mockResolvedValue({}) };
     botSettings = {
@@ -690,14 +692,16 @@ describe('BotEngineService', () => {
 
       expect(whatsapp.getProductNames).toHaveBeenCalledWith('cat1', ['vaso-01']);
       expect(prisma.message.create).toHaveBeenCalledWith({
+        data: { conversationId: 'c1', direction: 'inbound', kind: 'order' },
+      });
+      expect(prisma.order.create).toHaveBeenCalledWith({
         data: {
           conversationId: 'c1',
-          direction: 'inbound',
-          kind: 'order',
-          orderItems: {
+          messageId: 'msg1',
+          catalogId: 'cat1',
+          items: {
             create: [
               {
-                catalogId: 'cat1',
                 productRetailerId: 'vaso-01',
                 productName: 'Vaso de Cerâmica',
                 quantity: 2,
@@ -731,10 +735,7 @@ describe('BotEngineService', () => {
         ]),
       );
 
-      const orderMessageCall = prisma.message.create.mock.calls.find(
-        ([{ data }]: [{ data: { kind?: string } }]) => data.kind === 'order',
-      );
-      expect(orderMessageCall[0].data.orderItems.create[0].productName).toBeUndefined();
+      expect(prisma.order.create.mock.calls[0][0].data.items.create[0].productName).toBeUndefined();
     });
 
     it('a catalog order with multiple items stores one order item per line', async () => {
@@ -752,12 +753,8 @@ describe('BotEngineService', () => {
         ]),
       );
 
-      const orderMessageCall = prisma.message.create.mock.calls.find(
-        ([{ data }]: [{ data: { kind?: string } }]) => data.kind === 'order',
-      );
-      expect(orderMessageCall[0].data.orderItems.create).toEqual([
+      expect(prisma.order.create.mock.calls[0][0].data.items.create).toEqual([
         {
-          catalogId: 'cat1',
           productRetailerId: 'vaso-01',
           productName: 'Vaso de Cerâmica',
           quantity: 2,
@@ -765,7 +762,6 @@ describe('BotEngineService', () => {
           currency: 'BRL',
         },
         {
-          catalogId: 'cat1',
           productRetailerId: 'muda-samambaia',
           productName: 'Muda de Samambaia',
           quantity: 1,
