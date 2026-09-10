@@ -15,7 +15,7 @@ model BotSettings {
   botEnabled                     Boolean  @default(false) @map("bot_enabled")
   welcomeMessage                 String   @map("welcome_message")
   invalidAttemptsExceededMessage String   @default("Não consegui entender sua opção, vou te chamar um atendente!") @map("invalid_attempts_exceeded_message")
-  mediaReceivedMessage           String   @default("Esse tipo de mensagem não é válido por aqui, vou te chamar um atendente!") @map("media_received_message")
+  mediaReceivedMessage           String   @default("Esse tipo de mensagem não é válido por aqui!") @map("media_received_message")
   orderReceivedMessage           String   @default("Aceito! Recebemos seu pedido, já vamos confirmar com você.") @map("order_received_message")
   updatedAt                      DateTime @updatedAt @map("updated_at")
 

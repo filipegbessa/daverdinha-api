@@ -166,6 +166,10 @@ export class BotEngineService {
     };
   }
 
+  // Unlike every other terminal branch in this method, this one does NOT
+  // hand off to a human — the bot replies and the conversation stays
+  // exactly as it was (still bot_active, still awaiting whatever it was
+  // awaiting), so the customer's next real message is handled normally.
   private async handleUnsupportedMessage(
     conversation: { id: string; phone: string },
     settings: { mediaReceivedMessage: string },
@@ -181,10 +185,6 @@ export class BotEngineService {
     await this.whatsapp.sendText(conversation.phone, settings.mediaReceivedMessage);
     await this.prisma.message.create({
       data: { conversationId: conversation.id, direction: 'outbound', body: settings.mediaReceivedMessage },
-    });
-    await this.prisma.conversation.update({
-      where: { id: conversation.id },
-      data: { status: 'paused_human' },
     });
   }
 

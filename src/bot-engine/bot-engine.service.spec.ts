@@ -85,7 +85,7 @@ describe('BotEngineService', () => {
         botEnabled: true,
         welcomeMessage: 'Bem-vinda(o)!',
         invalidAttemptsExceededMessage: 'Vou te chamar um atendente, só um instante!',
-        mediaReceivedMessage: 'Esse tipo de mensagem não é válido por aqui, vou te chamar um atendente!',
+        mediaReceivedMessage: 'Esse tipo de mensagem não é válido por aqui!',
         orderReceivedMessage: 'Aceito! Recebemos seu pedido, já vamos confirmar com você.',
       }),
     };
@@ -611,7 +611,7 @@ describe('BotEngineService', () => {
       expect(prisma.conversation.update).not.toHaveBeenCalled();
     });
 
-    it('an audio message is persisted with a unified invalid-content label and hands off to a human', async () => {
+    it('an audio message is persisted with a unified invalid-content label, replies, and stays with the bot (no handoff)', async () => {
       const conversation = { id: 'c1', phone: '5521999999999', status: 'bot_active', invalidAttempts: 0, awaitingDeliveryReply: false };
       prisma.conversation.findFirst.mockResolvedValue(conversation);
 
@@ -620,24 +620,18 @@ describe('BotEngineService', () => {
       expect(prisma.message.create).toHaveBeenCalledWith({
         data: { conversationId: 'c1', direction: 'inbound', kind: 'invalid_content', body: '[Conteúdo inválido]' },
       });
-      expect(whatsapp.sendText).toHaveBeenCalledWith(
-        '5521999999999',
-        'Esse tipo de mensagem não é válido por aqui, vou te chamar um atendente!',
-      );
+      expect(whatsapp.sendText).toHaveBeenCalledWith('5521999999999', 'Esse tipo de mensagem não é válido por aqui!');
       expect(prisma.message.create).toHaveBeenCalledWith({
         data: {
           conversationId: 'c1',
           direction: 'outbound',
-          body: 'Esse tipo de mensagem não é válido por aqui, vou te chamar um atendente!',
+          body: 'Esse tipo de mensagem não é válido por aqui!',
         },
       });
-      expect(prisma.conversation.update).toHaveBeenCalledWith({
-        where: { id: 'c1' },
-        data: { status: 'paused_human' },
-      });
+      expect(prisma.conversation.update).not.toHaveBeenCalled();
     });
 
-    it('a sticker message is persisted with the same unified invalid-content label and hands off', async () => {
+    it('a sticker message is persisted with the same unified invalid-content label and stays with the bot', async () => {
       const conversation = { id: 'c1', phone: '5521999999999', status: 'bot_active', invalidAttempts: 0, awaitingDeliveryReply: false };
       prisma.conversation.findFirst.mockResolvedValue(conversation);
 
@@ -646,13 +640,10 @@ describe('BotEngineService', () => {
       expect(prisma.message.create).toHaveBeenCalledWith({
         data: { conversationId: 'c1', direction: 'inbound', kind: 'invalid_content', body: '[Conteúdo inválido]' },
       });
-      expect(prisma.conversation.update).toHaveBeenCalledWith({
-        where: { id: 'c1' },
-        data: { status: 'paused_human' },
-      });
+      expect(prisma.conversation.update).not.toHaveBeenCalled();
     });
 
-    it('a video message is persisted with the same unified invalid-content label and hands off', async () => {
+    it('a video message is persisted with the same unified invalid-content label and stays with the bot', async () => {
       const conversation = { id: 'c1', phone: '5521999999999', status: 'bot_active', invalidAttempts: 0, awaitingDeliveryReply: false };
       prisma.conversation.findFirst.mockResolvedValue(conversation);
 
@@ -661,10 +652,7 @@ describe('BotEngineService', () => {
       expect(prisma.message.create).toHaveBeenCalledWith({
         data: { conversationId: 'c1', direction: 'inbound', kind: 'invalid_content', body: '[Conteúdo inválido]' },
       });
-      expect(prisma.conversation.update).toHaveBeenCalledWith({
-        where: { id: 'c1' },
-        data: { status: 'paused_human' },
-      });
+      expect(prisma.conversation.update).not.toHaveBeenCalled();
     });
 
     it('an unrecognized message type still gets the same invalid-content treatment, instead of being silently dropped', async () => {
@@ -676,23 +664,17 @@ describe('BotEngineService', () => {
       expect(prisma.message.create).toHaveBeenCalledWith({
         data: { conversationId: 'c1', direction: 'inbound', kind: 'invalid_content', body: '[Conteúdo inválido]' },
       });
-      expect(prisma.conversation.update).toHaveBeenCalledWith({
-        where: { id: 'c1' },
-        data: { status: 'paused_human' },
-      });
+      expect(prisma.conversation.update).not.toHaveBeenCalled();
     });
 
-    it('an audio message overrides an in-progress delivery-CEP wait and hands off immediately, instead of being treated as the CEP reply', async () => {
+    it('an audio message during an in-progress delivery-CEP wait replies with the invalid-content message, instead of being treated as the CEP reply, and does not hand off', async () => {
       const conversation = { id: 'c1', phone: '5521999999999', status: 'bot_active', invalidAttempts: 0, awaitingDeliveryReply: true };
       prisma.conversation.findFirst.mockResolvedValue(conversation);
 
       await service.handleIncomingMessage(mediaMessagePayload('5521999999999', 'audio'));
 
       expect(deliveryCheck.handleReply).not.toHaveBeenCalled();
-      expect(prisma.conversation.update).toHaveBeenCalledWith({
-        where: { id: 'c1' },
-        data: { status: 'paused_human' },
-      });
+      expect(prisma.conversation.update).not.toHaveBeenCalled();
     });
 
     it('a catalog order message lists the product items (by retailer id), tags the message as an order, and hands off to a human', async () => {

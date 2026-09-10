@@ -19,7 +19,7 @@ CREATE TABLE "bot_settings" (
     "bot_enabled" BOOLEAN NOT NULL DEFAULT false,
     "welcome_message" TEXT NOT NULL,
     "invalid_attempts_exceeded_message" TEXT NOT NULL DEFAULT 'Não consegui entender sua opção, vou te chamar um atendente!',
-    "media_received_message" TEXT NOT NULL DEFAULT 'Esse tipo de mensagem não é válido por aqui, vou te chamar um atendente!',
+    "media_received_message" TEXT NOT NULL DEFAULT 'Esse tipo de mensagem não é válido por aqui!',
     "order_received_message" TEXT NOT NULL DEFAULT 'Aceito! Recebemos seu pedido, já vamos confirmar com você.',
     "updated_at" TIMESTAMP(3) NOT NULL,
 
