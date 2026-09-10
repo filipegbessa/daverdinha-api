@@ -104,10 +104,25 @@ CREATE TABLE "messages" (
     "conversation_id" TEXT NOT NULL,
     "direction" "MessageDirection" NOT NULL,
     "kind" "MessageKind" NOT NULL DEFAULT 'text',
-    "body" TEXT NOT NULL,
+    "body" TEXT,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "messages_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "order_items" (
+    "id" TEXT NOT NULL,
+    "message_id" TEXT NOT NULL,
+    "catalog_id" TEXT NOT NULL,
+    "product_retailer_id" TEXT NOT NULL,
+    "product_name" TEXT,
+    "quantity" INTEGER NOT NULL,
+    "unit_price" DECIMAL(10,2),
+    "currency" TEXT,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "order_items_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateIndex
@@ -127,3 +142,6 @@ ALTER TABLE "conversations" ADD CONSTRAINT "conversations_awaiting_menu_item_ans
 
 -- AddForeignKey
 ALTER TABLE "messages" ADD CONSTRAINT "messages_conversation_id_fkey" FOREIGN KEY ("conversation_id") REFERENCES "conversations"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "order_items" ADD CONSTRAINT "order_items_message_id_fkey" FOREIGN KEY ("message_id") REFERENCES "messages"("id") ON DELETE CASCADE ON UPDATE CASCADE;

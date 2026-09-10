@@ -52,7 +52,7 @@ describe('ConversationsService', () => {
     const result = await service.getWithMessages('1');
     expect(prisma.conversation.findUnique).toHaveBeenCalledWith({
       where: { id: '1' },
-      include: { messages: { orderBy: { createdAt: 'asc' } } },
+      include: { messages: { orderBy: { createdAt: 'asc' }, include: { orderItems: true } } },
     });
     expect(result).toBe(conversation);
   });

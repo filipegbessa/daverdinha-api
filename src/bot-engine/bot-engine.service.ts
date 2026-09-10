@@ -17,12 +17,6 @@ const STALE_HANDOFF_MS = 30 * 24 * 60 * 60 * 1000;
 // ignored entirely for now, pending a dedicated image flow.
 const INVALID_CONTENT_LABEL = '[Conteúdo inválido]';
 
-function formatCurrency(amount: string, currency: string): string {
-  const value = Number(amount);
-  if (Number.isNaN(value)) return `${currency} ${amount}`;
-  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency }).format(value).replace(/ /g, ' ');
-}
-
 interface OrderProductItem {
   product_retailer_id: string;
   quantity: string;
@@ -211,16 +205,22 @@ export class BotEngineService {
         )
       : {};
 
-    const lines = items.map((item) => {
-      const name = productNames[item.product_retailer_id] ?? item.product_retailer_id;
-      const price =
-        item.item_price && item.currency ? ` — ${formatCurrency(item.item_price, item.currency)}` : '';
-      return `- ${name} x${item.quantity}${price}`;
-    });
-    const body = ['Pedido pelo catálogo:', ...lines].join('\n');
-
     await this.prisma.message.create({
-      data: { conversationId: conversation.id, direction: 'inbound', kind: 'order', body },
+      data: {
+        conversationId: conversation.id,
+        direction: 'inbound',
+        kind: 'order',
+        orderItems: {
+          create: items.map((item) => ({
+            catalogId: order?.catalog_id ?? '',
+            productRetailerId: item.product_retailer_id,
+            productName: productNames[item.product_retailer_id],
+            quantity: Number(item.quantity),
+            unitPrice: item.item_price,
+            currency: item.currency,
+          })),
+        },
+      },
     });
     await this.whatsapp.sendText(conversation.phone, settings.orderReceivedMessage);
     await this.prisma.message.create({

@@ -23,7 +23,7 @@ export class ConversationsService {
   async getWithMessages(id: string) {
     const conversation = await this.prisma.conversation.findUnique({
       where: { id },
-      include: { messages: { orderBy: { createdAt: 'asc' } } },
+      include: { messages: { orderBy: { createdAt: 'asc' }, include: { orderItems: true } } },
     });
     if (!conversation) {
       throw new NotFoundException(`Conversa ${id} não encontrada`);

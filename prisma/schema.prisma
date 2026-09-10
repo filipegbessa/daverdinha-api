@@ -131,8 +131,24 @@ model Message {
   conversation   Conversation     @relation(fields: [conversationId], references: [id])
   direction      MessageDirection
   kind           MessageKind      @default(text)
-  body           String
+  body           String?
+  orderItems     OrderItem[]
   createdAt      DateTime         @default(now()) @map("created_at")
 
   @@map("messages")
+}
+
+model OrderItem {
+  id                String   @id @default(uuid())
+  messageId         String   @map("message_id")
+  message           Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  catalogId         String   @map("catalog_id")
+  productRetailerId String   @map("product_retailer_id")
+  productName       String?  @map("product_name")
+  quantity          Int
+  unitPrice         Decimal? @map("unit_price") @db.Decimal(10, 2)
+  currency          String?
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  @@map("order_items")
 }

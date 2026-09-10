@@ -677,7 +677,7 @@ describe('BotEngineService', () => {
       expect(prisma.conversation.update).not.toHaveBeenCalled();
     });
 
-    it('a catalog order message looks up the product name, formats the price as R$, tags the message as an order, and starts the delivery-location flow', async () => {
+    it('a catalog order message looks up the product name, stores structured order items, tags the message as an order, and starts the delivery-location flow', async () => {
       const conversation = { id: 'c1', phone: '5521999999999', status: 'bot_active', invalidAttempts: 0, awaitingDeliveryReply: false };
       prisma.conversation.findFirst.mockResolvedValue(conversation);
       whatsapp.getProductNames.mockResolvedValue({ 'vaso-01': 'Vaso de Cerâmica' });
@@ -694,7 +694,18 @@ describe('BotEngineService', () => {
           conversationId: 'c1',
           direction: 'inbound',
           kind: 'order',
-          body: 'Pedido pelo catálogo:\n- Vaso de Cerâmica x2 — R$ 35,00',
+          orderItems: {
+            create: [
+              {
+                catalogId: 'cat1',
+                productRetailerId: 'vaso-01',
+                productName: 'Vaso de Cerâmica',
+                quantity: 2,
+                unitPrice: '35.00',
+                currency: 'BRL',
+              },
+            ],
+          },
         },
       });
       expect(whatsapp.sendText).toHaveBeenCalledWith(
@@ -709,7 +720,7 @@ describe('BotEngineService', () => {
       expect(deliveryCheck.start).toHaveBeenCalledWith(conversation);
     });
 
-    it('falls back to the retailer id when the catalog lookup has no name for it', async () => {
+    it('falls back to an undefined product name when the catalog lookup has no name for it', async () => {
       const conversation = { id: 'c1', phone: '5521999999999', status: 'bot_active', invalidAttempts: 0, awaitingDeliveryReply: false };
       prisma.conversation.findFirst.mockResolvedValue(conversation);
       whatsapp.getProductNames.mockResolvedValue({});
@@ -721,12 +732,12 @@ describe('BotEngineService', () => {
       );
 
       const orderMessageCall = prisma.message.create.mock.calls.find(
-        ([{ data }]: [{ data: { body: string; direction: string } }]) => data.direction === 'inbound',
+        ([{ data }]: [{ data: { kind?: string } }]) => data.kind === 'order',
       );
-      expect(orderMessageCall[0].data.body).toBe('Pedido pelo catálogo:\n- vaso-01 x2 — R$ 35,00');
+      expect(orderMessageCall[0].data.orderItems.create[0].productName).toBeUndefined();
     });
 
-    it('a catalog order with multiple items lists every line', async () => {
+    it('a catalog order with multiple items stores one order item per line', async () => {
       const conversation = { id: 'c1', phone: '5521999999999', status: 'bot_active', invalidAttempts: 0, awaitingDeliveryReply: false };
       prisma.conversation.findFirst.mockResolvedValue(conversation);
       whatsapp.getProductNames.mockResolvedValue({
@@ -742,11 +753,26 @@ describe('BotEngineService', () => {
       );
 
       const orderMessageCall = prisma.message.create.mock.calls.find(
-        ([{ data }]: [{ data: { body: string; direction: string } }]) => data.direction === 'inbound',
+        ([{ data }]: [{ data: { kind?: string } }]) => data.kind === 'order',
       );
-      expect(orderMessageCall[0].data.body).toBe(
-        'Pedido pelo catálogo:\n- Vaso de Cerâmica x2 — R$ 35,00\n- Muda de Samambaia x1 — R$ 18,50',
-      );
+      expect(orderMessageCall[0].data.orderItems.create).toEqual([
+        {
+          catalogId: 'cat1',
+          productRetailerId: 'vaso-01',
+          productName: 'Vaso de Cerâmica',
+          quantity: 2,
+          unitPrice: '35.00',
+          currency: 'BRL',
+        },
+        {
+          catalogId: 'cat1',
+          productRetailerId: 'muda-samambaia',
+          productName: 'Muda de Samambaia',
+          quantity: 1,
+          unitPrice: '18.50',
+          currency: 'BRL',
+        },
+      ]);
     });
 
     it('still answers a catalog order even when the conversation is already paused_human', async () => {
