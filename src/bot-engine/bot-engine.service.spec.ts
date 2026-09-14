@@ -398,6 +398,10 @@ describe('BotEngineService', () => {
     expect(deliveryCheck.handleReply).toHaveBeenCalledWith(conversation, 'Ipanema');
     expect(whatsapp.sendInteractiveList).not.toHaveBeenCalled();
     expect(prisma.conversation.update).not.toHaveBeenCalled();
+    // DeliveryCheckService owns persisting this reply (annotated with the
+    // resolved bairro) — the generic inbound-text persistence must not
+    // also save a plain, unannotated copy.
+    expect(prisma.message.create).not.toHaveBeenCalled();
   });
 
   it('processes a delivery-reply even when the bot is globally disabled — the sub-flow is a closed loop that must resolve before handoff', async () => {

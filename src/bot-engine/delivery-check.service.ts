@@ -9,8 +9,8 @@ import { normalizeText } from '../common/normalize-text';
 const MAX_DELIVERY_CEP_ATTEMPTS = 2;
 
 type ResolutionResult =
-  | { kind: 'covered'; covered: boolean }
-  | { kind: 'not-covered' }
+  | { kind: 'covered'; covered: boolean; bairro: string }
+  | { kind: 'not-covered'; bairro: string }
   | { kind: 'unresolved' };
 
 @Injectable()
@@ -39,16 +39,25 @@ export class DeliveryCheckService {
     const cep = text.replace(/\D/g, '');
     const result = await this.resolveLocation(cep);
 
+    await this.prisma.message.create({
+      data: {
+        conversationId: conversation.id,
+        direction: 'inbound',
+        body: result.kind === 'unresolved' ? text : `${text} (${result.bairro})`,
+      },
+    });
+
     if (result.kind === 'unresolved') {
       await this.registerUnresolvedAttempt(conversation);
       return;
     }
 
     const item = await this.menuItems.findSystemDeliveryItem();
-    const body =
+    const template =
       result.kind === 'covered' && result.covered
         ? item.deliveryConfirmedMessage ?? ''
         : item.deliveryNotCoveredMessage ?? '';
+    const body = template.replace(/\[local\]/g, result.bairro);
 
     await this.sendAndPersist(conversation, body);
     await this.prisma.conversation.update({
@@ -65,16 +74,16 @@ export class DeliveryCheckService {
     const localMatch = locations.find((loc) =>
       loc.cepRanges.some((range) => cepNumber >= range.startCep && cepNumber <= range.endCep),
     );
-    if (localMatch) return { kind: 'covered', covered: localMatch.covered };
+    if (localMatch) return { kind: 'covered', covered: localMatch.covered, bairro: localMatch.regionName };
 
     const lookup = await this.cepLookup.lookup(cep);
     if (!lookup) return { kind: 'unresolved' };
 
     const normalizedBairro = normalizeText(lookup.bairro);
     const apiMatch = locations.find((loc) => normalizeText(loc.regionName) === normalizedBairro);
-    if (apiMatch) return { kind: 'covered', covered: apiMatch.covered };
+    if (apiMatch) return { kind: 'covered', covered: apiMatch.covered, bairro: apiMatch.regionName };
 
-    return { kind: 'not-covered' };
+    return { kind: 'not-covered', bairro: lookup.bairro };
   }
 
   private async registerUnresolvedAttempt(conversation: {

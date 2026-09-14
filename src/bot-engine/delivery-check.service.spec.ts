@@ -16,8 +16,8 @@ describe('DeliveryCheckService', () => {
 
   const messages = {
     deliveryPrompt: 'Qual o CEP para entrega?',
-    deliveryConfirmedMessage: 'Aguarde!',
-    deliveryNotCoveredMessage: 'Ainda não chegamos aí, mas em breve!',
+    deliveryConfirmedMessage: 'Sim! Entregamos aí no [local], aguarde um pouco que entro em contato',
+    deliveryNotCoveredMessage: 'Ainda não chegamos no [local], mas em breve!',
     deliveryRetryMessage: 'Esse não é um CEP válido, quer tentar novamente?',
     deliveryUnrecognizedMessage: 'Não consegui identificar seu CEP, vou te chamar um atendente!',
   };
@@ -62,15 +62,27 @@ describe('DeliveryCheckService', () => {
   });
 
   describe('handleReply() — local range match', () => {
-    it('confirms delivery and hands off when the CEP is in a covered local range', async () => {
+    it('confirms delivery and hands off when the CEP is in a covered local range, filling [local] with the bairro', async () => {
       const conversation = { id: 'c1', phone: '5521999999999', invalidAttempts: 0 };
       await service.handleReply(conversation, '22440-000');
 
       expect(cepLookup.lookup).not.toHaveBeenCalled();
-      expect(whatsapp.sendText).toHaveBeenCalledWith('5521999999999', 'Aguarde!');
+      expect(whatsapp.sendText).toHaveBeenCalledWith(
+        '5521999999999',
+        'Sim! Entregamos aí no Ipanema, aguarde um pouco que entro em contato',
+      );
       expect(prisma.conversation.update).toHaveBeenCalledWith({
         where: { id: 'c1' },
         data: { awaitingDeliveryReply: false, status: 'paused_human' },
+      });
+    });
+
+    it('persists the inbound reply annotated with the resolved bairro', async () => {
+      const conversation = { id: 'c1', phone: '5521999999999', invalidAttempts: 0 };
+      await service.handleReply(conversation, '22440-000');
+
+      expect(prisma.message.create).toHaveBeenCalledWith({
+        data: { conversationId: 'c1', direction: 'inbound', body: '22440-000 (Ipanema)' },
       });
     });
 
@@ -78,7 +90,10 @@ describe('DeliveryCheckService', () => {
       const conversation = { id: 'c1', phone: '5521999999999', invalidAttempts: 0 };
       await service.handleReply(conversation, '22650000');
 
-      expect(whatsapp.sendText).toHaveBeenCalledWith('5521999999999', 'Ainda não chegamos aí, mas em breve!');
+      expect(whatsapp.sendText).toHaveBeenCalledWith(
+        '5521999999999',
+        'Ainda não chegamos no Barra da Tijuca, mas em breve!',
+      );
       expect(prisma.conversation.update).toHaveBeenCalledWith({
         where: { id: 'c1' },
         data: { awaitingDeliveryReply: false, status: 'paused_human' },
@@ -94,7 +109,13 @@ describe('DeliveryCheckService', () => {
       await service.handleReply(conversation, '22999999');
 
       expect(cepLookup.lookup).toHaveBeenCalledWith('22999999');
-      expect(whatsapp.sendText).toHaveBeenCalledWith('5521999999999', 'Aguarde!');
+      expect(whatsapp.sendText).toHaveBeenCalledWith(
+        '5521999999999',
+        'Sim! Entregamos aí no Ipanema, aguarde um pouco que entro em contato',
+      );
+      expect(prisma.message.create).toHaveBeenCalledWith({
+        data: { conversationId: 'c1', direction: 'inbound', body: '22999999 (Ipanema)' },
+      });
     });
 
     it('sends not-covered when the API resolves a bairro that exists but is not in our list', async () => {
@@ -103,7 +124,13 @@ describe('DeliveryCheckService', () => {
 
       await service.handleReply(conversation, '99999999');
 
-      expect(whatsapp.sendText).toHaveBeenCalledWith('5521999999999', 'Ainda não chegamos aí, mas em breve!');
+      expect(whatsapp.sendText).toHaveBeenCalledWith(
+        '5521999999999',
+        'Ainda não chegamos no Copacabana Fictícia, mas em breve!',
+      );
+      expect(prisma.message.create).toHaveBeenCalledWith({
+        data: { conversationId: 'c1', direction: 'inbound', body: '99999999 (Copacabana Fictícia)' },
+      });
       expect(prisma.conversation.update).toHaveBeenCalledWith({
         where: { id: 'c1' },
         data: { awaitingDeliveryReply: false, status: 'paused_human' },
@@ -118,6 +145,9 @@ describe('DeliveryCheckService', () => {
 
       expect(cepLookup.lookup).not.toHaveBeenCalled();
       expect(whatsapp.sendText).toHaveBeenCalledWith('5521999999999', 'Esse não é um CEP válido, quer tentar novamente?');
+      expect(prisma.message.create).toHaveBeenCalledWith({
+        data: { conversationId: 'c1', direction: 'inbound', body: '123' },
+      });
       expect(prisma.conversation.update).toHaveBeenCalledWith({
         where: { id: 'c1' },
         data: { invalidAttempts: 1 },

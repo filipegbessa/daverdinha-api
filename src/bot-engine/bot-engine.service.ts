@@ -61,7 +61,15 @@ export class BotEngineService {
       return;
     }
 
-    if (message.text?.body) {
+    // A reply to the delivery-location sub-flow is persisted by
+    // DeliveryCheckService itself, annotated with the resolved bairro
+    // (e.g. "22211-200 (Catete)") instead of the raw CEP text.
+    const isDeliveryReply =
+      conversation.awaitingDeliveryReply &&
+      !!message.text?.body &&
+      normalizeText(message.text.body) !== 'menu';
+
+    if (message.text?.body && !isDeliveryReply) {
       await this.prisma.message.create({
         data: {
           conversationId: conversation.id,
