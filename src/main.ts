@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
+import { createCorsOriginHandler } from './cors-origin';
 import { json } from 'express';
 
 async function bootstrap() {
@@ -12,18 +13,7 @@ async function bootstrap() {
     return json()(req, res, next);
   });
 
-  const frontendUrls = (process.env.FRONTEND_URL ?? 'http://localhost:3000')
-    .split(',')
-    .map((url) => url.trim());
-  app.enableCors({
-    origin: (origin, callback) => {
-      if (!origin || frontendUrls.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error('Not allowed by CORS'));
-      }
-    },
-  });
+  app.enableCors({ origin: createCorsOriginHandler(process.env.FRONTEND_URL) });
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
 
   await app.listen(process.env.PORT ?? 3001);

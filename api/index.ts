@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { ExpressAdapter } from '@nestjs/platform-express';
 import { AppModule } from '../src/app.module';
+import { createCorsOriginHandler } from '../src/cors-origin';
 import express, { Express } from 'express';
 import { IncomingMessage, ServerResponse } from 'http';
 
@@ -22,7 +23,7 @@ async function bootstrap(): Promise<Express> {
     return express.json()(req, res, next);
   });
 
-  nestApp.enableCors({ origin: process.env.FRONTEND_URL ?? 'http://localhost:3000' });
+  nestApp.enableCors({ origin: createCorsOriginHandler(process.env.FRONTEND_URL) });
   nestApp.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
 
   await nestApp.init();
