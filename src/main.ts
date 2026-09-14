@@ -16,7 +16,13 @@ async function bootstrap() {
     .split(',')
     .map((url) => url.trim());
   app.enableCors({
-    origin: frontendUrls,
+    origin: (origin, callback) => {
+      if (!origin || frontendUrls.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
   });
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
 
