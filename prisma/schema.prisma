@@ -98,19 +98,20 @@ enum EntryPoint {
 }
 
 model Conversation {
-  id                       String             @id @default(uuid())
+  id                       String                 @id @default(uuid())
   phone                    String
   name                     String?
-  status                   ConversationStatus @default(bot_active)
-  entryPoint               EntryPoint?        @map("entry_point")
-  invalidAttempts          Int                @default(0) @map("invalid_attempts")
-  awaitingDeliveryReply    Boolean            @default(false) @map("awaiting_delivery_reply")
-  awaitingMenuItemAnswerId String?            @map("awaiting_menu_item_answer_id")
-  awaitingMenuItemAnswer   MenuItem?          @relation(fields: [awaitingMenuItemAnswerId], references: [id], onDelete: SetNull)
-  createdAt                DateTime           @default(now()) @map("created_at")
-  updatedAt                DateTime           @updatedAt @map("updated_at")
+  status                   ConversationStatus     @default(bot_active)
+  entryPoint               EntryPoint?            @map("entry_point")
+  invalidAttempts          Int                    @default(0) @map("invalid_attempts")
+  awaitingDeliveryReply    Boolean                @default(false) @map("awaiting_delivery_reply")
+  awaitingMenuItemAnswerId String?                @map("awaiting_menu_item_answer_id")
+  awaitingMenuItemAnswer   MenuItem?              @relation(fields: [awaitingMenuItemAnswerId], references: [id], onDelete: SetNull)
+  createdAt                DateTime               @default(now()) @map("created_at")
+  updatedAt                DateTime               @updatedAt @map("updated_at")
   messages                 Message[]
   orders                   Order[]
+  categories               ConversationCategory[]
 
   @@map("conversations")
 }
@@ -175,4 +176,25 @@ model PushSubscription {
   createdAt   DateTime @default(now()) @map("created_at")
 
   @@map("push_subscriptions")
+}
+
+model Category {
+  id            String                 @id @default(uuid())
+  name          String                 @unique
+  color         String
+  createdAt     DateTime               @default(now()) @map("created_at")
+  conversations ConversationCategory[]
+
+  @@map("categories")
+}
+
+model ConversationCategory {
+  conversationId String       @map("conversation_id")
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  categoryId     String       @map("category_id")
+  category       Category     @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  createdAt      DateTime     @default(now()) @map("created_at")
+
+  @@id([conversationId, categoryId])
+  @@map("conversation_categories")
 }

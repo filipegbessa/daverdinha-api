@@ -147,6 +147,25 @@ CREATE TABLE "push_subscriptions" (
     CONSTRAINT "push_subscriptions_pkey" PRIMARY KEY ("id")
 );
 
+-- CreateTable
+CREATE TABLE "categories" (
+    "id" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "color" TEXT NOT NULL,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "categories_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "conversation_categories" (
+    "conversation_id" TEXT NOT NULL,
+    "category_id" TEXT NOT NULL,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "conversation_categories_pkey" PRIMARY KEY ("conversation_id","category_id")
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "delivery_locations_region_name_key" ON "delivery_locations"("region_name");
 
@@ -158,6 +177,9 @@ CREATE UNIQUE INDEX "orders_message_id_key" ON "orders"("message_id");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "push_subscriptions_endpoint_key" ON "push_subscriptions"("endpoint");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "categories_name_key" ON "categories"("name");
 
 -- AddForeignKey
 ALTER TABLE "menu_item_answer_options" ADD CONSTRAINT "menu_item_answer_options_menu_item_id_fkey" FOREIGN KEY ("menu_item_id") REFERENCES "menu_items"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -179,3 +201,9 @@ ALTER TABLE "orders" ADD CONSTRAINT "orders_message_id_fkey" FOREIGN KEY ("messa
 
 -- AddForeignKey
 ALTER TABLE "order_items" ADD CONSTRAINT "order_items_order_id_fkey" FOREIGN KEY ("order_id") REFERENCES "orders"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "conversation_categories" ADD CONSTRAINT "conversation_categories_conversation_id_fkey" FOREIGN KEY ("conversation_id") REFERENCES "conversations"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "conversation_categories" ADD CONSTRAINT "conversation_categories_category_id_fkey" FOREIGN KEY ("category_id") REFERENCES "categories"("id") ON DELETE CASCADE ON UPDATE CASCADE;
