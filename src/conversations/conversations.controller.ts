@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { ClerkAuthGuard } from '../common/auth/clerk-auth.guard';
 import { ConversationsService } from './conversations.service';
 import { ReplyDto } from './dto/reply.dto';
@@ -37,5 +37,15 @@ export class ConversationsController {
   @Post(':id/pause')
   pause(@Param('id') id: string) {
     return this.service.pause(id);
+  }
+
+  @Post(':id/categories/:categoryId')
+  addCategory(@Param('id') id: string, @Param('categoryId') categoryId: string) {
+    return this.service.addCategory(id, categoryId);
+  }
+
+  @Delete(':id/categories/:categoryId')
+  removeCategory(@Param('id') id: string, @Param('categoryId') categoryId: string) {
+    return this.service.removeCategory(id, categoryId);
   }
 }

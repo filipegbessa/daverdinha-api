@@ -6,13 +6,14 @@ import { WhatsAppClientService } from '../whatsapp/whatsapp-client.service';
 
 describe('ConversationsService', () => {
   let service: ConversationsService;
-  let prisma: { conversation: any; message: any; $transaction: jest.Mock };
+  let prisma: { conversation: any; message: any; conversationCategory: any; $transaction: jest.Mock };
   let whatsapp: { sendText: jest.Mock };
 
   beforeEach(async () => {
     prisma = {
       conversation: { findMany: jest.fn(), findUnique: jest.fn(), findUniqueOrThrow: jest.fn(), update: jest.fn() },
       message: { create: jest.fn() },
+      conversationCategory: { upsert: jest.fn(), deleteMany: jest.fn() },
       $transaction: jest.fn(),
     };
     whatsapp = { sendText: jest.fn() };
@@ -28,33 +29,92 @@ describe('ConversationsService', () => {
 
   it('list() returns conversations ordered by updatedAt desc, each annotated with unread', async () => {
     prisma.conversation.findMany.mockResolvedValue([
-      { id: '1', phone: '5521999999999', messages: [{ direction: 'inbound' }] },
-      { id: '2', phone: '5521988888888', messages: [{ direction: 'outbound' }] },
-      { id: '3', phone: '5521977777777', messages: [] },
+      { id: '1', phone: '5521999999999', messages: [{ direction: 'inbound' }], categories: [] },
+      { id: '2', phone: '5521988888888', messages: [{ direction: 'outbound' }], categories: [] },
+      { id: '3', phone: '5521977777777', messages: [], categories: [] },
     ]);
 
     const result = await service.list();
 
     expect(prisma.conversation.findMany).toHaveBeenCalledWith({
       orderBy: { updatedAt: 'desc' },
-      include: { messages: { orderBy: { createdAt: 'desc' }, take: 1 } },
+      include: {
+        messages: { orderBy: { createdAt: 'desc' }, take: 1 },
+        categories: { include: { category: true } },
+      },
     });
     expect(result).toEqual([
-      { id: '1', phone: '5521999999999', unread: true },
-      { id: '2', phone: '5521988888888', unread: false },
-      { id: '3', phone: '5521977777777', unread: false },
+      { id: '1', phone: '5521999999999', unread: true, categories: [] },
+      { id: '2', phone: '5521988888888', unread: false, categories: [] },
+      { id: '3', phone: '5521977777777', unread: false, categories: [] },
+    ]);
+  });
+
+  it('list() flattens each conversation\'s categories out of the join-table include', async () => {
+    prisma.conversation.findMany.mockResolvedValue([
+      {
+        id: '1',
+        phone: '5521999999999',
+        messages: [{ direction: 'inbound' }],
+        categories: [{ category: { id: 'cat1', name: 'Bingo', color: '#185928' } }],
+      },
+    ]);
+
+    const result = await service.list();
+
+    expect(prisma.conversation.findMany).toHaveBeenCalledWith({
+      orderBy: { updatedAt: 'desc' },
+      include: {
+        messages: { orderBy: { createdAt: 'desc' }, take: 1 },
+        categories: { include: { category: true } },
+      },
+    });
+    expect(result).toEqual([
+      {
+        id: '1',
+        phone: '5521999999999',
+        unread: true,
+        categories: [{ id: 'cat1', name: 'Bingo', color: '#185928' }],
+      },
     ]);
   });
 
   it('getWithMessages() returns the conversation with its messages ordered chronologically', async () => {
-    const conversation = { id: '1', messages: [] };
+    const conversation = { id: '1', messages: [], categories: [] };
     prisma.conversation.findUnique.mockResolvedValue(conversation);
     const result = await service.getWithMessages('1');
     expect(prisma.conversation.findUnique).toHaveBeenCalledWith({
       where: { id: '1' },
-      include: { messages: { orderBy: { createdAt: 'asc' }, include: { order: { include: { items: true } } } } },
+      include: {
+        messages: { orderBy: { createdAt: 'asc' }, include: { order: { include: { items: true } } } },
+        categories: { include: { category: true } },
+      },
     });
-    expect(result).toBe(conversation);
+    expect(result).toEqual({ id: '1', messages: [], categories: [] });
+  });
+
+  it('getWithMessages() flattens categories the same way', async () => {
+    const conversation = {
+      id: '1',
+      messages: [],
+      categories: [{ category: { id: 'cat1', name: 'Bingo', color: '#185928' } }],
+    };
+    prisma.conversation.findUnique.mockResolvedValue(conversation);
+
+    const result = await service.getWithMessages('1');
+
+    expect(prisma.conversation.findUnique).toHaveBeenCalledWith({
+      where: { id: '1' },
+      include: {
+        messages: { orderBy: { createdAt: 'asc' }, include: { order: { include: { items: true } } } },
+        categories: { include: { category: true } },
+      },
+    });
+    expect(result).toEqual({
+      id: '1',
+      messages: [],
+      categories: [{ id: 'cat1', name: 'Bingo', color: '#185928' }],
+    });
   });
 
   it('getWithMessages() throws NotFoundException when the conversation does not exist', async () => {

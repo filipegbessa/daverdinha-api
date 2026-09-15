@@ -12,23 +12,43 @@ export class ConversationsService {
   async list() {
     const conversations = await this.prisma.conversation.findMany({
       orderBy: { updatedAt: 'desc' },
-      include: { messages: { orderBy: { createdAt: 'desc' }, take: 1 } },
+      include: {
+        messages: { orderBy: { createdAt: 'desc' }, take: 1 },
+        categories: { include: { category: true } },
+      },
     });
-    return conversations.map(({ messages, ...conversation }) => ({
+    return conversations.map(({ messages, categories, ...conversation }) => ({
       ...conversation,
       unread: messages[0]?.direction === 'inbound',
+      categories: categories.map((c) => c.category),
     }));
   }
 
   async getWithMessages(id: string) {
     const conversation = await this.prisma.conversation.findUnique({
       where: { id },
-      include: { messages: { orderBy: { createdAt: 'asc' }, include: { order: { include: { items: true } } } } },
+      include: {
+        messages: { orderBy: { createdAt: 'asc' }, include: { order: { include: { items: true } } } },
+        categories: { include: { category: true } },
+      },
     });
     if (!conversation) {
       throw new NotFoundException(`Conversa ${id} não encontrada`);
     }
-    return conversation;
+    const { categories, ...rest } = conversation;
+    return { ...rest, categories: categories.map((c) => c.category) };
+  }
+
+  async addCategory(conversationId: string, categoryId: string): Promise<void> {
+    await this.prisma.conversationCategory.upsert({
+      where: { conversationId_categoryId: { conversationId, categoryId } },
+      update: {},
+      create: { conversationId, categoryId },
+    });
+  }
+
+  async removeCategory(conversationId: string, categoryId: string): Promise<void> {
+    await this.prisma.conversationCategory.deleteMany({ where: { conversationId, categoryId } });
   }
 
   async reply(id: string, text: string) {
