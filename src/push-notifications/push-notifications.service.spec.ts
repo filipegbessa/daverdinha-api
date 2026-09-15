@@ -1,4 +1,5 @@
 import { Test } from '@nestjs/testing';
+import { Logger } from '@nestjs/common';
 import * as webpush from 'web-push';
 import { PushNotificationsService } from './push-notifications.service';
 import { PushSubscriptionsService } from '../push-subscriptions/push-subscriptions.service';
@@ -86,5 +87,65 @@ describe('PushNotificationsService', () => {
     await service.notifyNewMessage({ id: 'c1', name: 'Maria', phone: '5521999999999' });
 
     expect(subscriptions.remove).not.toHaveBeenCalled();
+  });
+
+  it('logs a warning on a transient error (e.g. 500) instead of silently dropping it', async () => {
+    subscriptions.listAll.mockResolvedValue([
+      { endpoint: 'https://push.example/1', p256dh: 'p1', auth: 'a1' },
+    ]);
+    (webpush.sendNotification as jest.Mock).mockRejectedValue({ statusCode: 500 });
+    const warnSpy = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+
+    await service.notifyNewMessage({ id: 'c1', name: 'Maria', phone: '5521999999999' });
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('https://push.example/1'),
+    );
+    warnSpy.mockRestore();
+  });
+
+  describe('when VAPID is not configured', () => {
+    async function buildServiceWithoutVapid() {
+      const localSubscriptions = { listAll: jest.fn().mockResolvedValue([]), remove: jest.fn() };
+      const moduleRef = await Test.createTestingModule({
+        providers: [
+          PushNotificationsService,
+          { provide: PushSubscriptionsService, useValue: localSubscriptions },
+        ],
+      }).compile();
+
+      const localService = moduleRef.get(PushNotificationsService);
+      return { localService, localSubscriptions };
+    }
+
+    it('does not call setVapidDetails when a VAPID env var is missing', async () => {
+      delete process.env.VAPID_PUBLIC_KEY;
+      (webpush.setVapidDetails as jest.Mock).mockClear();
+
+      try {
+        const { localService } = await buildServiceWithoutVapid();
+        localService.onModuleInit();
+
+        expect(webpush.setVapidDetails).not.toHaveBeenCalled();
+      } finally {
+        process.env.VAPID_PUBLIC_KEY = 'public-key';
+      }
+    });
+
+    it('does not send notifications or list subscriptions when VAPID is not configured', async () => {
+      delete process.env.VAPID_PUBLIC_KEY;
+
+      try {
+        const { localService, localSubscriptions } = await buildServiceWithoutVapid();
+        localService.onModuleInit();
+
+        await localService.notifyNewMessage({ id: 'c1', name: 'Maria', phone: '5521999999999' });
+
+        expect(localSubscriptions.listAll).not.toHaveBeenCalled();
+        expect(webpush.sendNotification).not.toHaveBeenCalled();
+      } finally {
+        process.env.VAPID_PUBLIC_KEY = 'public-key';
+      }
+    });
   });
 });

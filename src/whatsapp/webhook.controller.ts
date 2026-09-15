@@ -52,12 +52,16 @@ export class WebhookController {
 
     await this.botEngine.handleIncomingMessage(body);
 
-    const phone = extractPhoneFromWebhookPayload(body);
-    if (phone) {
-      const conversation = await this.prisma.conversation.findFirst({ where: { phone } });
-      if (conversation?.status === 'paused_human') {
-        await this.pushNotifications.notifyNewMessage(conversation);
+    try {
+      const phone = extractPhoneFromWebhookPayload(body);
+      if (phone) {
+        const conversation = await this.prisma.conversation.findFirst({ where: { phone } });
+        if (conversation?.status === 'paused_human') {
+          await this.pushNotifications.notifyNewMessage(conversation);
+        }
       }
+    } catch {
+      // best-effort: never fail the webhook response over notification plumbing
     }
 
     return { status: 'ok' };

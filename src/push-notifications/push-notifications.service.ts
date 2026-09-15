@@ -1,4 +1,4 @@
-import { Injectable, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import * as webpush from 'web-push';
 import { PushSubscriptionsService } from '../push-subscriptions/push-subscriptions.service';
 
@@ -10,17 +10,22 @@ interface NotifiableConversation {
 
 @Injectable()
 export class PushNotificationsService implements OnModuleInit {
+  private readonly logger = new Logger(PushNotificationsService.name);
+  private vapidConfigured = false;
+
   constructor(private readonly subscriptions: PushSubscriptionsService) {}
 
   onModuleInit() {
-    webpush.setVapidDetails(
-      process.env.VAPID_SUBJECT!,
-      process.env.VAPID_PUBLIC_KEY!,
-      process.env.VAPID_PRIVATE_KEY!,
-    );
+    const { VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY } = process.env;
+    if (!VAPID_SUBJECT || !VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) return;
+
+    webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+    this.vapidConfigured = true;
   }
 
   async notifyNewMessage(conversation: NotifiableConversation): Promise<void> {
+    if (!this.vapidConfigured) return;
+
     const subscriptions = await this.subscriptions.listAll();
     const payload = JSON.stringify({
       title: 'Nova mensagem',
@@ -42,6 +47,10 @@ export class PushNotificationsService implements OnModuleInit {
           const statusCode = (error as { statusCode?: number }).statusCode;
           if (statusCode === 404 || statusCode === 410) {
             await this.subscriptions.remove(subscription.endpoint);
+          } else {
+            this.logger.warn(
+              `Failed to send push notification to ${subscription.endpoint}: ${statusCode ?? error}`,
+            );
           }
         }
       }),

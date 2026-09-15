@@ -87,4 +87,23 @@ describe('WebhookController', () => {
     expect(prisma.conversation.findFirst).not.toHaveBeenCalled();
     expect(pushNotifications.notifyNewMessage).not.toHaveBeenCalled();
   });
+
+  it('still returns ok when the notification lookup throws (never fails the webhook response)', async () => {
+    prisma.conversation.findFirst.mockRejectedValue(new Error('db unavailable'));
+
+    await expect(controller.receive(fakeRequest(), payload)).resolves.toEqual({ status: 'ok' });
+    expect(botEngine.handleIncomingMessage).toHaveBeenCalledWith(payload);
+  });
+
+  it('still returns ok when notifyNewMessage throws (never fails the webhook response)', async () => {
+    prisma.conversation.findFirst.mockResolvedValue({
+      id: 'c1',
+      name: 'Maria',
+      phone: '5521999999999',
+      status: 'paused_human',
+    });
+    pushNotifications.notifyNewMessage.mockRejectedValue(new Error('push failed'));
+
+    await expect(controller.receive(fakeRequest(), payload)).resolves.toEqual({ status: 'ok' });
+  });
 });
