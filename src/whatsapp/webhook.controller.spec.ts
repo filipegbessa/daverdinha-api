@@ -1,0 +1,90 @@
+import { Test } from '@nestjs/testing';
+import { WebhookController } from './webhook.controller';
+import { BotEngineService } from '../bot-engine/bot-engine.service';
+import { PrismaService } from '../prisma/prisma.service';
+import { PushNotificationsService } from '../push-notifications/push-notifications.service';
+import * as verifySignatureModule from './verify-signature';
+
+describe('WebhookController', () => {
+  let controller: WebhookController;
+  let botEngine: { handleIncomingMessage: jest.Mock };
+  let prisma: { conversation: { findFirst: jest.Mock } };
+  let pushNotifications: { notifyNewMessage: jest.Mock };
+
+  const payload = {
+    entry: [{ changes: [{ value: { messages: [{ from: '5521999999999', type: 'text', text: { body: 'oi' } }] } }] }],
+  };
+
+  function fakeRequest() {
+    return {
+      rawBody: Buffer.from(JSON.stringify(payload)),
+      headers: { 'x-hub-signature-256': 'sha256=whatever' },
+    } as any;
+  }
+
+  beforeEach(async () => {
+    process.env.WHATSAPP_APP_SECRET = 'test-secret';
+    jest.spyOn(verifySignatureModule, 'verifySignature').mockReturnValue(true);
+
+    botEngine = { handleIncomingMessage: jest.fn().mockResolvedValue(undefined) };
+    prisma = { conversation: { findFirst: jest.fn() } };
+    pushNotifications = { notifyNewMessage: jest.fn() };
+
+    const moduleRef = await Test.createTestingModule({
+      controllers: [WebhookController],
+      providers: [
+        { provide: BotEngineService, useValue: botEngine },
+        { provide: PrismaService, useValue: prisma },
+        { provide: PushNotificationsService, useValue: pushNotifications },
+      ],
+    }).compile();
+
+    controller = moduleRef.get(WebhookController);
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('notifies when the conversation ends up paused_human after processing', async () => {
+    prisma.conversation.findFirst.mockResolvedValue({
+      id: 'c1',
+      name: 'Maria',
+      phone: '5521999999999',
+      status: 'paused_human',
+    });
+
+    await controller.receive(fakeRequest(), payload);
+
+    expect(botEngine.handleIncomingMessage).toHaveBeenCalledWith(payload);
+    expect(prisma.conversation.findFirst).toHaveBeenCalledWith({ where: { phone: '5521999999999' } });
+    expect(pushNotifications.notifyNewMessage).toHaveBeenCalledWith({
+      id: 'c1',
+      name: 'Maria',
+      phone: '5521999999999',
+      status: 'paused_human',
+    });
+  });
+
+  it('does not notify when the conversation is still bot_active', async () => {
+    prisma.conversation.findFirst.mockResolvedValue({
+      id: 'c1',
+      name: 'Maria',
+      phone: '5521999999999',
+      status: 'bot_active',
+    });
+
+    await controller.receive(fakeRequest(), payload);
+
+    expect(pushNotifications.notifyNewMessage).not.toHaveBeenCalled();
+  });
+
+  it('does not notify when the payload has no extractable phone (e.g. a status webhook)', async () => {
+    const statusPayload = { entry: [{ changes: [{ value: { statuses: [{ id: 'wamid.1' }] } }] }] };
+
+    await controller.receive(fakeRequest(), statusPayload);
+
+    expect(prisma.conversation.findFirst).not.toHaveBeenCalled();
+    expect(pushNotifications.notifyNewMessage).not.toHaveBeenCalled();
+  });
+});

@@ -10,11 +10,18 @@ import {
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { verifySignature } from './verify-signature';
+import { extractPhoneFromWebhookPayload } from './extract-phone';
 import { BotEngineService } from '../bot-engine/bot-engine.service';
+import { PrismaService } from '../prisma/prisma.service';
+import { PushNotificationsService } from '../push-notifications/push-notifications.service';
 
 @Controller('webhook/whatsapp')
 export class WebhookController {
-  constructor(private readonly botEngine: BotEngineService) {}
+  constructor(
+    private readonly botEngine: BotEngineService,
+    private readonly prisma: PrismaService,
+    private readonly pushNotifications: PushNotificationsService,
+  ) {}
 
   @Get()
   verify(
@@ -44,6 +51,15 @@ export class WebhookController {
     }
 
     await this.botEngine.handleIncomingMessage(body);
+
+    const phone = extractPhoneFromWebhookPayload(body);
+    if (phone) {
+      const conversation = await this.prisma.conversation.findFirst({ where: { phone } });
+      if (conversation?.status === 'paused_human') {
+        await this.pushNotifications.notifyNewMessage(conversation);
+      }
+    }
+
     return { status: 'ok' };
   }
 }
