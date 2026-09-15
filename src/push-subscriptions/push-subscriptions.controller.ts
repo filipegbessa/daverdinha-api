@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, HttpCode, HttpStatus, Post, Req, UseGuards } from '@nestjs/common';
 import type { Request } from 'express';
 import { ClerkAuthGuard } from '../common/auth/clerk-auth.guard';
 import { PushSubscriptionsService } from './push-subscriptions.service';
@@ -16,6 +16,7 @@ export class PushSubscriptionsController {
   }
 
   @Delete()
+  @HttpCode(HttpStatus.NO_CONTENT)
   remove(@Body() dto: RemovePushSubscriptionDto) {
     return this.service.remove(dto.endpoint);
   }

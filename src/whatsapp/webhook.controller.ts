@@ -58,9 +58,20 @@ export class WebhookController {
     try {
       const phone = extractPhoneFromWebhookPayload(body);
       if (phone) {
-        const conversation = await this.prisma.conversation.findFirst({ where: { phone } });
+        const conversation = await this.prisma.conversation.findFirst({
+          where: { phone },
+          include: { messages: { orderBy: { createdAt: 'desc' }, take: 1 } },
+        });
         if (conversation?.status === 'paused_human') {
-          await this.pushNotifications.notifyNewMessage(conversation);
+          const [lastMessage] = conversation.messages;
+          const messagePreview =
+            lastMessage?.kind === 'order' ? 'Novo pedido pelo catálogo' : (lastMessage?.body ?? 'Nova mensagem');
+          await this.pushNotifications.notifyNewMessage({
+            id: conversation.id,
+            name: conversation.name,
+            phone: conversation.phone,
+            messagePreview,
+          });
         }
       }
     } catch (error) {

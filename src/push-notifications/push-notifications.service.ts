@@ -6,6 +6,15 @@ interface NotifiableConversation {
   id: string;
   name: string | null;
   phone: string;
+  messagePreview: string;
+}
+
+const MAX_BODY_LENGTH = 120;
+
+function truncateBody(text: string): string {
+  const trimmed = text.trim();
+  if (trimmed.length <= MAX_BODY_LENGTH) return trimmed;
+  return `${trimmed.slice(0, MAX_BODY_LENGTH).trimEnd()}…`;
 }
 
 @Injectable()
@@ -32,8 +41,8 @@ export class PushNotificationsService implements OnModuleInit {
 
     const subscriptions = await this.subscriptions.listAll();
     const payload = JSON.stringify({
-      title: 'Nova mensagem',
-      body: conversation.name ?? conversation.phone,
+      title: conversation.name ?? conversation.phone,
+      body: truncateBody(conversation.messagePreview),
       url: `/admin/conversas/${conversation.id}`,
     });
 

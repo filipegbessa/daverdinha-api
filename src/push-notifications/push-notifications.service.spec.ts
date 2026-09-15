@@ -37,34 +37,48 @@ describe('PushNotificationsService', () => {
     );
   });
 
-  it('sends a notification to every stored subscription', async () => {
+  it('sends a notification with the contact name as the title and the message as the body', async () => {
     subscriptions.listAll.mockResolvedValue([
       { endpoint: 'https://push.example/1', p256dh: 'p1', auth: 'a1' },
       { endpoint: 'https://push.example/2', p256dh: 'p2', auth: 'a2' },
     ]);
     (webpush.sendNotification as jest.Mock).mockResolvedValue(undefined);
 
-    await service.notifyNewMessage({ id: 'c1', name: 'Maria', phone: '5521999999999' });
+    await service.notifyNewMessage({ id: 'c1', name: 'Maria', phone: '5521999999999', messagePreview: 'Oi, tudo bem?' });
 
     expect(webpush.sendNotification).toHaveBeenCalledTimes(2);
     expect(webpush.sendNotification).toHaveBeenCalledWith(
       { endpoint: 'https://push.example/1', keys: { p256dh: 'p1', auth: 'a1' } },
-      JSON.stringify({ title: 'Nova mensagem', body: 'Maria', url: '/admin/conversas/c1' }),
+      JSON.stringify({ title: 'Maria', body: 'Oi, tudo bem?', url: '/admin/conversas/c1' }),
     );
   });
 
-  it('falls back to the phone number in the body when the conversation has no name', async () => {
+  it('falls back to the phone number as the title when the conversation has no name', async () => {
     subscriptions.listAll.mockResolvedValue([
       { endpoint: 'https://push.example/1', p256dh: 'p1', auth: 'a1' },
     ]);
     (webpush.sendNotification as jest.Mock).mockResolvedValue(undefined);
 
-    await service.notifyNewMessage({ id: 'c1', name: null, phone: '5521999999999' });
+    await service.notifyNewMessage({ id: 'c1', name: null, phone: '5521999999999', messagePreview: 'Oi!' });
 
     expect(webpush.sendNotification).toHaveBeenCalledWith(
       expect.anything(),
-      JSON.stringify({ title: 'Nova mensagem', body: '5521999999999', url: '/admin/conversas/c1' }),
+      JSON.stringify({ title: '5521999999999', body: 'Oi!', url: '/admin/conversas/c1' }),
     );
+  });
+
+  it('truncates a long message preview to keep the notification body short', async () => {
+    subscriptions.listAll.mockResolvedValue([
+      { endpoint: 'https://push.example/1', p256dh: 'p1', auth: 'a1' },
+    ]);
+    (webpush.sendNotification as jest.Mock).mockResolvedValue(undefined);
+    const longMessage = 'a'.repeat(200);
+
+    await service.notifyNewMessage({ id: 'c1', name: 'Maria', phone: '5521999999999', messagePreview: longMessage });
+
+    const [, payload] = (webpush.sendNotification as jest.Mock).mock.calls[0];
+    const { body } = JSON.parse(payload);
+    expect(body).toBe(`${'a'.repeat(120)}…`);
   });
 
   it('removes a subscription the push service reports as gone (410)', async () => {
@@ -73,7 +87,7 @@ describe('PushNotificationsService', () => {
     ]);
     (webpush.sendNotification as jest.Mock).mockRejectedValue({ statusCode: 410 });
 
-    await service.notifyNewMessage({ id: 'c1', name: 'Maria', phone: '5521999999999' });
+    await service.notifyNewMessage({ id: 'c1', name: 'Maria', phone: '5521999999999', messagePreview: 'Oi, tudo bem?' });
 
     expect(subscriptions.remove).toHaveBeenCalledWith('https://push.example/dead');
   });
@@ -84,7 +98,7 @@ describe('PushNotificationsService', () => {
     ]);
     (webpush.sendNotification as jest.Mock).mockRejectedValue({ statusCode: 500 });
 
-    await service.notifyNewMessage({ id: 'c1', name: 'Maria', phone: '5521999999999' });
+    await service.notifyNewMessage({ id: 'c1', name: 'Maria', phone: '5521999999999', messagePreview: 'Oi, tudo bem?' });
 
     expect(subscriptions.remove).not.toHaveBeenCalled();
   });
@@ -96,7 +110,7 @@ describe('PushNotificationsService', () => {
     (webpush.sendNotification as jest.Mock).mockRejectedValue({ statusCode: 500 });
     const warnSpy = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
 
-    await service.notifyNewMessage({ id: 'c1', name: 'Maria', phone: '5521999999999' });
+    await service.notifyNewMessage({ id: 'c1', name: 'Maria', phone: '5521999999999', messagePreview: 'Oi, tudo bem?' });
 
     expect(warnSpy).toHaveBeenCalledWith(
       expect.stringContaining('https://push.example/1'),
@@ -139,7 +153,7 @@ describe('PushNotificationsService', () => {
         const { localService, localSubscriptions } = await buildServiceWithoutVapid();
         localService.onModuleInit();
 
-        await localService.notifyNewMessage({ id: 'c1', name: 'Maria', phone: '5521999999999' });
+        await localService.notifyNewMessage({ id: 'c1', name: 'Maria', phone: '5521999999999', messagePreview: 'Oi!' });
 
         expect(localSubscriptions.listAll).not.toHaveBeenCalled();
         expect(webpush.sendNotification).not.toHaveBeenCalled();
@@ -172,7 +186,7 @@ describe('PushNotificationsService', () => {
         expect(() => localService.onModuleInit()).not.toThrow();
         expect(warnSpy).toHaveBeenCalled();
 
-        await localService.notifyNewMessage({ id: 'c1', name: 'Maria', phone: '5521999999999' });
+        await localService.notifyNewMessage({ id: 'c1', name: 'Maria', phone: '5521999999999', messagePreview: 'Oi!' });
 
         expect(localSubscriptions.listAll).not.toHaveBeenCalled();
         expect(webpush.sendNotification).not.toHaveBeenCalled();

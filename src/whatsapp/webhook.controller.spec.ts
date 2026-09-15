@@ -47,23 +47,65 @@ describe('WebhookController', () => {
     jest.restoreAllMocks();
   });
 
-  it('notifies when the conversation ends up paused_human after processing', async () => {
+  it('notifies with the last inbound message as the preview when the conversation ends up paused_human', async () => {
     prisma.conversation.findFirst.mockResolvedValue({
       id: 'c1',
       name: 'Maria',
       phone: '5521999999999',
       status: 'paused_human',
+      messages: [{ kind: 'text', body: 'Oi, tudo bem?' }],
     });
 
     await controller.receive(fakeRequest(), payload);
 
     expect(botEngine.handleIncomingMessage).toHaveBeenCalledWith(payload);
-    expect(prisma.conversation.findFirst).toHaveBeenCalledWith({ where: { phone: '5521999999999' } });
+    expect(prisma.conversation.findFirst).toHaveBeenCalledWith({
+      where: { phone: '5521999999999' },
+      include: { messages: { orderBy: { createdAt: 'desc' }, take: 1 } },
+    });
     expect(pushNotifications.notifyNewMessage).toHaveBeenCalledWith({
       id: 'c1',
       name: 'Maria',
       phone: '5521999999999',
+      messagePreview: 'Oi, tudo bem?',
+    });
+  });
+
+  it('uses a catalog-order label as the preview when the last message is an order', async () => {
+    prisma.conversation.findFirst.mockResolvedValue({
+      id: 'c1',
+      name: 'Maria',
+      phone: '5521999999999',
       status: 'paused_human',
+      messages: [{ kind: 'order', body: null }],
+    });
+
+    await controller.receive(fakeRequest(), payload);
+
+    expect(pushNotifications.notifyNewMessage).toHaveBeenCalledWith({
+      id: 'c1',
+      name: 'Maria',
+      phone: '5521999999999',
+      messagePreview: 'Novo pedido pelo catálogo',
+    });
+  });
+
+  it('falls back to a generic preview when there is no last message', async () => {
+    prisma.conversation.findFirst.mockResolvedValue({
+      id: 'c1',
+      name: 'Maria',
+      phone: '5521999999999',
+      status: 'paused_human',
+      messages: [],
+    });
+
+    await controller.receive(fakeRequest(), payload);
+
+    expect(pushNotifications.notifyNewMessage).toHaveBeenCalledWith({
+      id: 'c1',
+      name: 'Maria',
+      phone: '5521999999999',
+      messagePreview: 'Nova mensagem',
     });
   });
 
@@ -73,6 +115,7 @@ describe('WebhookController', () => {
       name: 'Maria',
       phone: '5521999999999',
       status: 'bot_active',
+      messages: [{ kind: 'text', body: 'oi' }],
     });
 
     await controller.receive(fakeRequest(), payload);
@@ -102,6 +145,7 @@ describe('WebhookController', () => {
       name: 'Maria',
       phone: '5521999999999',
       status: 'paused_human',
+      messages: [{ kind: 'text', body: 'oi' }],
     });
     pushNotifications.notifyNewMessage.mockRejectedValue(new Error('push failed'));
 
@@ -114,6 +158,7 @@ describe('WebhookController', () => {
       name: 'Maria',
       phone: '5521999999999',
       status: 'paused_human',
+      messages: [{ kind: 'text', body: 'oi' }],
     });
     pushNotifications.notifyNewMessage.mockRejectedValue(new Error('push failed'));
     const warnSpy = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
