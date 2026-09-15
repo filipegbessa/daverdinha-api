@@ -4,6 +4,7 @@ import {
   ForbiddenException,
   Get,
   HttpCode,
+  Logger,
   Post,
   Query,
   Req,
@@ -17,6 +18,8 @@ import { PushNotificationsService } from '../push-notifications/push-notificatio
 
 @Controller('webhook/whatsapp')
 export class WebhookController {
+  private readonly logger = new Logger(WebhookController.name);
+
   constructor(
     private readonly botEngine: BotEngineService,
     private readonly prisma: PrismaService,
@@ -60,8 +63,8 @@ export class WebhookController {
           await this.pushNotifications.notifyNewMessage(conversation);
         }
       }
-    } catch {
-      // best-effort: never fail the webhook response over notification plumbing
+    } catch (error) {
+      this.logger.warn(`Failed to process post-webhook notification: ${error}`);
     }
 
     return { status: 'ok' };

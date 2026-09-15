@@ -19,8 +19,12 @@ export class PushNotificationsService implements OnModuleInit {
     const { VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY } = process.env;
     if (!VAPID_SUBJECT || !VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) return;
 
-    webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
-    this.vapidConfigured = true;
+    try {
+      webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+      this.vapidConfigured = true;
+    } catch (error) {
+      this.logger.warn(`Invalid VAPID configuration, push notifications disabled: ${error}`);
+    }
   }
 
   async notifyNewMessage(conversation: NotifiableConversation): Promise<void> {

@@ -148,4 +148,40 @@ describe('PushNotificationsService', () => {
       }
     });
   });
+
+  describe('when VAPID keys are truthy but invalid (e.g. the .env.example placeholder)', () => {
+    it('does not throw on onModuleInit and leaves notifications disabled', async () => {
+      process.env.VAPID_PUBLIC_KEY = 'xxx';
+      process.env.VAPID_PRIVATE_KEY = 'xxx';
+      const setVapidDetailsMock = webpush.setVapidDetails as jest.Mock;
+      setVapidDetailsMock.mockImplementation(() => {
+        throw new Error('Vapid public key should be 65 bytes long when decoded.');
+      });
+      const warnSpy = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+
+      try {
+        const localSubscriptions = { listAll: jest.fn().mockResolvedValue([]), remove: jest.fn() };
+        const moduleRef = await Test.createTestingModule({
+          providers: [
+            PushNotificationsService,
+            { provide: PushSubscriptionsService, useValue: localSubscriptions },
+          ],
+        }).compile();
+        const localService = moduleRef.get(PushNotificationsService);
+
+        expect(() => localService.onModuleInit()).not.toThrow();
+        expect(warnSpy).toHaveBeenCalled();
+
+        await localService.notifyNewMessage({ id: 'c1', name: 'Maria', phone: '5521999999999' });
+
+        expect(localSubscriptions.listAll).not.toHaveBeenCalled();
+        expect(webpush.sendNotification).not.toHaveBeenCalled();
+      } finally {
+        warnSpy.mockRestore();
+        setVapidDetailsMock.mockReset();
+        process.env.VAPID_PUBLIC_KEY = 'public-key';
+        process.env.VAPID_PRIVATE_KEY = 'private-key';
+      }
+    });
+  });
 });

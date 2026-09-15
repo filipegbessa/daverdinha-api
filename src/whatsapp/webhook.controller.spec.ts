@@ -1,4 +1,5 @@
 import { Test } from '@nestjs/testing';
+import { Logger } from '@nestjs/common';
 import { WebhookController } from './webhook.controller';
 import { BotEngineService } from '../bot-engine/bot-engine.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -105,5 +106,23 @@ describe('WebhookController', () => {
     pushNotifications.notifyNewMessage.mockRejectedValue(new Error('push failed'));
 
     await expect(controller.receive(fakeRequest(), payload)).resolves.toEqual({ status: 'ok' });
+  });
+
+  it('logs a warning and still returns ok when the notification path throws', async () => {
+    prisma.conversation.findFirst.mockResolvedValue({
+      id: 'c1',
+      name: 'Maria',
+      phone: '5521999999999',
+      status: 'paused_human',
+    });
+    pushNotifications.notifyNewMessage.mockRejectedValue(new Error('push failed'));
+    const warnSpy = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+
+    await expect(controller.receive(fakeRequest(), payload)).resolves.toEqual({ status: 'ok' });
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Failed to process post-webhook notification'),
+    );
+    warnSpy.mockRestore();
   });
 });
