@@ -8,6 +8,7 @@ import { WhatsAppModule } from './whatsapp/whatsapp.module';
 import { BotEngineModule } from './bot-engine/bot-engine.module';
 import { ConversationsModule } from './conversations/conversations.module';
 import { PushSubscriptionsModule } from './push-subscriptions/push-subscriptions.module';
+import { CategoriesModule } from './categories/categories.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { PushSubscriptionsModule } from './push-subscriptions/push-subscriptions
     BotEngineModule,
     ConversationsModule,
     PushSubscriptionsModule,
+    CategoriesModule,
   ],
   controllers: [AppController],
 })
