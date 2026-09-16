@@ -11,10 +11,8 @@ import {
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { verifySignature } from './verify-signature';
-import { extractPhoneFromWebhookPayload } from './extract-phone';
 import { BotEngineService } from '../bot-engine/bot-engine.service';
-import { PrismaService } from '../prisma/prisma.service';
-import { PushNotificationsService } from '../push-notifications/push-notifications.service';
+import { ConversationNotifierService } from '../push-notifications/conversation-notifier.service';
 
 @Controller('webhook/whatsapp')
 export class WebhookController {
@@ -22,8 +20,7 @@ export class WebhookController {
 
   constructor(
     private readonly botEngine: BotEngineService,
-    private readonly prisma: PrismaService,
-    private readonly pushNotifications: PushNotificationsService,
+    private readonly notifier: ConversationNotifierService,
   ) {}
 
   @Get()
@@ -53,32 +50,16 @@ export class WebhookController {
       throw new ForbiddenException('Invalid signature');
     }
 
-    const processed = await this.botEngine.handleIncomingMessage(body);
-    if (!processed) {
-      return { status: 'ok' };
-    }
+    const result = await this.botEngine.handleIncomingMessage(body);
 
-    try {
-      const phone = extractPhoneFromWebhookPayload(body);
-      if (phone) {
-        const conversation = await this.prisma.conversation.findFirst({
-          where: { phone },
-          include: { messages: { orderBy: { createdAt: 'desc' }, take: 1 } },
-        });
-        if (conversation?.status === 'paused_human') {
-          const [lastMessage] = conversation.messages;
-          const messagePreview =
-            lastMessage?.kind === 'order' ? 'Novo pedido pelo catálogo' : (lastMessage?.body ?? 'Nova mensagem');
-          await this.pushNotifications.notifyNewMessage({
-            id: conversation.id,
-            name: conversation.name,
-            phone: conversation.phone,
-            messagePreview,
-          });
-        }
+    // A failed push must never fail the webhook: Meta retries anything we
+    // don't ack with a 200, and a retry would replay the whole message.
+    if (result) {
+      try {
+        await this.notifier.notifyNewInboundMessage(result.conversationId);
+      } catch (error) {
+        this.logger.warn(`Failed to send new-message notification: ${error}`);
       }
-    } catch (error) {
-      this.logger.warn(`Failed to process post-webhook notification: ${error}`);
     }
 
     return { status: 'ok' };

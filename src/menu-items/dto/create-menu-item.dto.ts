@@ -1,28 +1,15 @@
-import { Type } from 'class-transformer';
 import {
-  IsArray,
   IsBoolean,
-  IsIn,
   IsInt,
   IsOptional,
   IsString,
   MaxLength,
-  ValidateNested,
 } from 'class-validator';
 
 // WhatsApp's interactive list message rejects the whole request
 // (error #131009) if any row title is longer than this — capping it here
 // keeps a too-long menu item topic from breaking every single menu send.
 const MENU_ITEM_TOPIC_MAX_LENGTH = 24;
-
-export class MenuItemAnswerOptionDto {
-  @IsArray()
-  @IsString({ each: true })
-  keywords: string[];
-
-  @IsString()
-  reply: string;
-}
 
 export class CreateMenuItemDto {
   @IsInt()
@@ -32,20 +19,10 @@ export class CreateMenuItemDto {
   @MaxLength(MENU_ITEM_TOPIC_MAX_LENGTH)
   topic: string;
 
-  @IsIn(['texto', 'entrega', 'atendente', 'pergunta'])
-  type: 'texto' | 'entrega' | 'atendente' | 'pergunta';
-
+  /** The answer sent for an ordinary item. The system item uses the delivery* fields instead. */
   @IsString()
   @IsOptional()
   reply?: string;
-
-  @IsString()
-  @IsOptional()
-  question?: string;
-
-  @IsString()
-  @IsOptional()
-  noMatchReply?: string;
 
   @IsString()
   @IsOptional()
@@ -66,12 +43,6 @@ export class CreateMenuItemDto {
   @IsString()
   @IsOptional()
   deliveryUnrecognizedMessage?: string;
-
-  @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => MenuItemAnswerOptionDto)
-  @IsOptional()
-  answerOptions?: MenuItemAnswerOptionDto[];
 
   @IsBoolean()
   @IsOptional()

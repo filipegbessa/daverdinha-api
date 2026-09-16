@@ -1,7 +1,4 @@
 -- CreateEnum
-CREATE TYPE "MenuItemType" AS ENUM ('texto', 'entrega', 'atendente', 'pergunta');
-
--- CreateEnum
 CREATE TYPE "ConversationStatus" AS ENUM ('bot_active', 'paused_human');
 
 -- CreateEnum
@@ -31,11 +28,8 @@ CREATE TABLE "menu_items" (
     "id" TEXT NOT NULL,
     "order" INTEGER NOT NULL,
     "topic" TEXT NOT NULL,
-    "type" "MenuItemType" NOT NULL,
     "is_system" BOOLEAN NOT NULL DEFAULT false,
     "reply" TEXT,
-    "question" TEXT,
-    "no_match_reply" TEXT,
     "delivery_prompt" TEXT,
     "delivery_retry_message" TEXT,
     "delivery_confirmed_message" TEXT,
@@ -46,18 +40,6 @@ CREATE TABLE "menu_items" (
     "updated_at" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "menu_items_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "menu_item_answer_options" (
-    "id" TEXT NOT NULL,
-    "menu_item_id" TEXT NOT NULL,
-    "keywords" TEXT[],
-    "reply" TEXT NOT NULL,
-    "order" INTEGER NOT NULL DEFAULT 0,
-    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT "menu_item_answer_options_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -91,7 +73,7 @@ CREATE TABLE "conversations" (
     "entry_point" "EntryPoint",
     "invalid_attempts" INTEGER NOT NULL DEFAULT 0,
     "awaiting_delivery_reply" BOOLEAN NOT NULL DEFAULT false,
-    "awaiting_menu_item_answer_id" TEXT,
+    "unread" BOOLEAN NOT NULL DEFAULT false,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
 
@@ -189,14 +171,20 @@ CREATE UNIQUE INDEX "push_subscriptions_endpoint_key" ON "push_subscriptions"("e
 -- CreateIndex
 CREATE UNIQUE INDEX "categories_name_key" ON "categories"("name");
 
--- AddForeignKey
-ALTER TABLE "menu_item_answer_options" ADD CONSTRAINT "menu_item_answer_options_menu_item_id_fkey" FOREIGN KEY ("menu_item_id") REFERENCES "menu_items"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+-- CreateIndex
+CREATE INDEX "conversations_updated_at_idx" ON "conversations"("updated_at" DESC);
+
+-- CreateIndex
+CREATE INDEX "conversations_phone_idx" ON "conversations"("phone");
+
+-- CreateIndex
+CREATE INDEX "conversations_unread_idx" ON "conversations"("unread");
+
+-- CreateIndex
+CREATE INDEX "messages_conversation_id_created_at_idx" ON "messages"("conversation_id", "created_at");
 
 -- AddForeignKey
 ALTER TABLE "cep_ranges" ADD CONSTRAINT "cep_ranges_delivery_location_id_fkey" FOREIGN KEY ("delivery_location_id") REFERENCES "delivery_locations"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "conversations" ADD CONSTRAINT "conversations_awaiting_menu_item_answer_id_fkey" FOREIGN KEY ("awaiting_menu_item_answer_id") REFERENCES "menu_items"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "messages" ADD CONSTRAINT "messages_conversation_id_fkey" FOREIGN KEY ("conversation_id") REFERENCES "conversations"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

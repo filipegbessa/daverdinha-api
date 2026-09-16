@@ -40,14 +40,23 @@ async function seedDeliveryLocations() {
       },
     });
 
-    const hasRanges = (await prisma.cepRange.count({ where: { deliveryLocationId: location.id } })) > 0;
+    const hasRanges =
+      (await prisma.cepRange.count({
+        where: { deliveryLocationId: location.id },
+      })) > 0;
     if (hasRanges) continue; // ranges already seeded for this bairro — never duplicate them
 
-    const rangeRow = rangesByBairro.find((r) => normalizeText(r.bairro) === normalizeText(bairro));
+    const rangeRow = rangesByBairro.find(
+      (r) => normalizeText(r.bairro) === normalizeText(bairro),
+    );
     if (!rangeRow) continue;
     for (const range of rangeRow.ranges) {
       await prisma.cepRange.create({
-        data: { startCep: range.start, endCep: range.end, deliveryLocationId: location.id },
+        data: {
+          startCep: range.start,
+          endCep: range.end,
+          deliveryLocationId: location.id,
+        },
       });
     }
   }
@@ -60,10 +69,13 @@ async function main() {
     create: {
       id: 1,
       botEnabled: false,
-      welcomeMessage: 'Oi! Que bom te ver por aqui 🌱 Bem-vinda(o) à Daverdinha — um espaço pra plantar, criar e brindar. Como posso te ajudar hoje?',
-      invalidAttemptsExceededMessage: 'Não consegui entender sua opção, vou te chamar um atendente!',
+      welcomeMessage:
+        'Oi! Que bom te ver por aqui 🌱 Bem-vinda(o) à Daverdinha — um espaço pra plantar, criar e brindar. Como posso te ajudar hoje?',
+      invalidAttemptsExceededMessage:
+        'Não consegui entender sua opção, vou te chamar um atendente!',
       mediaReceivedMessage: 'Esse tipo de mensagem não é válido por aqui!',
-      orderReceivedMessage: 'Aceito! Recebemos seu pedido, já vamos confirmar com você.',
+      orderReceivedMessage:
+        'Aceito! Recebemos seu pedido, já vamos confirmar com você.',
     },
   });
 
@@ -73,20 +85,21 @@ async function main() {
     {
       order: 0,
       topic: 'Locais de entrega',
-      type: 'entrega' as const,
       isSystem: true,
       reply: null,
       deliveryPrompt: 'Qual o CEP para entrega?',
-      deliveryConfirmedMessage: 'Sim! entregamos aí no [local], aguarde um pouco que entro em contato',
-      deliveryNotCoveredMessage: 'Infelizmente ainda não fazemos entregas no [local]',
+      deliveryConfirmedMessage:
+        'Sim! entregamos aí no [local], aguarde um pouco que entro em contato',
+      deliveryNotCoveredMessage:
+        'Infelizmente ainda não fazemos entregas no [local]',
       deliveryRetryMessage: 'Esse não é um CEP válido, quer tentar novamente?',
-      deliveryUnrecognizedMessage: 'Não consegui identificar seu CEP, vou te chamar um atendente!',
+      deliveryUnrecognizedMessage:
+        'Não consegui identificar seu CEP, vou te chamar um atendente!',
       active: true,
     },
     {
       order: 1,
       topic: 'Bingo de Plantas',
-      type: 'texto' as const,
       isSystem: false,
       reply: 'Todo sábado às 16h, aqui na loja!',
       active: true,
@@ -94,7 +107,6 @@ async function main() {
     {
       order: 2,
       topic: 'Falar com um atendente',
-      type: 'texto' as const,
       isSystem: false,
       reply: 'Aguarde um pouco que já retorno',
       active: true,
@@ -106,7 +118,7 @@ async function main() {
     // a real upsert. Match on the item's natural key instead, and only
     // create when missing — never overwrite an existing row, since the
     // admin may have already customized its reply/messages.
-    const where = item.isSystem ? { isSystem: true, type: item.type } : { topic: item.topic };
+    const where = item.isSystem ? { isSystem: true } : { topic: item.topic };
     const existing = await prisma.menuItem.findFirst({ where });
     if (!existing) {
       await prisma.menuItem.create({ data: item });

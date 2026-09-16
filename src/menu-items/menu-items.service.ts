@@ -13,65 +13,29 @@ export class MenuItemsService {
   ) {}
 
   list() {
+    return this.prisma.menuItem.findMany({ orderBy: { order: 'asc' } });
+  }
+
+  /** What the customer actually sees, in menu order. */
+  listActive() {
     return this.prisma.menuItem.findMany({
+      where: { active: true },
       orderBy: { order: 'asc' },
-      include: { answerOptions: { orderBy: { order: 'asc' } } },
     });
   }
 
   findOne(id: string) {
-    return this.prisma.menuItem.findUnique({
-      where: { id },
-      include: { answerOptions: { orderBy: { order: 'asc' } } },
-    });
+    return this.prisma.menuItem.findUnique({ where: { id } });
   }
 
   create(dto: CreateMenuItemDto) {
-    const { answerOptions, ...rest } = dto;
-    return this.prisma.menuItem.create({
-      data: {
-        ...rest,
-        ...(answerOptions
-          ? {
-              answerOptions: {
-                create: answerOptions.map((option, index) => ({
-                  ...option,
-                  order: index,
-                })),
-              },
-            }
-          : {}),
-      },
-      include: { answerOptions: true },
-    });
+    return this.prisma.menuItem.create({ data: dto });
   }
 
   async update(id: string, dto: UpdateMenuItemDto) {
-    if (dto.type !== undefined) {
-      const existing = await this.prisma.menuItem.findUniqueOrThrow({ where: { id } });
-      if (existing.isSystem && dto.type !== existing.type) {
-        throw new ForbiddenException('Não é possível mudar o tipo de um item de sistema.');
-      }
-    }
-
-    const { answerOptions, ...rest } = dto;
     const result = await this.prisma.menuItem.update({
       where: { id },
-      data: {
-        ...rest,
-        ...(answerOptions !== undefined
-          ? {
-              answerOptions: {
-                deleteMany: {},
-                create: answerOptions.map((option, index) => ({
-                  ...option,
-                  order: index,
-                })),
-              },
-            }
-          : {}),
-      },
-      include: { answerOptions: true },
+      data: dto,
     });
     if (dto.active === false) {
       await this.botSettings.autoDisableIfNoActiveMenuItems();
@@ -80,18 +44,25 @@ export class MenuItemsService {
   }
 
   async remove(id: string) {
-    const item = await this.prisma.menuItem.findUniqueOrThrow({ where: { id } });
+    const item = await this.prisma.menuItem.findUniqueOrThrow({
+      where: { id },
+    });
     if (item.isSystem) {
-      throw new ForbiddenException('Não é possível excluir um item de sistema.');
+      throw new ForbiddenException(
+        'Não é possível excluir um item de sistema.',
+      );
     }
     await this.prisma.menuItem.delete({ where: { id } });
     await this.botSettings.autoDisableIfNoActiveMenuItems();
   }
 
+  /**
+   * The delivery-location flow. It's the only system item there is — it
+   * can't be created or deleted from the admin, only edited, because the
+   * bot hard-depends on its four messages existing.
+   */
   findSystemDeliveryItem() {
-    return this.prisma.menuItem.findFirstOrThrow({
-      where: { isSystem: true, type: 'entrega' },
-    });
+    return this.prisma.menuItem.findFirstOrThrow({ where: { isSystem: true } });
   }
 
   reorder(dto: ReorderMenuItemsDto) {

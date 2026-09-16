@@ -22,46 +22,26 @@ model BotSettings {
   @@map("bot_settings")
 }
 
-enum MenuItemType {
-  texto
-  entrega
-  atendente
-  pergunta
-}
-
+// One row per option the customer sees in the WhatsApp menu. Exactly one
+// row is `isSystem` — the delivery-location flow, which answers from its
+// own `delivery*` messages instead of the plain `reply` every other item
+// uses. System items can be edited but never created or deleted.
 model MenuItem {
-  id                          String                 @id @default(uuid())
+  id                          String   @id @default(uuid())
   order                       Int
   topic                       String
-  type                        MenuItemType
-  isSystem                    Boolean                @default(false) @map("is_system")
+  isSystem                    Boolean  @default(false) @map("is_system")
   reply                       String?
-  question                    String?                @map("question")
-  noMatchReply                String?                @map("no_match_reply")
-  deliveryPrompt              String?                @map("delivery_prompt")
-  deliveryRetryMessage        String?                @map("delivery_retry_message")
-  deliveryConfirmedMessage    String?                @map("delivery_confirmed_message")
-  deliveryNotCoveredMessage   String?                @map("delivery_not_covered_message")
-  deliveryUnrecognizedMessage String?                @map("delivery_unrecognized_message")
-  active                      Boolean                @default(true)
-  createdAt                   DateTime               @default(now()) @map("created_at")
-  updatedAt                   DateTime               @updatedAt @map("updated_at")
-  answerOptions               MenuItemAnswerOption[]
-  awaitingConversations       Conversation[]
+  deliveryPrompt              String?  @map("delivery_prompt")
+  deliveryRetryMessage        String?  @map("delivery_retry_message")
+  deliveryConfirmedMessage    String?  @map("delivery_confirmed_message")
+  deliveryNotCoveredMessage   String?  @map("delivery_not_covered_message")
+  deliveryUnrecognizedMessage String?  @map("delivery_unrecognized_message")
+  active                      Boolean  @default(true)
+  createdAt                   DateTime @default(now()) @map("created_at")
+  updatedAt                   DateTime @updatedAt @map("updated_at")
 
   @@map("menu_items")
-}
-
-model MenuItemAnswerOption {
-  id         String   @id @default(uuid())
-  menuItemId String   @map("menu_item_id")
-  menuItem   MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
-  keywords   String[] @map("keywords")
-  reply      String
-  order      Int      @default(0)
-  createdAt  DateTime @default(now()) @map("created_at")
-
-  @@map("menu_item_answer_options")
 }
 
 model DeliveryLocation {
@@ -98,21 +78,30 @@ enum EntryPoint {
 }
 
 model Conversation {
-  id                       String                 @id @default(uuid())
-  phone                    String
-  name                     String?
-  status                   ConversationStatus     @default(bot_active)
-  entryPoint               EntryPoint?            @map("entry_point")
-  invalidAttempts          Int                    @default(0) @map("invalid_attempts")
-  awaitingDeliveryReply    Boolean                @default(false) @map("awaiting_delivery_reply")
-  awaitingMenuItemAnswerId String?                @map("awaiting_menu_item_answer_id")
-  awaitingMenuItemAnswer   MenuItem?              @relation(fields: [awaitingMenuItemAnswerId], references: [id], onDelete: SetNull)
-  createdAt                DateTime               @default(now()) @map("created_at")
-  updatedAt                DateTime               @updatedAt @map("updated_at")
-  messages                 Message[]
-  orders                   Order[]
-  categories               ConversationCategory[]
+  id                    String                 @id @default(uuid())
+  phone                 String
+  name                  String?
+  status                ConversationStatus     @default(bot_active)
+  entryPoint            EntryPoint?            @map("entry_point")
+  invalidAttempts       Int                    @default(0) @map("invalid_attempts")
+  awaitingDeliveryReply Boolean                @default(false) @map("awaiting_delivery_reply")
+  /// True while the last message is one the customer sent. Maintained by
+  /// ConversationMessengerService on every write rather than derived, so the
+  /// admin list and the unread badge never have to fetch each conversation's
+  /// last message just to colour a dot.
+  unread                Boolean                @default(false)
+  createdAt             DateTime               @default(now()) @map("created_at")
+  updatedAt             DateTime               @updatedAt @map("updated_at")
+  messages              Message[]
+  orders                Order[]
+  categories            ConversationCategory[]
 
+  // The admin list sorts by updatedAt and the bot looks a conversation up by
+  // phone on every single inbound message — neither had an index, and Postgres
+  // does not create one for a foreign key on its own.
+  @@index([updatedAt(sort: Desc)])
+  @@index([phone])
+  @@index([unread])
   @@map("conversations")
 }
 
@@ -137,6 +126,9 @@ model Message {
   order          Order?
   createdAt      DateTime         @default(now()) @map("created_at")
 
+  // Every read of a thread is "this conversation, in time order" — as a page,
+  // as a delta poll, or as older history.
+  @@index([conversationId, createdAt])
   @@map("messages")
 }
 
@@ -194,6 +186,7 @@ model PushSubscription {
 model Category {
   id            String                 @id @default(uuid())
   name          String                 @unique
+  /// Free-form hex (#rrggbb) chosen by the admin from a colour input.
   color         String
   createdAt     DateTime               @default(now()) @map("created_at")
   conversations ConversationCategory[]

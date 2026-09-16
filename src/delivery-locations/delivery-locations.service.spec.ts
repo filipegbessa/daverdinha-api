@@ -11,7 +11,10 @@ describe('DeliveryLocationsService', () => {
       deliveryLocation: { findMany: jest.fn(), update: jest.fn() },
     };
     const moduleRef = await Test.createTestingModule({
-      providers: [DeliveryLocationsService, { provide: PrismaService, useValue: prisma }],
+      providers: [
+        DeliveryLocationsService,
+        { provide: PrismaService, useValue: prisma },
+      ],
     }).compile();
     service = moduleRef.get(DeliveryLocationsService);
   });
@@ -28,7 +31,10 @@ describe('DeliveryLocationsService', () => {
   });
 
   it('update() only ever writes the covered field', async () => {
-    prisma.deliveryLocation.update.mockResolvedValue({ id: 'l1', covered: false });
+    prisma.deliveryLocation.update.mockResolvedValue({
+      id: 'l1',
+      covered: false,
+    });
 
     await service.update('l1', { covered: false });
 
@@ -44,5 +50,33 @@ describe('DeliveryLocationsService', () => {
 
   it('has no remove method', () => {
     expect((service as any).remove).toBeUndefined();
+  });
+
+  describe('listCoveredByZone()', () => {
+    it('returns only covered bairros, grouped under their zone', async () => {
+      prisma.deliveryLocation.findMany.mockResolvedValue([
+        { zone: 'Centro', regionName: 'Gamboa' },
+        { zone: 'Centro', regionName: 'Santo Cristo' },
+        { zone: 'Zona Sul', regionName: 'Botafogo' },
+      ]);
+
+      const result = await service.listCoveredByZone();
+
+      expect(prisma.deliveryLocation.findMany).toHaveBeenCalledWith({
+        where: { covered: true },
+        orderBy: [{ zone: 'asc' }, { regionName: 'asc' }],
+        select: { zone: true, regionName: true },
+      });
+      expect(result).toEqual([
+        { zone: 'Centro', bairros: ['Gamboa', 'Santo Cristo'] },
+        { zone: 'Zona Sul', bairros: ['Botafogo'] },
+      ]);
+    });
+
+    it('returns an empty list when nothing is covered, rather than empty zones', async () => {
+      prisma.deliveryLocation.findMany.mockResolvedValue([]);
+
+      await expect(service.listCoveredByZone()).resolves.toEqual([]);
+    });
   });
 });

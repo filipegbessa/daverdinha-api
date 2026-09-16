@@ -4,10 +4,20 @@ import { CategoriesService } from './categories.service';
 
 describe('CategoriesController', () => {
   let controller: CategoriesController;
-  let service: { list: jest.Mock; create: jest.Mock; update: jest.Mock; remove: jest.Mock };
+  let service: {
+    list: jest.Mock;
+    create: jest.Mock;
+    update: jest.Mock;
+    remove: jest.Mock;
+  };
 
   beforeEach(async () => {
-    service = { list: jest.fn(), create: jest.fn(), update: jest.fn(), remove: jest.fn() };
+    service = {
+      list: jest.fn(),
+      create: jest.fn(),
+      update: jest.fn(),
+      remove: jest.fn(),
+    };
 
     const moduleRef = await Test.createTestingModule({
       controllers: [CategoriesController],
@@ -17,9 +27,9 @@ describe('CategoriesController', () => {
     controller = moduleRef.get(CategoriesController);
   });
 
-  it('list() forwards to the service', () => {
-    controller.list();
-    expect(service.list).toHaveBeenCalled();
+  it('list() forwards the pagination query to the service', () => {
+    controller.list({ page: 2, perPage: 10 });
+    expect(service.list).toHaveBeenCalledWith({ page: 2, perPage: 10 });
   });
 
   it('create() forwards the dto', () => {

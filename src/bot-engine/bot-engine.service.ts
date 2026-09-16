@@ -1,15 +1,24 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { WhatsAppClientService } from '../whatsapp/whatsapp-client.service';
+import { ConversationMessengerService } from '../messaging/conversation-messenger.service';
 import { BotSettingsService } from '../bot-settings/bot-settings.service';
 import { MenuItemsService } from '../menu-items/menu-items.service';
 import { DeliveryCheckService } from './delivery-check.service';
 import { normalizeText } from '../common/normalize-text';
+import {
+  parseIncomingMessage,
+  type OrderProductItem,
+} from '../whatsapp/incoming-message';
 
 const MAX_INVALID_ATTEMPTS = 3;
-const DEFAULT_NO_MATCH_REPLY = 'Não entendi sua resposta, vou te chamar um atendente!';
 const MENU_PROMPT = 'Como posso te ajudar hoje?';
+const MENU_BUTTON = 'Ver opções';
 const STALE_HANDOFF_MS = 30 * 24 * 60 * 60 * 1000;
+
+// Typing "menu" is the customer's escape hatch out of any sub-flow, so it's
+// matched before anything else looks at the text.
+const MENU_KEYWORD = 'menu';
 
 // Persisted as a stand-in for the actual content on any message type the bot
 // can't interpret (audio/sticker/video/etc — we never download or store the
@@ -17,21 +26,16 @@ const STALE_HANDOFF_MS = 30 * 24 * 60 * 60 * 1000;
 // ignored entirely for now, pending a dedicated image flow.
 const INVALID_CONTENT_LABEL = '[Conteúdo inválido]';
 
-interface OrderProductItem {
-  product_retailer_id: string;
-  quantity: string;
-  item_price?: string;
-  currency?: string;
-}
+/** The state a conversation is reset to whenever it returns to the bot. */
+const BOT_ACTIVE_RESET = {
+  status: 'bot_active',
+  invalidAttempts: 0,
+  awaitingDeliveryReply: false,
+} as const;
 
-interface IncomingMessage {
-  id?: string;
-  from: string;
-  type: string;
-  text?: { body: string };
-  interactive?: { list_reply?: { id: string; title?: string } };
-  order?: { catalog_id?: string; product_items?: OrderProductItem[] };
-  referredProductId?: string;
+/** Identifies the conversation a webhook call ended up touching. */
+interface HandledMessage {
+  conversationId: string;
 }
 
 @Injectable()
@@ -39,27 +43,32 @@ export class BotEngineService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly whatsapp: WhatsAppClientService,
+    private readonly messenger: ConversationMessengerService,
     private readonly botSettings: BotSettingsService,
     private readonly menuItems: MenuItemsService,
     private readonly deliveryCheck: DeliveryCheckService,
   ) {}
 
-  // Returns whether a message was actually processed (false for a missing
-  // message or a webhook retry of one already handled) so the webhook
-  // controller can skip its own post-processing (the push notification
-  // lookup) on a duplicate too.
-  async handleIncomingMessage(payload: any): Promise<boolean> {
-    const message = this.extractMessage(payload);
-    if (!message) return false;
+  /**
+   * Returns the conversation that was touched, or null when nothing was
+   * processed (no message in the payload, or a webhook retry of one already
+   * handled) so the caller can skip its own post-processing too.
+   */
+  async handleIncomingMessage(
+    payload: unknown,
+  ): Promise<HandledMessage | null> {
+    const message = parseIncomingMessage(payload);
+    if (!message) return null;
 
     if (message.id && (await this.isDuplicateMessage(message.id))) {
-      return false;
+      return null;
     }
 
     const { conversation, isNew } = await this.resolveConversation(
       message.from,
       !!message.referredProductId,
     );
+    const handled: HandledMessage = { conversationId: conversation.id };
 
     // Catalog orders get a bot reply unconditionally — even with the bot
     // disabled or the conversation already handed off to a human — since
@@ -67,50 +76,31 @@ export class BotEngineService {
     if (message.type === 'order') {
       const settings = await this.botSettings.get();
       await this.handleOrderMessage(conversation, settings, message.order);
-      return true;
+      return handled;
     }
+
+    const text = message.text?.body;
+    const isMenuKeyword = !!text && normalizeText(text) === MENU_KEYWORD;
 
     // A reply to the delivery-location sub-flow is persisted by
     // DeliveryCheckService itself, annotated with the resolved bairro
     // (e.g. "22211-200 (Catete)") instead of the raw CEP text.
     const isDeliveryReply =
-      conversation.awaitingDeliveryReply &&
-      !!message.text?.body &&
-      normalizeText(message.text.body) !== 'menu';
+      conversation.awaitingDeliveryReply && !!text && !isMenuKeyword;
 
-    if (message.text?.body && !isDeliveryReply) {
-      await this.prisma.message.create({
-        data: {
-          conversationId: conversation.id,
-          direction: 'inbound',
-          body: message.text.body,
-        },
-      });
+    if (text && !isDeliveryReply) {
+      await this.messenger.recordInbound(conversation.id, text);
     }
 
     const listReplyTitle = message.interactive?.list_reply?.title;
     if (listReplyTitle) {
-      await this.prisma.message.create({
-        data: {
-          conversationId: conversation.id,
-          direction: 'inbound',
-          body: listReplyTitle,
-        },
-      });
+      await this.messenger.recordInbound(conversation.id, listReplyTitle);
     }
 
-    if (message.text?.body && normalizeText(message.text.body) === 'menu') {
-      await this.prisma.conversation.update({
-        where: { id: conversation.id },
-        data: {
-          status: 'bot_active',
-          invalidAttempts: 0,
-          awaitingDeliveryReply: false,
-          awaitingMenuItemAnswerId: null,
-        },
-      });
+    if (isMenuKeyword) {
+      await this.resetToBot(conversation.id);
       await this.showMenu(conversation);
-      return true;
+      return handled;
     }
 
     // The delivery-location sub-flow (however it started — order, menu
@@ -118,26 +108,20 @@ export class BotEngineService {
     // in a human handoff, so a reply keeps it moving regardless of the
     // bot's enabled/paused state — otherwise the customer's answer to
     // "qual seu CEP?" would go unanswered.
-    if (conversation.awaitingDeliveryReply && message.text?.body) {
-      await this.deliveryCheck.handleReply(conversation, message.text.body);
-      return true;
+    if (isDeliveryReply) {
+      await this.deliveryCheck.handleReply(conversation, text);
+      return handled;
     }
 
     if (conversation.status === 'paused_human') {
-      const isStale = Date.now() - conversation.updatedAt.getTime() > STALE_HANDOFF_MS;
-      if (!isStale) {
-        return true;
+      // A handoff nobody ever picked up shouldn't strand the customer
+      // forever — after a month, hand the conversation back to the bot.
+      const isStale =
+        Date.now() - conversation.updatedAt.getTime() > STALE_HANDOFF_MS;
+      if (isStale) {
+        await this.resetToBot(conversation.id);
       }
-      await this.prisma.conversation.update({
-        where: { id: conversation.id },
-        data: {
-          status: 'bot_active',
-          invalidAttempts: 0,
-          awaitingDeliveryReply: false,
-          awaitingMenuItemAnswerId: null,
-        },
-      });
-      return true;
+      return handled;
     }
 
     const settings = await this.botSettings.get();
@@ -146,62 +130,60 @@ export class BotEngineService {
         where: { id: conversation.id },
         data: { status: 'paused_human' },
       });
-      return true;
+      return handled;
     }
 
     // 'image' is deliberately left out of the invalid-content bucket below —
     // ignored entirely for now, a dedicated image flow comes later.
     if (message.type === 'image') {
-      return true;
+      return handled;
     }
 
-    if (message.type && message.type !== 'text' && message.type !== 'interactive') {
+    if (
+      message.type &&
+      message.type !== 'text' &&
+      message.type !== 'interactive'
+    ) {
       await this.handleUnsupportedMessage(conversation, settings);
-      return true;
-    }
-
-    if (conversation.awaitingMenuItemAnswerId && message.text?.body) {
-      await this.handleMenuItemAnswerReply(conversation, message.text.body);
-      return true;
+      return handled;
     }
 
     if (message.referredProductId) {
       await this.deliveryCheck.start(conversation);
-      return true;
+      return handled;
     }
 
     if (isNew) {
       await this.showMenu(conversation);
-      return true;
+      return handled;
     }
 
-    const selectedItemId = message.interactive?.list_reply?.id;
-    await this.handleMenuSelection(conversation, selectedItemId);
-    return true;
+    await this.handleMenuSelection(
+      conversation,
+      message.interactive?.list_reply?.id,
+    );
+    return handled;
   }
 
-  private async isDuplicateMessage(whatsappMessageId: string): Promise<boolean> {
+  private resetToBot(conversationId: string) {
+    return this.prisma.conversation.update({
+      where: { id: conversationId },
+      data: { ...BOT_ACTIVE_RESET },
+    });
+  }
+
+  private async isDuplicateMessage(
+    whatsappMessageId: string,
+  ): Promise<boolean> {
     try {
-      await this.prisma.processedWebhookMessage.create({ data: { whatsappMessageId } });
+      await this.prisma.processedWebhookMessage.create({
+        data: { whatsappMessageId },
+      });
       return false;
     } catch (error) {
       if ((error as { code?: string }).code === 'P2002') return true;
       throw error;
     }
-  }
-
-  private extractMessage(payload: any): IncomingMessage | null {
-    const raw = payload?.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
-    if (!raw) return null;
-    return {
-      id: raw.id,
-      from: raw.from,
-      type: raw.type,
-      text: raw.text,
-      interactive: raw.interactive,
-      order: raw.order,
-      referredProductId: raw.context?.referred_product?.product_retailer_id,
-    };
   }
 
   // Unlike every other terminal branch in this method, this one does NOT
@@ -212,24 +194,19 @@ export class BotEngineService {
     conversation: { id: string; phone: string },
     settings: { mediaReceivedMessage: string },
   ) {
-    await this.prisma.message.create({
-      data: {
-        conversationId: conversation.id,
-        direction: 'inbound',
-        kind: 'invalid_content',
-        body: INVALID_CONTENT_LABEL,
-      },
-    });
-    await this.whatsapp.sendText(conversation.phone, settings.mediaReceivedMessage);
-    await this.prisma.message.create({
-      data: { conversationId: conversation.id, direction: 'outbound', body: settings.mediaReceivedMessage },
-    });
+    await this.messenger.recordInbound(
+      conversation.id,
+      INVALID_CONTENT_LABEL,
+      'invalid_content',
+    );
+    await this.messenger.sendText(conversation, settings.mediaReceivedMessage);
   }
 
   private async handleOrderMessage(
     conversation: { id: string; phone: string },
     settings: { orderReceivedMessage: string },
-    order: { catalog_id?: string; product_items?: OrderProductItem[] } | undefined,
+    order:
+      { catalog_id?: string; product_items?: OrderProductItem[] } | undefined,
   ) {
     const items = order?.product_items ?? [];
     const productNames = order?.catalog_id
@@ -239,9 +216,20 @@ export class BotEngineService {
         )
       : {};
 
+    // The order rows are written directly rather than through the messenger,
+    // because the message and its structured order have to land together — so
+    // the unread bookkeeping the messenger normally does is repeated here.
     await this.prisma.$transaction(async (tx) => {
       const message = await tx.message.create({
-        data: { conversationId: conversation.id, direction: 'inbound', kind: 'order' },
+        data: {
+          conversationId: conversation.id,
+          direction: 'inbound',
+          kind: 'order',
+        },
+      });
+      await tx.conversation.update({
+        where: { id: conversation.id },
+        data: { unread: true },
       });
       await tx.order.create({
         data: {
@@ -260,10 +248,8 @@ export class BotEngineService {
         },
       });
     });
-    await this.whatsapp.sendText(conversation.phone, settings.orderReceivedMessage);
-    await this.prisma.message.create({
-      data: { conversationId: conversation.id, direction: 'outbound', body: settings.orderReceivedMessage },
-    });
+
+    await this.messenger.sendText(conversation, settings.orderReceivedMessage);
 
     // Hand off to a human only happens once the delivery-location sub-flow
     // resolves (covered/not covered/unrecognized after retries) — by then
@@ -289,43 +275,26 @@ export class BotEngineService {
 
   private async showMenu(conversation: { id: string; phone: string }) {
     const settings = await this.botSettings.get();
-    const items = (await this.menuItems.list()).filter(
-      (item) => item.active,
-    );
+    const items = (await this.menuItems.listActive()).map((item) => ({
+      id: item.id,
+      title: item.topic,
+    }));
 
-    await this.whatsapp.sendText(conversation.phone, settings.welcomeMessage);
-    await this.prisma.message.create({
-      data: {
-        conversationId: conversation.id,
-        direction: 'outbound',
-        body: settings.welcomeMessage,
-      },
-    });
-
-    await this.whatsapp.sendInteractiveList(
-      conversation.phone,
+    await this.messenger.sendText(conversation, settings.welcomeMessage);
+    await this.messenger.sendMenu(
+      conversation,
       MENU_PROMPT,
-      'Ver opções',
-      items.map((item) => ({ id: item.id, title: item.topic })),
+      MENU_BUTTON,
+      items,
     );
-    await this.prisma.message.create({
-      data: {
-        conversationId: conversation.id,
-        direction: 'outbound',
-        body: [MENU_PROMPT, ...items.map((item) => `- ${item.topic}`)].join(
-          '\n',
-        ),
-      },
-    });
   }
 
   private async handleMenuSelection(
     conversation: { id: string; phone: string; invalidAttempts: number },
     selectedItemId: string | undefined,
   ) {
-    const items = await this.menuItems.list();
-    const selected = items.find(
-      (item) => item.id === selectedItemId && item.active,
+    const selected = (await this.menuItems.listActive()).find(
+      (item) => item.id === selectedItemId,
     );
 
     if (!selected) {
@@ -343,81 +312,18 @@ export class BotEngineService {
       data: { invalidAttempts: 0, awaitingDeliveryReply: false },
     });
 
-    switch (selected.type) {
-      case 'texto':
-        await this.whatsapp.sendText(conversation.phone, selected.reply ?? '');
-        await this.prisma.message.create({
-          data: {
-            conversationId: conversation.id,
-            direction: 'outbound',
-            body: selected.reply ?? '',
-          },
-        });
-        await this.prisma.conversation.update({
-          where: { id: conversation.id },
-          data: { status: 'paused_human' },
-        });
-        break;
-      case 'entrega':
-        await this.deliveryCheck.start(conversation);
-        break;
-      case 'atendente':
-        if (selected.reply) {
-          await this.whatsapp.sendText(conversation.phone, selected.reply);
-          await this.prisma.message.create({
-            data: {
-              conversationId: conversation.id,
-              direction: 'outbound',
-              body: selected.reply,
-            },
-          });
-        }
-        await this.prisma.conversation.update({
-          where: { id: conversation.id },
-          data: { status: 'paused_human' },
-        });
-        break;
-      case 'pergunta':
-        await this.whatsapp.sendText(conversation.phone, selected.question ?? '');
-        await this.prisma.message.create({
-          data: {
-            conversationId: conversation.id,
-            direction: 'outbound',
-            body: selected.question ?? '',
-          },
-        });
-        await this.prisma.conversation.update({
-          where: { id: conversation.id },
-          data: { awaitingMenuItemAnswerId: selected.id },
-        });
-        break;
+    // The one system item is the delivery-location flow, which owns its own
+    // set of messages and its own handoff. Every other item is the simple
+    // topic + reply the admin creates: answer, then hand to a human.
+    if (selected.isSystem) {
+      await this.deliveryCheck.start(conversation);
+      return;
     }
-  }
 
-  private async handleMenuItemAnswerReply(
-    conversation: { id: string; phone: string; awaitingMenuItemAnswerId: string | null },
-    text: string,
-  ) {
-    const item = conversation.awaitingMenuItemAnswerId
-      ? await this.menuItems.findOne(conversation.awaitingMenuItemAnswerId)
-      : null;
-    const normalizedInput = normalizeText(text);
-    const match = item?.answerOptions?.find((option: { keywords: string[] }) =>
-      option.keywords.some((keyword) => normalizedInput.includes(normalizeText(keyword))),
-    );
-
-    const replyText = match?.reply ?? item?.noMatchReply ?? DEFAULT_NO_MATCH_REPLY;
-    await this.whatsapp.sendText(conversation.phone, replyText);
-    await this.prisma.message.create({
-      data: {
-        conversationId: conversation.id,
-        direction: 'outbound',
-        body: replyText,
-      },
-    });
+    await this.messenger.sendText(conversation, selected.reply ?? '');
     await this.prisma.conversation.update({
       where: { id: conversation.id },
-      data: { awaitingMenuItemAnswerId: null, status: 'paused_human' },
+      data: { status: 'paused_human' },
     });
   }
 
@@ -430,14 +336,10 @@ export class BotEngineService {
 
     if (attempts >= MAX_INVALID_ATTEMPTS) {
       const settings = await this.botSettings.get();
-      await this.whatsapp.sendText(conversation.phone, settings.invalidAttemptsExceededMessage);
-      await this.prisma.message.create({
-        data: {
-          conversationId: conversation.id,
-          direction: 'outbound',
-          body: settings.invalidAttemptsExceededMessage,
-        },
-      });
+      await this.messenger.sendText(
+        conversation,
+        settings.invalidAttemptsExceededMessage,
+      );
       await this.prisma.conversation.update({
         where: { id: conversation.id },
         data: { status: 'paused_human', invalidAttempts: attempts },

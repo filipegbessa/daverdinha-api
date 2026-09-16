@@ -1,8 +1,22 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { ClerkAuthGuard } from '../common/auth/clerk-auth.guard';
 import { ConversationsService } from './conversations.service';
 import { ReplyDto } from './dto/reply.dto';
 import { UpdateConversationDto } from './dto/update-conversation.dto';
+import { ListConversationsDto } from './dto/list-conversations.dto';
+import { ListMessagesDto } from './dto/list-messages.dto';
 
 @Controller('conversations')
 @UseGuards(ClerkAuthGuard)
@@ -10,13 +24,18 @@ export class ConversationsController {
   constructor(private readonly service: ConversationsService) {}
 
   @Get()
-  list() {
-    return this.service.list();
+  list(@Query() query: ListConversationsDto) {
+    return this.service.list(query);
   }
 
   @Get(':id')
   getOne(@Param('id') id: string) {
     return this.service.getWithMessages(id);
+  }
+
+  @Get(':id/messages')
+  listMessages(@Param('id') id: string, @Query() query: ListMessagesDto) {
+    return this.service.listMessages(id, query);
   }
 
   @Patch(':id')
@@ -41,13 +60,19 @@ export class ConversationsController {
 
   @Post(':id/categories/:categoryId')
   @HttpCode(HttpStatus.NO_CONTENT)
-  addCategory(@Param('id') id: string, @Param('categoryId') categoryId: string) {
+  addCategory(
+    @Param('id') id: string,
+    @Param('categoryId') categoryId: string,
+  ) {
     return this.service.addCategory(id, categoryId);
   }
 
   @Delete(':id/categories/:categoryId')
   @HttpCode(HttpStatus.NO_CONTENT)
-  removeCategory(@Param('id') id: string, @Param('categoryId') categoryId: string) {
+  removeCategory(
+    @Param('id') id: string,
+    @Param('categoryId') categoryId: string,
+  ) {
     return this.service.removeCategory(id, categoryId);
   }
 }

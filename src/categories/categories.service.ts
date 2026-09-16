@@ -1,5 +1,10 @@
 import { ConflictException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  PaginationQueryDto,
+  pageBounds,
+  paginated,
+} from '../common/pagination';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
 
@@ -7,15 +12,29 @@ import { UpdateCategoryDto } from './dto/update-category.dto';
 export class CategoriesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async list() {
-    const categories = await this.prisma.category.findMany({
-      orderBy: { name: 'asc' },
-      include: { _count: { select: { conversations: true } } },
-    });
-    return categories.map(({ _count, ...category }) => ({
+  /**
+   * Ordered by name, which — unlike the conversation list — never changes on
+   * its own, so page boundaries stay put while the operator browses.
+   */
+  async list(query: PaginationQueryDto = {}) {
+    const { page, perPage, skip, take } = pageBounds(query);
+
+    const [categories, total] = await Promise.all([
+      this.prisma.category.findMany({
+        orderBy: { name: 'asc' },
+        skip,
+        take,
+        include: { _count: { select: { conversations: true } } },
+      }),
+      this.prisma.category.count(),
+    ]);
+
+    const items = categories.map(({ _count, ...category }) => ({
       ...category,
       conversationCount: _count.conversations,
     }));
+
+    return paginated(items, total, page, perPage);
   }
 
   async create(dto: CreateCategoryDto) {

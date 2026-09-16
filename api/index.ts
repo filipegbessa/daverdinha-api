@@ -1,8 +1,7 @@
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
 import { ExpressAdapter } from '@nestjs/platform-express';
 import { AppModule } from '../src/app.module';
-import { createCorsOriginHandler } from '../src/cors-origin';
+import { configureApp } from '../src/bootstrap';
 import express, { Express } from 'express';
 import { IncomingMessage, ServerResponse } from 'http';
 
@@ -12,19 +11,15 @@ async function bootstrap(): Promise<Express> {
   if (cachedApp) return cachedApp;
 
   const expressApp = express();
-  const nestApp = await NestFactory.create(AppModule, new ExpressAdapter(expressApp), {
-    bodyParser: false,
-  });
+  const nestApp = await NestFactory.create(
+    AppModule,
+    new ExpressAdapter(expressApp),
+    {
+      bodyParser: false,
+    },
+  );
 
-  nestApp.use((req: any, res: any, next: any) => {
-    if (req.path === '/webhook/whatsapp') {
-      return next();
-    }
-    return express.json()(req, res, next);
-  });
-
-  nestApp.enableCors({ origin: createCorsOriginHandler(process.env.FRONTEND_URL) });
-  nestApp.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
+  configureApp(nestApp);
 
   await nestApp.init();
   cachedApp = expressApp;

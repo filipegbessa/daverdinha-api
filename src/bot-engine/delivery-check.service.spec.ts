@@ -3,12 +3,13 @@ import { DeliveryCheckService } from './delivery-check.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { WhatsAppClientService } from '../whatsapp/whatsapp-client.service';
 import { MenuItemsService } from '../menu-items/menu-items.service';
+import { ConversationMessengerService } from '../messaging/conversation-messenger.service';
 import { DeliveryLocationsService } from '../delivery-locations/delivery-locations.service';
 import { CepLookupService } from '../cep-lookup/cep-lookup.service';
 
 describe('DeliveryCheckService', () => {
   let service: DeliveryCheckService;
-  let prisma: { conversation: any; message: any };
+  let prisma: { conversation: any; message: any; $transaction: jest.Mock };
   let whatsapp: { sendText: jest.Mock };
   let menuItems: { findSystemDeliveryItem: jest.Mock };
   let deliveryLocations: { list: jest.Mock };
@@ -16,21 +17,41 @@ describe('DeliveryCheckService', () => {
 
   const messages = {
     deliveryPrompt: 'Qual o CEP para entrega?',
-    deliveryConfirmedMessage: 'Sim! Entregamos aí no [local], aguarde um pouco que entro em contato',
+    deliveryConfirmedMessage:
+      'Sim! Entregamos aí no [local], aguarde um pouco que entro em contato',
     deliveryNotCoveredMessage: 'Ainda não chegamos no [local], mas em breve!',
     deliveryRetryMessage: 'Esse não é um CEP válido, quer tentar novamente?',
-    deliveryUnrecognizedMessage: 'Não consegui identificar seu CEP, vou te chamar um atendente!',
+    deliveryUnrecognizedMessage:
+      'Não consegui identificar seu CEP, vou te chamar um atendente!',
   };
 
   const locations = [
-    { id: 'l1', zone: 'Zona Sul', regionName: 'Ipanema', covered: true, cepRanges: [{ startCep: 22410000, endCep: 22471999 }] },
-    { id: 'l2', zone: 'Zona Oeste', regionName: 'Barra da Tijuca', covered: false, cepRanges: [{ startCep: 22600000, endCep: 22799999 }] },
+    {
+      id: 'l1',
+      zone: 'Zona Sul',
+      regionName: 'Ipanema',
+      covered: true,
+      cepRanges: [{ startCep: 22410000, endCep: 22471999 }],
+    },
+    {
+      id: 'l2',
+      zone: 'Zona Oeste',
+      regionName: 'Barra da Tijuca',
+      covered: false,
+      cepRanges: [{ startCep: 22600000, endCep: 22799999 }],
+    },
   ];
 
   beforeEach(async () => {
-    prisma = { conversation: { update: jest.fn() }, message: { create: jest.fn() } };
+    prisma = {
+      conversation: { update: jest.fn() },
+      message: { create: jest.fn().mockResolvedValue({ id: 'msg1' }) },
+      $transaction: jest.fn((ops: any[]) => Promise.all(ops)),
+    };
     whatsapp = { sendText: jest.fn() };
-    menuItems = { findSystemDeliveryItem: jest.fn().mockResolvedValue(messages) };
+    menuItems = {
+      findSystemDeliveryItem: jest.fn().mockResolvedValue(messages),
+    };
     deliveryLocations = { list: jest.fn().mockResolvedValue(locations) };
     cepLookup = { lookup: jest.fn() };
 
@@ -42,6 +63,9 @@ describe('DeliveryCheckService', () => {
         { provide: MenuItemsService, useValue: menuItems },
         { provide: DeliveryLocationsService, useValue: deliveryLocations },
         { provide: CepLookupService, useValue: cepLookup },
+        // The real messenger, wired to the same prisma/whatsapp mocks — the
+        // send-and-persist pairing is exactly what these tests assert on.
+        ConversationMessengerService,
       ],
     }).compile();
 
@@ -53,7 +77,10 @@ describe('DeliveryCheckService', () => {
       const conversation = { id: 'c1', phone: '5521999999999' };
       await service.start(conversation);
 
-      expect(whatsapp.sendText).toHaveBeenCalledWith('5521999999999', 'Qual o CEP para entrega?');
+      expect(whatsapp.sendText).toHaveBeenCalledWith(
+        '5521999999999',
+        'Qual o CEP para entrega?',
+      );
       expect(prisma.conversation.update).toHaveBeenCalledWith({
         where: { id: 'c1' },
         data: { awaitingDeliveryReply: true, invalidAttempts: 0 },
@@ -63,7 +90,11 @@ describe('DeliveryCheckService', () => {
 
   describe('handleReply() — local range match', () => {
     it('confirms delivery and hands off when the CEP is in a covered local range, filling [local] with the bairro', async () => {
-      const conversation = { id: 'c1', phone: '5521999999999', invalidAttempts: 0 };
+      const conversation = {
+        id: 'c1',
+        phone: '5521999999999',
+        invalidAttempts: 0,
+      };
       await service.handleReply(conversation, '22440-000');
 
       expect(cepLookup.lookup).not.toHaveBeenCalled();
@@ -78,16 +109,29 @@ describe('DeliveryCheckService', () => {
     });
 
     it('persists the inbound reply annotated with the resolved bairro', async () => {
-      const conversation = { id: 'c1', phone: '5521999999999', invalidAttempts: 0 };
+      const conversation = {
+        id: 'c1',
+        phone: '5521999999999',
+        invalidAttempts: 0,
+      };
       await service.handleReply(conversation, '22440-000');
 
       expect(prisma.message.create).toHaveBeenCalledWith({
-        data: { conversationId: 'c1', direction: 'inbound', body: '22440-000 (Ipanema)' },
+        data: {
+          conversationId: 'c1',
+          direction: 'inbound',
+          kind: 'text',
+          body: '22440-000 (Ipanema)',
+        },
       });
     });
 
     it('sends the not-covered message and hands off when the CEP is in a non-covered local range', async () => {
-      const conversation = { id: 'c1', phone: '5521999999999', invalidAttempts: 0 };
+      const conversation = {
+        id: 'c1',
+        phone: '5521999999999',
+        invalidAttempts: 0,
+      };
       await service.handleReply(conversation, '22650000');
 
       expect(whatsapp.sendText).toHaveBeenCalledWith(
@@ -104,7 +148,11 @@ describe('DeliveryCheckService', () => {
   describe('handleReply() — API fallback', () => {
     it('falls back to the API when no local range matches, and confirms on a covered bairro match', async () => {
       cepLookup.lookup.mockResolvedValue({ bairro: 'ipánema' });
-      const conversation = { id: 'c1', phone: '5521999999999', invalidAttempts: 0 };
+      const conversation = {
+        id: 'c1',
+        phone: '5521999999999',
+        invalidAttempts: 0,
+      };
 
       await service.handleReply(conversation, '22999999');
 
@@ -114,13 +162,22 @@ describe('DeliveryCheckService', () => {
         'Sim! Entregamos aí no Ipanema, aguarde um pouco que entro em contato',
       );
       expect(prisma.message.create).toHaveBeenCalledWith({
-        data: { conversationId: 'c1', direction: 'inbound', body: '22999999 (Ipanema)' },
+        data: {
+          conversationId: 'c1',
+          direction: 'inbound',
+          kind: 'text',
+          body: '22999999 (Ipanema)',
+        },
       });
     });
 
     it('sends not-covered when the API resolves a bairro that exists but is not in our list', async () => {
       cepLookup.lookup.mockResolvedValue({ bairro: 'Copacabana Fictícia' });
-      const conversation = { id: 'c1', phone: '5521999999999', invalidAttempts: 0 };
+      const conversation = {
+        id: 'c1',
+        phone: '5521999999999',
+        invalidAttempts: 0,
+      };
 
       await service.handleReply(conversation, '99999999');
 
@@ -129,7 +186,12 @@ describe('DeliveryCheckService', () => {
         'Ainda não chegamos no Copacabana Fictícia, mas em breve!',
       );
       expect(prisma.message.create).toHaveBeenCalledWith({
-        data: { conversationId: 'c1', direction: 'inbound', body: '99999999 (Copacabana Fictícia)' },
+        data: {
+          conversationId: 'c1',
+          direction: 'inbound',
+          kind: 'text',
+          body: '99999999 (Copacabana Fictícia)',
+        },
       });
       expect(prisma.conversation.update).toHaveBeenCalledWith({
         where: { id: 'c1' },
@@ -140,13 +202,25 @@ describe('DeliveryCheckService', () => {
 
   describe('handleReply() — unresolved, retry then handoff', () => {
     it('sends the retry message and does not hand off on the first unresolved attempt (bad format)', async () => {
-      const conversation = { id: 'c1', phone: '5521999999999', invalidAttempts: 0 };
+      const conversation = {
+        id: 'c1',
+        phone: '5521999999999',
+        invalidAttempts: 0,
+      };
       await service.handleReply(conversation, '123');
 
       expect(cepLookup.lookup).not.toHaveBeenCalled();
-      expect(whatsapp.sendText).toHaveBeenCalledWith('5521999999999', 'Esse não é um CEP válido, quer tentar novamente?');
+      expect(whatsapp.sendText).toHaveBeenCalledWith(
+        '5521999999999',
+        'Esse não é um CEP válido, quer tentar novamente?',
+      );
       expect(prisma.message.create).toHaveBeenCalledWith({
-        data: { conversationId: 'c1', direction: 'inbound', body: '123' },
+        data: {
+          conversationId: 'c1',
+          direction: 'inbound',
+          kind: 'text',
+          body: '123',
+        },
       });
       expect(prisma.conversation.update).toHaveBeenCalledWith({
         where: { id: 'c1' },
@@ -156,11 +230,18 @@ describe('DeliveryCheckService', () => {
 
     it('sends the retry message on the first unresolved attempt when the API cannot resolve the CEP', async () => {
       cepLookup.lookup.mockResolvedValue(null);
-      const conversation = { id: 'c1', phone: '5521999999999', invalidAttempts: 0 };
+      const conversation = {
+        id: 'c1',
+        phone: '5521999999999',
+        invalidAttempts: 0,
+      };
 
       await service.handleReply(conversation, '22999999');
 
-      expect(whatsapp.sendText).toHaveBeenCalledWith('5521999999999', 'Esse não é um CEP válido, quer tentar novamente?');
+      expect(whatsapp.sendText).toHaveBeenCalledWith(
+        '5521999999999',
+        'Esse não é um CEP válido, quer tentar novamente?',
+      );
       expect(prisma.conversation.update).toHaveBeenCalledWith({
         where: { id: 'c1' },
         data: { invalidAttempts: 1 },
@@ -168,13 +249,24 @@ describe('DeliveryCheckService', () => {
     });
 
     it('sends the unrecognized message and hands off on the second unresolved attempt', async () => {
-      const conversation = { id: 'c1', phone: '5521999999999', invalidAttempts: 1 };
+      const conversation = {
+        id: 'c1',
+        phone: '5521999999999',
+        invalidAttempts: 1,
+      };
       await service.handleReply(conversation, '123');
 
-      expect(whatsapp.sendText).toHaveBeenCalledWith('5521999999999', 'Não consegui identificar seu CEP, vou te chamar um atendente!');
+      expect(whatsapp.sendText).toHaveBeenCalledWith(
+        '5521999999999',
+        'Não consegui identificar seu CEP, vou te chamar um atendente!',
+      );
       expect(prisma.conversation.update).toHaveBeenCalledWith({
         where: { id: 'c1' },
-        data: { awaitingDeliveryReply: false, status: 'paused_human', invalidAttempts: 2 },
+        data: {
+          awaitingDeliveryReply: false,
+          status: 'paused_human',
+          invalidAttempts: 2,
+        },
       });
     });
   });
