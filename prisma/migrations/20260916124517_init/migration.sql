@@ -136,6 +136,14 @@ CREATE TABLE "order_items" (
 );
 
 -- CreateTable
+CREATE TABLE "processed_webhook_messages" (
+    "whatsapp_message_id" TEXT NOT NULL,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "processed_webhook_messages_pkey" PRIMARY KEY ("whatsapp_message_id")
+);
+
+-- CreateTable
 CREATE TABLE "push_subscriptions" (
     "id" TEXT NOT NULL,
     "clerk_user_id" TEXT NOT NULL,

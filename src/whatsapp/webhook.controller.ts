@@ -53,7 +53,10 @@ export class WebhookController {
       throw new ForbiddenException('Invalid signature');
     }
 
-    await this.botEngine.handleIncomingMessage(body);
+    const processed = await this.botEngine.handleIncomingMessage(body);
+    if (!processed) {
+      return { status: 'ok' };
+    }
 
     try {
       const phone = extractPhoneFromWebhookPayload(body);

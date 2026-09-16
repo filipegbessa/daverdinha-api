@@ -25,6 +25,7 @@ interface OrderProductItem {
 }
 
 interface IncomingMessage {
+  id?: string;
   from: string;
   type: string;
   text?: { body: string };
@@ -43,9 +44,17 @@ export class BotEngineService {
     private readonly deliveryCheck: DeliveryCheckService,
   ) {}
 
-  async handleIncomingMessage(payload: any): Promise<void> {
+  // Returns whether a message was actually processed (false for a missing
+  // message or a webhook retry of one already handled) so the webhook
+  // controller can skip its own post-processing (the push notification
+  // lookup) on a duplicate too.
+  async handleIncomingMessage(payload: any): Promise<boolean> {
     const message = this.extractMessage(payload);
-    if (!message) return;
+    if (!message) return false;
+
+    if (message.id && (await this.isDuplicateMessage(message.id))) {
+      return false;
+    }
 
     const { conversation, isNew } = await this.resolveConversation(
       message.from,
@@ -58,7 +67,7 @@ export class BotEngineService {
     if (message.type === 'order') {
       const settings = await this.botSettings.get();
       await this.handleOrderMessage(conversation, settings, message.order);
-      return;
+      return true;
     }
 
     // A reply to the delivery-location sub-flow is persisted by
@@ -101,7 +110,7 @@ export class BotEngineService {
         },
       });
       await this.showMenu(conversation);
-      return;
+      return true;
     }
 
     // The delivery-location sub-flow (however it started — order, menu
@@ -111,13 +120,13 @@ export class BotEngineService {
     // "qual seu CEP?" would go unanswered.
     if (conversation.awaitingDeliveryReply && message.text?.body) {
       await this.deliveryCheck.handleReply(conversation, message.text.body);
-      return;
+      return true;
     }
 
     if (conversation.status === 'paused_human') {
       const isStale = Date.now() - conversation.updatedAt.getTime() > STALE_HANDOFF_MS;
       if (!isStale) {
-        return;
+        return true;
       }
       await this.prisma.conversation.update({
         where: { id: conversation.id },
@@ -128,7 +137,7 @@ export class BotEngineService {
           awaitingMenuItemAnswerId: null,
         },
       });
-      return;
+      return true;
     }
 
     const settings = await this.botSettings.get();
@@ -137,43 +146,55 @@ export class BotEngineService {
         where: { id: conversation.id },
         data: { status: 'paused_human' },
       });
-      return;
+      return true;
     }
 
     // 'image' is deliberately left out of the invalid-content bucket below —
     // ignored entirely for now, a dedicated image flow comes later.
     if (message.type === 'image') {
-      return;
+      return true;
     }
 
     if (message.type && message.type !== 'text' && message.type !== 'interactive') {
       await this.handleUnsupportedMessage(conversation, settings);
-      return;
+      return true;
     }
 
     if (conversation.awaitingMenuItemAnswerId && message.text?.body) {
       await this.handleMenuItemAnswerReply(conversation, message.text.body);
-      return;
+      return true;
     }
 
     if (message.referredProductId) {
       await this.deliveryCheck.start(conversation);
-      return;
+      return true;
     }
 
     if (isNew) {
       await this.showMenu(conversation);
-      return;
+      return true;
     }
 
     const selectedItemId = message.interactive?.list_reply?.id;
     await this.handleMenuSelection(conversation, selectedItemId);
+    return true;
+  }
+
+  private async isDuplicateMessage(whatsappMessageId: string): Promise<boolean> {
+    try {
+      await this.prisma.processedWebhookMessage.create({ data: { whatsappMessageId } });
+      return false;
+    } catch (error) {
+      if ((error as { code?: string }).code === 'P2002') return true;
+      throw error;
+    }
   }
 
   private extractMessage(payload: any): IncomingMessage | null {
     const raw = payload?.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
     if (!raw) return null;
     return {
+      id: raw.id,
       from: raw.from,
       type: raw.type,
       text: raw.text,

@@ -167,6 +167,19 @@ model OrderItem {
   @@map("order_items")
 }
 
+// Guards against WhatsApp's webhook retries (e.g. our endpoint didn't ack
+// fast enough) reprocessing the same inbound message — without this, a
+// retried "oi" looks like an unrecognized reply to whatever the bot already
+// answered with, cycling invalidAttempts and eventually escalating to a
+// human for no reason. whatsappMessageId is the Cloud API's own wamid,
+// already globally unique, so it doubles as the primary key.
+model ProcessedWebhookMessage {
+  whatsappMessageId String   @id @map("whatsapp_message_id")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  @@map("processed_webhook_messages")
+}
+
 model PushSubscription {
   id          String   @id @default(uuid())
   clerkUserId String   @map("clerk_user_id")

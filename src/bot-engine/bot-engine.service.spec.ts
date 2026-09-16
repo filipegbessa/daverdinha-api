@@ -79,6 +79,7 @@ describe('BotEngineService', () => {
       conversation: { findFirst: jest.fn(), create: jest.fn(), update: jest.fn() },
       message: { create: jest.fn().mockResolvedValue({ id: 'msg1' }) },
       order: { create: jest.fn() },
+      processedWebhookMessage: { create: jest.fn().mockResolvedValue({ whatsappMessageId: 'wamid.default' }) },
       $transaction: jest.fn((callback: (tx: any) => Promise<unknown>) => callback(prisma)),
     };
     whatsapp = { sendText: jest.fn(), sendInteractiveList: jest.fn(), getProductNames: jest.fn().mockResolvedValue({}) };
@@ -106,6 +107,75 @@ describe('BotEngineService', () => {
     }).compile();
 
     service = moduleRef.get(BotEngineService);
+  });
+
+  describe('deduplicating WhatsApp webhook retries', () => {
+    function textMessagePayloadWithId(id: string, from: string, text: string) {
+      return {
+        entry: [{ changes: [{ value: { messages: [{ id, from, type: 'text', text: { body: text } }] } }] }],
+      };
+    }
+
+    it('processes a message with a wamid it has not seen before', async () => {
+      prisma.conversation.findFirst.mockResolvedValue(null);
+      prisma.conversation.create.mockResolvedValue({
+        id: 'c1',
+        phone: '5521999999999',
+        status: 'bot_active',
+        invalidAttempts: 0,
+        awaitingDeliveryReply: false,
+      });
+
+      const processed = await service.handleIncomingMessage(
+        textMessagePayloadWithId('wamid.1', '5521999999999', 'oi'),
+      );
+
+      expect(processed).toBe(true);
+      expect(prisma.processedWebhookMessage.create).toHaveBeenCalledWith({
+        data: { whatsappMessageId: 'wamid.1' },
+      });
+      expect(whatsapp.sendText).toHaveBeenCalled();
+    });
+
+    it('skips reprocessing (and returns false) when the same wamid is delivered again — a webhook retry', async () => {
+      const conversation = {
+        id: 'c1',
+        phone: '5521999999999',
+        status: 'bot_active',
+        invalidAttempts: 0,
+        awaitingDeliveryReply: false,
+      };
+      prisma.conversation.findFirst.mockResolvedValue(conversation);
+      prisma.processedWebhookMessage.create.mockRejectedValue({ code: 'P2002' });
+
+      const processed = await service.handleIncomingMessage(
+        textMessagePayloadWithId('wamid.1', '5521999999999', 'oi'),
+      );
+
+      expect(processed).toBe(false);
+      // Nothing from the normal flow ran — no menu resent, no invalid-attempt
+      // registered, no state mutated — this is a no-op on a retry.
+      expect(prisma.conversation.findFirst).not.toHaveBeenCalled();
+      expect(whatsapp.sendText).not.toHaveBeenCalled();
+      expect(whatsapp.sendInteractiveList).not.toHaveBeenCalled();
+      expect(prisma.conversation.update).not.toHaveBeenCalled();
+    });
+
+    it('does not dedupe messages that have no id (defensive — real WhatsApp payloads always include one)', async () => {
+      prisma.conversation.findFirst.mockResolvedValue(null);
+      prisma.conversation.create.mockResolvedValue({
+        id: 'c1',
+        phone: '5521999999999',
+        status: 'bot_active',
+        invalidAttempts: 0,
+        awaitingDeliveryReply: false,
+      });
+
+      const processed = await service.handleIncomingMessage(textMessagePayload('5521999999999', 'oi'));
+
+      expect(processed).toBe(true);
+      expect(prisma.processedWebhookMessage.create).not.toHaveBeenCalled();
+    });
   });
 
   it('on first contact, creates the conversation and sends welcome + menu', async () => {

@@ -27,7 +27,7 @@ describe('WebhookController', () => {
     process.env.WHATSAPP_APP_SECRET = 'test-secret';
     jest.spyOn(verifySignatureModule, 'verifySignature').mockReturnValue(true);
 
-    botEngine = { handleIncomingMessage: jest.fn().mockResolvedValue(undefined) };
+    botEngine = { handleIncomingMessage: jest.fn().mockResolvedValue(true) };
     prisma = { conversation: { findFirst: jest.fn() } };
     pushNotifications = { notifyNewMessage: jest.fn() };
 
@@ -120,6 +120,23 @@ describe('WebhookController', () => {
 
     await controller.receive(fakeRequest(), payload);
 
+    expect(pushNotifications.notifyNewMessage).not.toHaveBeenCalled();
+  });
+
+  it('skips the notification lookup entirely when the message was a duplicate webhook delivery', async () => {
+    botEngine.handleIncomingMessage.mockResolvedValue(false);
+    prisma.conversation.findFirst.mockResolvedValue({
+      id: 'c1',
+      name: 'Maria',
+      phone: '5521999999999',
+      status: 'paused_human',
+      messages: [{ kind: 'text', body: 'oi' }],
+    });
+
+    const result = await controller.receive(fakeRequest(), payload);
+
+    expect(result).toEqual({ status: 'ok' });
+    expect(prisma.conversation.findFirst).not.toHaveBeenCalled();
     expect(pushNotifications.notifyNewMessage).not.toHaveBeenCalled();
   });
 
