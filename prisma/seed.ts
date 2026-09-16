@@ -62,6 +62,126 @@ async function seedDeliveryLocations() {
   }
 }
 
+const CATEGORIES = [
+  { name: 'Dúvida', color: '#F59E0B' },
+  { name: 'Reclamação', color: '#EF4444' },
+  { name: 'Elogio', color: '#22C55E' },
+  { name: 'Pedido', color: '#3B82F6' },
+];
+
+async function seedCategories() {
+  for (const category of CATEGORIES) {
+    await prisma.category.upsert({
+      where: { name: category.name },
+      update: {},
+      create: category,
+    });
+  }
+}
+
+interface SeedMessage {
+  direction: 'inbound' | 'outbound';
+  body: string;
+}
+
+interface SeedConversation {
+  phone: string;
+  name: string;
+  status: 'bot_active' | 'paused_human';
+  entryPoint: 'menu' | 'catalog';
+  unread: boolean;
+  categories: string[];
+  messages: SeedMessage[];
+}
+
+const CONVERSATIONS: SeedConversation[] = [
+  {
+    phone: '5521999990001',
+    name: 'Marina Silva',
+    status: 'bot_active',
+    entryPoint: 'menu',
+    unread: true,
+    categories: ['Dúvida'],
+    messages: [
+      { direction: 'inbound', body: 'Oi, vocês entregam no Leblon?' },
+      {
+        direction: 'outbound',
+        body: 'Oi! Que bom te ver por aqui 🌱 Bem-vinda(o) à Daverdinha — um espaço pra plantar, criar e brindar. Como posso te ajudar hoje?',
+      },
+      { direction: 'inbound', body: 'Queria saber se entregam no meu bairro' },
+    ],
+  },
+  {
+    phone: '5521999990002',
+    name: 'João Pedro',
+    status: 'paused_human',
+    entryPoint: 'catalog',
+    unread: true,
+    categories: ['Reclamação'],
+    messages: [
+      { direction: 'inbound', body: 'Meu pedido chegou com a planta quebrada' },
+      {
+        direction: 'outbound',
+        body: 'Poxa, sinto muito! Vou te chamar um atendente pra resolver isso.',
+      },
+    ],
+  },
+  {
+    phone: '5521999990003',
+    name: 'Ana Costa',
+    status: 'bot_active',
+    entryPoint: 'menu',
+    unread: false,
+    categories: ['Elogio', 'Pedido'],
+    messages: [
+      { direction: 'inbound', body: 'Adorei o atendimento, muito obrigada!' },
+      { direction: 'outbound', body: 'Fico muito feliz em ouvir isso! 🌱' },
+      { direction: 'inbound', body: 'Queria fazer outro pedido' },
+    ],
+  },
+];
+
+async function seedConversations() {
+  const categoriesByName = new Map(
+    (await prisma.category.findMany()).map((c) => [c.name, c.id]),
+  );
+
+  for (const seedConversation of CONVERSATIONS) {
+    const existing = await prisma.conversation.findFirst({
+      where: { phone: seedConversation.phone },
+    });
+    if (existing) continue; // never duplicate on a re-run against a non-empty db
+
+    const conversation = await prisma.conversation.create({
+      data: {
+        phone: seedConversation.phone,
+        name: seedConversation.name,
+        status: seedConversation.status,
+        entryPoint: seedConversation.entryPoint,
+        unread: seedConversation.unread,
+      },
+    });
+
+    for (const message of seedConversation.messages) {
+      await prisma.message.create({
+        data: {
+          conversationId: conversation.id,
+          direction: message.direction,
+          body: message.body,
+        },
+      });
+    }
+
+    for (const categoryName of seedConversation.categories) {
+      const categoryId = categoriesByName.get(categoryName);
+      if (!categoryId) continue;
+      await prisma.conversationCategory.create({
+        data: { conversationId: conversation.id, categoryId },
+      });
+    }
+  }
+}
+
 async function main() {
   await prisma.botSettings.upsert({
     where: { id: 1 },
@@ -80,6 +200,8 @@ async function main() {
   });
 
   await seedDeliveryLocations();
+  await seedCategories();
+  await seedConversations();
 
   const menuItems = [
     {
