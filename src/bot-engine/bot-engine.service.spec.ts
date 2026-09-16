@@ -164,6 +164,54 @@ describe('BotEngineService', () => {
     expect(prisma.conversation.update).toHaveBeenCalledWith({ where: { id: 'c1' }, data: { status: 'paused_human' } });
   });
 
+  it('picking "atendente" while awaiting a CEP reply cancels the delivery sub-flow so the next free-text message is not misread as a CEP', async () => {
+    const conversation = { id: 'c1', phone: '5521999999999', status: 'bot_active', invalidAttempts: 0, awaitingDeliveryReply: true };
+    prisma.conversation.findFirst.mockResolvedValue(conversation);
+
+    await service.handleIncomingMessage({
+      entry: [{ changes: [{ value: { messages: [{ from: '5521999999999', type: 'interactive', interactive: { list_reply: { id: 'm3' } } }] } }] }],
+    });
+
+    expect(prisma.conversation.update).toHaveBeenCalledWith({
+      where: { id: 'c1' },
+      data: { invalidAttempts: 0, awaitingDeliveryReply: false },
+    });
+    expect(deliveryCheck.handleReply).not.toHaveBeenCalled();
+  });
+
+  it('end-to-end: after diverting to "atendente" mid-CEP-flow, the next free-text message is treated as a normal reply, not a CEP', async () => {
+    prisma.conversation.findFirst
+      .mockResolvedValueOnce({
+        id: 'c1',
+        phone: '5521999999999',
+        status: 'bot_active',
+        invalidAttempts: 0,
+        awaitingDeliveryReply: true,
+      })
+      // Reflects the DB after the update this method just made.
+      .mockResolvedValueOnce({
+        id: 'c1',
+        phone: '5521999999999',
+        status: 'paused_human',
+        invalidAttempts: 0,
+        awaitingDeliveryReply: false,
+        updatedAt: new Date(),
+      });
+
+    await service.handleIncomingMessage({
+      entry: [{ changes: [{ value: { messages: [{ from: '5521999999999', type: 'interactive', interactive: { list_reply: { id: 'm3' } } }] } }] }],
+    });
+    deliveryCheck.handleReply.mockClear();
+    whatsapp.sendText.mockClear();
+
+    await service.handleIncomingMessage(textMessagePayload('5521999999999', 'Ok'));
+
+    expect(deliveryCheck.handleReply).not.toHaveBeenCalled();
+    // paused_human with a non-stale handoff: the bot stays silent, it does
+    // not send the "Esse não é um CEP válido" message from the old flow.
+    expect(whatsapp.sendText).not.toHaveBeenCalled();
+  });
+
   it('after a "texto" item replies, hands off to a human', async () => {
     const conversation = { id: 'c1', phone: '5521999999999', status: 'bot_active', invalidAttempts: 0, awaitingDeliveryReply: false };
     prisma.conversation.findFirst.mockResolvedValue(conversation);

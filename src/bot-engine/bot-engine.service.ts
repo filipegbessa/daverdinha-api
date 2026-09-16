@@ -312,9 +312,14 @@ export class BotEngineService {
       return;
     }
 
+    // Picking any menu item is an explicit new intent — it must cancel a
+    // delivery sub-flow left mid-way (e.g. asked for a CEP, then the
+    // customer picked "Falar com um atendente" instead of answering).
+    // Otherwise the flag lingers and the next free-text message the
+    // customer sends gets misrouted into the CEP validator.
     await this.prisma.conversation.update({
       where: { id: conversation.id },
-      data: { invalidAttempts: 0 },
+      data: { invalidAttempts: 0, awaitingDeliveryReply: false },
     });
 
     switch (selected.type) {
