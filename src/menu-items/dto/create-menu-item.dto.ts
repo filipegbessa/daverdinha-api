@@ -6,8 +6,14 @@ import {
   IsInt,
   IsOptional,
   IsString,
+  MaxLength,
   ValidateNested,
 } from 'class-validator';
+
+// WhatsApp's interactive list message rejects the whole request
+// (error #131009) if any row title is longer than this — capping it here
+// keeps a too-long menu item topic from breaking every single menu send.
+const MENU_ITEM_TOPIC_MAX_LENGTH = 24;
 
 export class MenuItemAnswerOptionDto {
   @IsArray()
@@ -23,6 +29,7 @@ export class CreateMenuItemDto {
   order: number;
 
   @IsString()
+  @MaxLength(MENU_ITEM_TOPIC_MAX_LENGTH)
   topic: string;
 
   @IsIn(['texto', 'entrega', 'atendente', 'pergunta'])
