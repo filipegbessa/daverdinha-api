@@ -13,7 +13,10 @@ import {
   DEFAULT_MESSAGES_LIMIT,
 } from './dto/list-messages.dto';
 
-const MESSAGE_INCLUDE = { order: { include: { items: true } } } as const;
+const MESSAGE_INCLUDE = {
+  order: { include: { items: true } },
+  repliedTo: { select: { id: true, kind: true, body: true, direction: true } },
+} as const;
 
 @Injectable()
 export class ConversationsService {
@@ -157,7 +160,7 @@ export class ConversationsService {
     });
   }
 
-  async reply(id: string, text: string) {
+  async reply(id: string, text: string, replyToMessageId?: string) {
     const conversation = await this.prisma.conversation.findUniqueOrThrow({
       where: { id },
     });
@@ -167,8 +170,10 @@ export class ConversationsService {
       );
     }
     // The messenger marks the conversation read and bumps updatedAt as part
-    // of the same transaction as the message itself.
-    return this.messenger.sendText(conversation, text);
+    // of the same transaction as the message itself. It also validates
+    // replyToMessageId (existence, wamid, same conversation) and throws
+    // BadRequestException on its own when the citation can't be honored.
+    return this.messenger.sendText(conversation, text, { replyToMessageId });
   }
 
   async reactivate(id: string) {

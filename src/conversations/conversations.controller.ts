@@ -45,7 +45,7 @@ export class ConversationsController {
 
   @Post(':id/reply')
   reply(@Param('id') id: string, @Body() dto: ReplyDto) {
-    return this.service.reply(id, dto.text);
+    return this.service.reply(id, dto.text, dto.replyToMessageId);
   }
 
   @Post(':id/reactivate')

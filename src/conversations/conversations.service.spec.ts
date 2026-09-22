@@ -7,6 +7,7 @@ import { ConversationMessengerService } from '../messaging/conversation-messenge
 
 describe('ConversationsService', () => {
   let service: ConversationsService;
+  let messenger: ConversationMessengerService;
   let prisma: {
     conversation: any;
     message: any;
@@ -24,7 +25,7 @@ describe('ConversationsService', () => {
         update: jest.fn(),
         count: jest.fn().mockResolvedValue(0),
       },
-      message: { create: jest.fn(), findMany: jest.fn() },
+      message: { create: jest.fn(), findMany: jest.fn(), findUnique: jest.fn() },
       conversationCategory: { upsert: jest.fn(), deleteMany: jest.fn() },
       $transaction: jest.fn((ops: any[]) => Promise.all(ops)),
     };
@@ -43,6 +44,7 @@ describe('ConversationsService', () => {
       ],
     }).compile();
     service = moduleRef.get(ConversationsService);
+    messenger = moduleRef.get(ConversationMessengerService);
   });
 
   describe('list()', () => {
@@ -207,7 +209,12 @@ describe('ConversationsService', () => {
           messages: {
             orderBy: { createdAt: 'desc' },
             take: 4,
-            include: { order: { include: { items: true } } },
+            include: {
+              order: { include: { items: true } },
+              repliedTo: {
+                select: { id: true, kind: true, body: true, direction: true },
+              },
+            },
           },
           categories: { include: { category: true } },
         },
@@ -246,7 +253,12 @@ describe('ConversationsService', () => {
         where: { conversationId: 'c1', createdAt: { gte: since } },
         orderBy: { createdAt: 'asc' },
         take: 50,
-        include: { order: { include: { items: true } } },
+        include: {
+          order: { include: { items: true } },
+          repliedTo: {
+            select: { id: true, kind: true, body: true, direction: true },
+          },
+        },
       });
       expect(result).toEqual([{ id: 'm1' }]);
     });
@@ -261,7 +273,12 @@ describe('ConversationsService', () => {
         where: { conversationId: 'c1', createdAt: { lt: before } },
         orderBy: { createdAt: 'desc' },
         take: 2,
-        include: { order: { include: { items: true } } },
+        include: {
+          order: { include: { items: true } },
+          repliedTo: {
+            select: { id: true, kind: true, body: true, direction: true },
+          },
+        },
       });
       expect(result).toEqual([{ id: 'm2' }, { id: 'm3' }]);
     });
@@ -335,6 +352,57 @@ describe('ConversationsService', () => {
       );
       expect(whatsapp.sendText).not.toHaveBeenCalled();
       expect(prisma.message.create).not.toHaveBeenCalled();
+    });
+
+    it('forwards replyToMessageId to messenger.sendText as { replyToMessageId }', async () => {
+      prisma.conversation.findUniqueOrThrow.mockResolvedValue({
+        id: 'c1',
+        phone: '5521999999999',
+        status: 'paused_human',
+      });
+      prisma.message.findUnique.mockResolvedValue({
+        id: 'm-target',
+        conversationId: 'c1',
+        whatsappMessageId: 'wamid.target',
+      });
+      prisma.message.create.mockResolvedValue({ id: 'm2' });
+      prisma.conversation.update.mockResolvedValue({ id: 'c1' });
+      const sendTextSpy = jest.spyOn(messenger, 'sendText');
+
+      await service.reply('c1', 'Oi!', 'm-target');
+
+      expect(sendTextSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'c1' }),
+        'Oi!',
+        { replyToMessageId: 'm-target' },
+      );
+      // Confirms the quote actually made it through the messenger, not just
+      // that the third argument was forwarded.
+      expect(whatsapp.sendText).toHaveBeenCalledWith(
+        '5521999999999',
+        'Oi!',
+        { replyToWamid: 'wamid.target' },
+      );
+    });
+
+    it('without replyToMessageId, still calls messenger.sendText (third argument omitted/undefined)', async () => {
+      prisma.conversation.findUniqueOrThrow.mockResolvedValue({
+        id: 'c1',
+        phone: '5521999999999',
+        status: 'paused_human',
+      });
+      prisma.message.create.mockResolvedValue({ id: 'm1' });
+      prisma.conversation.update.mockResolvedValue({ id: 'c1' });
+      const sendTextSpy = jest.spyOn(messenger, 'sendText');
+
+      await service.reply('c1', 'Oi!');
+
+      expect(sendTextSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'c1' }),
+        'Oi!',
+        { replyToMessageId: undefined },
+      );
+      expect(prisma.message.findUnique).not.toHaveBeenCalled();
     });
   });
 
