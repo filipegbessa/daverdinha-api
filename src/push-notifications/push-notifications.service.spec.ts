@@ -115,7 +115,7 @@ describe('PushNotificationsService', () => {
 
     expect(webpush.sendNotification).toHaveBeenCalledWith(
       expect.anything(),
-      JSON.stringify({ title: '5521999999999', body: 'Oi!', url: '/admin/conversas/c1' }),
+      JSON.stringify({ title: '+55 (21) 99999-9999', body: 'Oi!', url: '/admin/conversas/c1' }),
     );
   });
 

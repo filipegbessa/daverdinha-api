@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import * as webpush from 'web-push';
 import { PushSubscriptionsService } from '../push-subscriptions/push-subscriptions.service';
+import { formatPhone } from '../common/format-phone';
 
 interface NotifiableConversation {
   id: string;
@@ -48,7 +49,7 @@ export class PushNotificationsService implements OnModuleInit {
 
     const subscriptions = await this.subscriptions.listAll();
     const payload = JSON.stringify({
-      title: conversation.name ?? conversation.phone,
+      title: conversation.name ?? formatPhone(conversation.phone),
       body: truncateBody(conversation.messagePreview),
       url: `/admin/conversas/${conversation.id}`,
       // Epoch millis, the shape `showNotification`'s `timestamp` option takes.
