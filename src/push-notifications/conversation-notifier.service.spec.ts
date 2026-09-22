@@ -34,9 +34,18 @@ describe('ConversationNotifierService', () => {
 
     await service.notifyNewInboundMessage('c1');
 
+    // Regression: this used to take the newest row of any direction, so a
+    // flow that answered before the push went out (a catalog order ends on
+    // the CEP prompt) previewed the bot's own text back to the operator.
     expect(prisma.conversation.findUnique).toHaveBeenCalledWith({
       where: { id: 'c1' },
-      include: { messages: { orderBy: { createdAt: 'desc' }, take: 1 } },
+      include: {
+        messages: {
+          where: { direction: 'inbound' },
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          take: 1,
+        },
+      },
     });
     expect(pushNotifications.notifyNewMessage).toHaveBeenCalledWith({
       id: 'c1',
@@ -44,6 +53,23 @@ describe('ConversationNotifierService', () => {
       phone: '5521999999999',
       messagePreview: 'Oi, tudo bem?',
     });
+  });
+
+  it('passes the message time along, so the push is not stamped with its own delivery', async () => {
+    const createdAt = new Date('2026-09-17T14:32:00.000Z');
+    prisma.conversation.findUnique.mockResolvedValue({
+      id: 'c1',
+      name: 'Maria',
+      phone: '5521999999999',
+      status: 'paused_human',
+      messages: [{ kind: 'text', body: 'Oi, tudo bem?', createdAt }],
+    });
+
+    await service.notifyNewInboundMessage('c1');
+
+    expect(pushNotifications.notifyNewMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ sentAt: createdAt }),
+    );
   });
 
   it('labels a catalog order instead of showing its empty body', async () => {

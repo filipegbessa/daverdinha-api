@@ -21,7 +21,20 @@ export class ConversationNotifierService {
   async notifyNewInboundMessage(conversationId: string): Promise<void> {
     const conversation = await this.prisma.conversation.findUnique({
       where: { id: conversationId },
-      include: { messages: { orderBy: { createdAt: 'desc' }, take: 1 } },
+      include: {
+        // The newest *inbound* message, not the newest row: the push is about
+        // what the customer sent. Taking the newest row previewed the bot's
+        // own last reply whenever the flow answered before the push went out
+        // (a catalog order ends on the CEP prompt, so the operator got a push
+        // reading "qual seu CEP?"). `id` breaks the tie because the bot writes
+        // two messages inside the same millisecond — the same reason `since`
+        // has to be inclusive on the messages endpoint.
+        messages: {
+          where: { direction: 'inbound' },
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          take: 1,
+        },
+      },
     });
 
     if (conversation?.status !== 'paused_human') return;
@@ -37,6 +50,7 @@ export class ConversationNotifierService {
       name: conversation.name,
       phone: conversation.phone,
       messagePreview,
+      sentAt: lastMessage?.createdAt,
     });
   }
 }

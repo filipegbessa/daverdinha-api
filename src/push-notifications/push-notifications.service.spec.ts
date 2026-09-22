@@ -53,6 +53,58 @@ describe('PushNotificationsService', () => {
     );
   });
 
+  it('sends when the message arrived, so the notification is not stamped with the delivery time', async () => {
+    subscriptions.listAll.mockResolvedValue([
+      { endpoint: 'https://push.example/1', p256dh: 'p1', auth: 'a1' },
+    ]);
+    (webpush.sendNotification as jest.Mock).mockResolvedValue(undefined);
+    const sentAt = new Date('2026-09-17T14:32:00.000Z');
+
+    await service.notifyNewMessage({
+      id: 'c1',
+      name: 'Maria',
+      phone: '5521999999999',
+      messagePreview: 'Oi, tudo bem?',
+      sentAt,
+    });
+
+    expect(webpush.sendNotification).toHaveBeenCalledWith(
+      expect.anything(),
+      JSON.stringify({
+        title: 'Maria',
+        body: 'Oi, tudo bem?',
+        url: '/admin/conversas/c1',
+        timestamp: sentAt.getTime(),
+      }),
+    );
+  });
+
+  it('leaves the timestamp out entirely when the message time is unknown', async () => {
+    subscriptions.listAll.mockResolvedValue([
+      { endpoint: 'https://push.example/1', p256dh: 'p1', auth: 'a1' },
+    ]);
+    (webpush.sendNotification as jest.Mock).mockResolvedValue(undefined);
+
+    await service.notifyNewMessage({
+      id: 'c1',
+      name: 'Maria',
+      phone: '5521999999999',
+      messagePreview: 'Oi, tudo bem?',
+    });
+
+    // Asserted as the exact payload: the key has to be absent, not
+    // `"timestamp":null`, so the browser falls back to the delivery time
+    // instead of reading an invalid date.
+    expect(webpush.sendNotification).toHaveBeenCalledWith(
+      expect.anything(),
+      JSON.stringify({
+        title: 'Maria',
+        body: 'Oi, tudo bem?',
+        url: '/admin/conversas/c1',
+      }),
+    );
+  });
+
   it('falls back to the phone number as the title when the conversation has no name', async () => {
     subscriptions.listAll.mockResolvedValue([
       { endpoint: 'https://push.example/1', p256dh: 'p1', auth: 'a1' },

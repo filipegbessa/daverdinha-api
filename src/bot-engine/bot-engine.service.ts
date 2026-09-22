@@ -21,10 +21,17 @@ const STALE_HANDOFF_MS = 30 * 24 * 60 * 60 * 1000;
 const MENU_KEYWORD = 'menu';
 
 // Persisted as a stand-in for the actual content on any message type the bot
-// can't interpret (audio/sticker/video/etc — we never download or store the
-// media itself). `image` is deliberately excluded from this bucket — it's
-// ignored entirely for now, pending a dedicated image flow.
+// can't interpret (image/audio/sticker/video/etc — we never download or store
+// the media itself).
 const INVALID_CONTENT_LABEL = '[Conteúdo inválido]';
+
+/**
+ * Anything that is neither plain text nor a tap on the menu. A catalog
+ * `order` never reaches this check — it returns earlier, through its own flow.
+ */
+function isUnsupportedContent(type: string | undefined): boolean {
+  return !!type && type !== 'text' && type !== 'interactive';
+}
 
 /** The state a conversation is reset to whenever it returns to the bot. */
 const BOT_ACTIVE_RESET = {
@@ -113,6 +120,25 @@ export class BotEngineService {
       return handled;
     }
 
+    // Content the bot can't read is answered on the bot's own trigger,
+    // whatever the conversation's status — the same principle a catalog order
+    // already follows: the reply is about the message, not about who owns the
+    // chat. This check sits *above* the `paused_human` return on purpose.
+    // Below it, a photo sent to a conversation a human was handling fell
+    // through without being recorded at all: the operator's transcript had
+    // nothing where the photo was, and the push the webhook fires right after
+    // previewed whatever the previous message in the thread happened to be —
+    // often days old.
+    if (isUnsupportedContent(message.type)) {
+      const settings = await this.botSettings.get();
+      await this.handleUnsupportedMessage(
+        conversation,
+        settings,
+        settings.botEnabled,
+      );
+      return handled;
+    }
+
     if (conversation.status === 'paused_human') {
       // A handoff nobody ever picked up shouldn't strand the customer
       // forever — after a month, hand the conversation back to the bot.
@@ -130,21 +156,6 @@ export class BotEngineService {
         where: { id: conversation.id },
         data: { status: 'paused_human' },
       });
-      return handled;
-    }
-
-    // 'image' is deliberately left out of the invalid-content bucket below —
-    // ignored entirely for now, a dedicated image flow comes later.
-    if (message.type === 'image') {
-      return handled;
-    }
-
-    if (
-      message.type &&
-      message.type !== 'text' &&
-      message.type !== 'interactive'
-    ) {
-      await this.handleUnsupportedMessage(conversation, settings);
       return handled;
     }
 
@@ -190,16 +201,28 @@ export class BotEngineService {
   // hand off to a human — the bot replies and the conversation stays
   // exactly as it was (still bot_active, still awaiting whatever it was
   // awaiting), so the customer's next real message is handled normally.
+  /**
+   * The message is always recorded — losing it is how the operator ends up
+   * reading a conversation with a hole in it. Only the reply is conditional:
+   * `botEnabled` is the shop's master switch, and with it off the bot stays
+   * silent even on its own trigger.
+   */
   private async handleUnsupportedMessage(
     conversation: { id: string; phone: string },
     settings: { mediaReceivedMessage: string },
+    reply: boolean,
   ) {
     await this.messenger.recordInbound(
       conversation.id,
       INVALID_CONTENT_LABEL,
       'invalid_content',
     );
-    await this.messenger.sendText(conversation, settings.mediaReceivedMessage);
+    if (reply) {
+      await this.messenger.sendText(
+        conversation,
+        settings.mediaReceivedMessage,
+      );
+    }
   }
 
   private async handleOrderMessage(

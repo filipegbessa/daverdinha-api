@@ -155,3 +155,24 @@ Dois serviços com responsabilidades separadas de propósito:
 - `ConversationNotifierService` — decide *se* vale notificar (só conversas já em `paused_human`) e monta o texto que o operador lê na tela de bloqueio.
 
 O `WebhookController` não consulta o banco: o `BotEngineService` devolve qual conversa foi tocada, e o controller só repassa esse id pro notifier. Uma falha ao notificar nunca derruba o webhook — a Meta reentrega tudo que não recebe `200`, e a reentrega replayaria a mensagem.
+
+### A prévia é a última mensagem **recebida**, não a última linha da thread
+
+O notifier recebe só o `conversationId` — ele não sabe qual mensagem disparou o push, então relê a conversa. Ler a linha mais nova de qualquer direção dava duas prévias erradas:
+
+- **Texto do próprio bot.** Quando o fluxo responde antes do push sair, a linha mais nova é `outbound`. Num pedido de catálogo em conversa já `paused_human` o fluxo termina no prompt de CEP, então o operador recebia um push escrito "qual seu CEP?" — e o branch `kind === 'order'` (que existe pra mostrar "Novo pedido pelo catálogo") ficava morto.
+- **Mensagem de dias atrás.** Se nada foi gravado na requisição, a linha mais nova é a anterior da thread. Era o caso de mídia em conversa `paused_human`, abaixo.
+
+Por isso o filtro é `where: { direction: 'inbound' }`, com `id` desempatando `createdAt` — o bot escreve duas mensagens no mesmo milissegundo, a mesma razão que obriga o `since` do endpoint de mensagens a ser inclusivo.
+
+⚠️ Resta uma brecha estreita: um payload sem `type` e sem texto retorna `handled` sem gravar nada, e aí a prévia volta a ser a última recebida, que pode ser antiga. Fechar isso de vez exige o `handleIncomingMessage` devolver *qual* mensagem gravou, em vez de o notifier reler e adivinhar.
+
+### Conteúdo inválido é respondido no gatilho do bot, em qualquer status
+
+Mídia (imagem, áudio, vídeo, figurinha, documento, tipo desconhecido) é gravada como `invalid_content` com o rótulo `[Conteúdo inválido]` e respondida com `mediaReceivedMessage` **independente do status da conversa** — mesmo com um humano atendendo. Mesmo princípio que o pedido de catálogo já seguia: a resposta é sobre a mensagem, não sobre quem está tocando a conversa.
+
+A checagem fica **acima** do return de `paused_human` de propósito. Abaixo dele, uma foto mandada pra conversa em atendimento humano caía fora sem ser gravada: o histórico do operador ficava com um buraco no lugar da foto, e o push disparado em seguida mostrava a mensagem anterior da thread.
+
+`botEnabled` continua sendo a chave geral: com ele desligado a mensagem ainda é **gravada** (perder a mensagem é o que deixa buraco no histórico), mas o bot não responde.
+
+Imagem deixou de ser ignorada. Antes ela era excluída de propósito do bucket de conteúdo inválido, "pending a dedicated image flow" — o que, somado ao ponto acima, era justamente o caminho que produzia push de mensagem antiga em conversa `paused_human`.

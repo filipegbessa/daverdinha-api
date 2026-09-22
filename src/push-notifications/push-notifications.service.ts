@@ -7,6 +7,13 @@ interface NotifiableConversation {
   name: string | null;
   phone: string;
   messagePreview: string;
+  /**
+   * When the customer's message was recorded. Sent so the notification can
+   * carry its own clock: the Notification API stamps one with the moment it
+   * was *delivered* otherwise, which reads as "now" for a message that has
+   * been sitting in the queue — or that the push is merely reporting late.
+   */
+  sentAt?: Date;
 }
 
 const MAX_BODY_LENGTH = 120;
@@ -44,6 +51,10 @@ export class PushNotificationsService implements OnModuleInit {
       title: conversation.name ?? conversation.phone,
       body: truncateBody(conversation.messagePreview),
       url: `/admin/conversas/${conversation.id}`,
+      // Epoch millis, the shape `showNotification`'s `timestamp` option takes.
+      // Left out when unknown (JSON.stringify drops an undefined value), and
+      // the browser then falls back to the delivery time on its own.
+      timestamp: conversation.sentAt?.getTime(),
     });
 
     await Promise.all(

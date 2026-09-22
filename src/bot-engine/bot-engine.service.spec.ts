@@ -226,7 +226,9 @@ describe('BotEngineService', () => {
       expect(whatsapp.sendText).not.toHaveBeenCalled();
       expect(whatsapp.sendInteractiveList).not.toHaveBeenCalled();
       expect(prisma.conversation.update).not.toHaveBeenCalledWith(
-        expect.objectContaining({ data: expect.objectContaining({ status: expect.anything() }) }),
+        expect.objectContaining({
+          data: expect.objectContaining({ status: expect.anything() }),
+        }),
       );
     });
 
@@ -570,7 +572,9 @@ describe('BotEngineService', () => {
     // the whole point of a handoff. What must NOT happen is any change to the
     // conversation's state.
     expect(prisma.conversation.update).not.toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ status: expect.anything() }) }),
+      expect.objectContaining({
+        data: expect.objectContaining({ status: expect.anything() }),
+      }),
     );
   });
 
@@ -1054,7 +1058,7 @@ describe('BotEngineService', () => {
   });
 
   describe('unsupported message types (media, order)', () => {
-    it('an image message is ignored entirely for now (no persistence, no reply, no handoff)', async () => {
+    it('an image message gets the same invalid-content treatment as any other media', async () => {
       const conversation = {
         id: 'c1',
         phone: '5521999999999',
@@ -1068,11 +1072,93 @@ describe('BotEngineService', () => {
         mediaMessagePayload('5521999999999', 'image'),
       );
 
-      expect(prisma.message.create).not.toHaveBeenCalled();
-      expect(whatsapp.sendText).not.toHaveBeenCalled();
-      expect(prisma.conversation.update).not.toHaveBeenCalledWith(
-        expect.objectContaining({ data: expect.objectContaining({ status: expect.anything() }) }),
+      expect(prisma.message.create).toHaveBeenCalledWith({
+        data: {
+          conversationId: 'c1',
+          direction: 'inbound',
+          kind: 'invalid_content',
+          body: '[Conteúdo inválido]',
+        },
+      });
+      expect(whatsapp.sendText).toHaveBeenCalledWith(
+        '5521999999999',
+        'Esse tipo de mensagem não é válido por aqui!',
       );
+      expect(prisma.conversation.update).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ status: expect.anything() }),
+        }),
+      );
+    });
+
+    // Regression: media sent to a conversation a human was handling fell
+    // through the paused_human early return without being recorded at all.
+    // The photo vanished from the transcript, and the push fired right after
+    // previewed the previous message in the thread — days old.
+    it('records and answers media even when a human is already handling the conversation', async () => {
+      const conversation = {
+        id: 'c1',
+        phone: '5521999999999',
+        status: 'paused_human',
+        invalidAttempts: 0,
+        awaitingDeliveryReply: false,
+        updatedAt: new Date(),
+      };
+      prisma.conversation.findFirst.mockResolvedValue(conversation);
+
+      await service.handleIncomingMessage(
+        mediaMessagePayload('5521999999999', 'image'),
+      );
+
+      expect(prisma.message.create).toHaveBeenCalledWith({
+        data: {
+          conversationId: 'c1',
+          direction: 'inbound',
+          kind: 'invalid_content',
+          body: '[Conteúdo inválido]',
+        },
+      });
+      expect(whatsapp.sendText).toHaveBeenCalledWith(
+        '5521999999999',
+        'Esse tipo de mensagem não é válido por aqui!',
+      );
+      // The handoff itself must not be disturbed by the bot answering.
+      expect(prisma.conversation.update).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ status: expect.anything() }),
+        }),
+      );
+    });
+
+    it('still records media when the bot is disabled, but stays silent', async () => {
+      botSettings.get.mockResolvedValue({
+        botEnabled: false,
+        mediaReceivedMessage: 'Esse tipo de mensagem não é válido por aqui!',
+      });
+      const conversation = {
+        id: 'c1',
+        phone: '5521999999999',
+        status: 'bot_active',
+        invalidAttempts: 0,
+        awaitingDeliveryReply: false,
+      };
+      prisma.conversation.findFirst.mockResolvedValue(conversation);
+
+      await service.handleIncomingMessage(
+        mediaMessagePayload('5521999999999', 'audio'),
+      );
+
+      // Recorded, because losing it leaves a hole in the operator's transcript.
+      expect(prisma.message.create).toHaveBeenCalledWith({
+        data: {
+          conversationId: 'c1',
+          direction: 'inbound',
+          kind: 'invalid_content',
+          body: '[Conteúdo inválido]',
+        },
+      });
+      // Silent, because botEnabled is the shop's master switch.
+      expect(whatsapp.sendText).not.toHaveBeenCalled();
     });
 
     it('an audio message is persisted with a unified invalid-content label, replies, and stays with the bot (no handoff)', async () => {
@@ -1109,7 +1195,9 @@ describe('BotEngineService', () => {
         },
       });
       expect(prisma.conversation.update).not.toHaveBeenCalledWith(
-        expect.objectContaining({ data: expect.objectContaining({ status: expect.anything() }) }),
+        expect.objectContaining({
+          data: expect.objectContaining({ status: expect.anything() }),
+        }),
       );
     });
 
@@ -1136,7 +1224,9 @@ describe('BotEngineService', () => {
         },
       });
       expect(prisma.conversation.update).not.toHaveBeenCalledWith(
-        expect.objectContaining({ data: expect.objectContaining({ status: expect.anything() }) }),
+        expect.objectContaining({
+          data: expect.objectContaining({ status: expect.anything() }),
+        }),
       );
     });
 
@@ -1163,7 +1253,9 @@ describe('BotEngineService', () => {
         },
       });
       expect(prisma.conversation.update).not.toHaveBeenCalledWith(
-        expect.objectContaining({ data: expect.objectContaining({ status: expect.anything() }) }),
+        expect.objectContaining({
+          data: expect.objectContaining({ status: expect.anything() }),
+        }),
       );
     });
 
@@ -1190,7 +1282,9 @@ describe('BotEngineService', () => {
         },
       });
       expect(prisma.conversation.update).not.toHaveBeenCalledWith(
-        expect.objectContaining({ data: expect.objectContaining({ status: expect.anything() }) }),
+        expect.objectContaining({
+          data: expect.objectContaining({ status: expect.anything() }),
+        }),
       );
     });
 
@@ -1210,7 +1304,9 @@ describe('BotEngineService', () => {
 
       expect(deliveryCheck.handleReply).not.toHaveBeenCalled();
       expect(prisma.conversation.update).not.toHaveBeenCalledWith(
-        expect.objectContaining({ data: expect.objectContaining({ status: expect.anything() }) }),
+        expect.objectContaining({
+          data: expect.objectContaining({ status: expect.anything() }),
+        }),
       );
     });
 
@@ -1423,7 +1519,9 @@ describe('BotEngineService', () => {
       prisma.conversation.findFirst.mockResolvedValue(conversation);
 
       await service.handleIncomingMessage(
-        orderMessagePayload('5521999999999', [{ product_retailer_id: 'p1', quantity: '1' }]),
+        orderMessagePayload('5521999999999', [
+          { product_retailer_id: 'p1', quantity: '1' },
+        ]),
       );
 
       expect(prisma.conversation.update).toHaveBeenCalledWith({
