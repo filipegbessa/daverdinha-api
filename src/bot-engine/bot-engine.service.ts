@@ -118,12 +118,23 @@ export class BotEngineService {
       conversation.awaitingDeliveryReply && !!text && !isMenuKeyword;
 
     if (text && !isDeliveryReply) {
-      await this.messenger.recordInbound(conversation.id, text);
+      await this.messenger.recordInbound(conversation.id, text, undefined, {
+        whatsappMessageId: message.id,
+        repliedToWamid: message.repliedToWamid,
+      });
     }
 
     const listReplyTitle = message.interactive?.list_reply?.title;
     if (listReplyTitle) {
-      await this.messenger.recordInbound(conversation.id, listReplyTitle);
+      await this.messenger.recordInbound(
+        conversation.id,
+        listReplyTitle,
+        undefined,
+        {
+          whatsappMessageId: message.id,
+          repliedToWamid: message.repliedToWamid,
+        },
+      );
     }
 
     if (isMenuKeyword) {
@@ -157,6 +168,8 @@ export class BotEngineService {
         conversation,
         settings,
         settings.botEnabled,
+        message.id,
+        message.repliedToWamid,
       );
       return handled;
     }
@@ -233,11 +246,14 @@ export class BotEngineService {
     conversation: { id: string; phone: string },
     settings: { mediaReceivedMessage: string },
     reply: boolean,
+    whatsappMessageId: string | undefined,
+    repliedToWamid: string | undefined,
   ) {
     await this.messenger.recordInbound(
       conversation.id,
       INVALID_CONTENT_LABEL,
       'invalid_content',
+      { whatsappMessageId, repliedToWamid },
     );
     if (reply) {
       await this.messenger.sendText(

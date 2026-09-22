@@ -71,6 +71,7 @@ function orderMessagePayload(
 
 describe('BotEngineService', () => {
   let service: BotEngineService;
+  let messenger: ConversationMessengerService;
   let prisma: any;
   let whatsapp: {
     sendText: jest.Mock;
@@ -117,7 +118,10 @@ describe('BotEngineService', () => {
         create: jest.fn(),
         update: jest.fn(),
       },
-      message: { create: jest.fn().mockResolvedValue({ id: 'msg1' }) },
+      message: {
+        create: jest.fn().mockResolvedValue({ id: 'msg1' }),
+        findFirst: jest.fn().mockResolvedValue(null),
+      },
       order: { create: jest.fn() },
       processedWebhookMessage: {
         create: jest
@@ -165,6 +169,7 @@ describe('BotEngineService', () => {
     }).compile();
 
     service = moduleRef.get(BotEngineService);
+    messenger = moduleRef.get(ConversationMessengerService);
   });
 
   describe('deduplicating WhatsApp webhook retries', () => {
@@ -1566,6 +1571,137 @@ describe('BotEngineService', () => {
         where: { id: 'c1' },
         data: { unread: true },
       });
+    });
+  });
+
+  describe('propagating the wamid and quoted-message metadata to recordInbound', () => {
+    // Citing a message is pure metadata (Task 5): it must reach every
+    // recordInbound call site unchanged, without altering how the bot
+    // decides to respond.
+    const conversation = {
+      id: 'c1',
+      phone: '5521999999999',
+      status: 'bot_active',
+      invalidAttempts: 0,
+      awaitingDeliveryReply: false,
+    };
+
+    it('a normal text message carries its wamid and repliedToWamid into recordInbound', async () => {
+      prisma.conversation.findFirst.mockResolvedValue(conversation);
+      const recordInboundSpy = jest.spyOn(messenger, 'recordInbound');
+
+      await service.handleIncomingMessage({
+        entry: [
+          {
+            changes: [
+              {
+                value: {
+                  messages: [
+                    {
+                      id: 'wamid.999',
+                      from: '5521999999999',
+                      type: 'text',
+                      text: { body: 'oi' },
+                      context: { id: 'wamid.parent' },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      });
+
+      expect(recordInboundSpy).toHaveBeenCalledWith('c1', 'oi', undefined, {
+        whatsappMessageId: 'wamid.999',
+        repliedToWamid: 'wamid.parent',
+      });
+    });
+
+    it('an interactive list-reply carries its wamid and repliedToWamid into recordInbound', async () => {
+      prisma.conversation.findFirst.mockResolvedValue(conversation);
+      const recordInboundSpy = jest.spyOn(messenger, 'recordInbound');
+
+      await service.handleIncomingMessage({
+        entry: [
+          {
+            changes: [
+              {
+                value: {
+                  messages: [
+                    {
+                      id: 'wamid.888',
+                      from: '5521999999999',
+                      type: 'interactive',
+                      interactive: {
+                        list_reply: { id: 'm2', title: 'Bingo de Plantas' },
+                      },
+                      context: { id: 'wamid.parent2' },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      });
+
+      expect(recordInboundSpy).toHaveBeenCalledWith(
+        'c1',
+        'Bingo de Plantas',
+        undefined,
+        { whatsappMessageId: 'wamid.888', repliedToWamid: 'wamid.parent2' },
+      );
+    });
+
+    it('an unsupported-content message carries its wamid and repliedToWamid into the recordInbound call inside handleUnsupportedMessage', async () => {
+      prisma.conversation.findFirst.mockResolvedValue(conversation);
+      const recordInboundSpy = jest.spyOn(messenger, 'recordInbound');
+
+      await service.handleIncomingMessage({
+        entry: [
+          {
+            changes: [
+              {
+                value: {
+                  messages: [
+                    {
+                      id: 'wamid.777',
+                      from: '5521999999999',
+                      type: 'image',
+                      image: { id: 'media123' },
+                      context: { id: 'wamid.parent3' },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      });
+
+      expect(recordInboundSpy).toHaveBeenCalledWith(
+        'c1',
+        '[Conteúdo inválido]',
+        'invalid_content',
+        { whatsappMessageId: 'wamid.777', repliedToWamid: 'wamid.parent3' },
+      );
+    });
+
+    it('a message with no context (not a reply) reaches recordInbound with repliedToWamid undefined, without breaking', async () => {
+      prisma.conversation.findFirst.mockResolvedValue(conversation);
+      const recordInboundSpy = jest.spyOn(messenger, 'recordInbound');
+
+      await service.handleIncomingMessage(
+        textMessagePayload('5521999999999', 'oi sem citação'),
+      );
+
+      expect(recordInboundSpy).toHaveBeenCalledWith(
+        'c1',
+        'oi sem citação',
+        undefined,
+        { whatsappMessageId: undefined, repliedToWamid: undefined },
+      );
     });
   });
 });
