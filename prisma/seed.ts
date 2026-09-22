@@ -82,6 +82,8 @@ async function seedCategories() {
 interface SeedMessage {
   direction: 'inbound' | 'outbound';
   body: string;
+  whatsappMessageId?: string;
+  repliedToWamid?: string;
 }
 
 interface SeedConversation {
@@ -109,6 +111,16 @@ const CONVERSATIONS: SeedConversation[] = [
         body: 'Oi! Que bom te ver por aqui 🌱 Bem-vinda(o) à Daverdinha — um espaço pra plantar, criar e brindar. Como posso te ajudar hoje?',
       },
       { direction: 'inbound', body: 'Queria saber se entregam no meu bairro' },
+      {
+        direction: 'outbound',
+        body: 'Sim! entregamos aí no Leblon, aguarde um pouco que entro em contato',
+        whatsappMessageId: 'wamid.seed.1',
+      },
+      {
+        direction: 'inbound',
+        body: 'Perfeito, obrigada!',
+        repliedToWamid: 'wamid.seed.1',
+      },
     ],
   },
   {
@@ -162,14 +174,32 @@ async function seedConversations() {
       },
     });
 
+    // Track messages by whatsappMessageId to resolve citations within this run
+    const messagesByWamid = new Map<string, string>();
+
     for (const message of seedConversation.messages) {
-      await prisma.message.create({
+      let repliedToId: string | undefined;
+
+      // If this message replies to another, look up the repliedToId
+      if (message.repliedToWamid && messagesByWamid.has(message.repliedToWamid)) {
+        repliedToId = messagesByWamid.get(message.repliedToWamid);
+      }
+
+      const createdMessage = await prisma.message.create({
         data: {
           conversationId: conversation.id,
           direction: message.direction,
           body: message.body,
+          whatsappMessageId: message.whatsappMessageId,
+          repliedToWamid: message.repliedToWamid,
+          repliedToId,
         },
       });
+
+      // Track this message if it has a whatsappMessageId
+      if (message.whatsappMessageId) {
+        messagesByWamid.set(message.whatsappMessageId, createdMessage.id);
+      }
     }
 
     for (const categoryName of seedConversation.categories) {
