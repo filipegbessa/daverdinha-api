@@ -4,11 +4,14 @@ Backend do bot de atendimento da Daverdinha (NestJS + Prisma + Postgres).
 
 ## Setup local
 
-1. `cp .env.example .env` e preencher as variáveis (banco, Clerk, WhatsApp Cloud API).
-2. `npm install`
-3. `npx prisma migrate dev`
-4. `npx prisma db seed`
-5. `npm run start:dev`
+1. `docker compose up -d` — sobe o Postgres de desenvolvimento. A `DATABASE_URL` correspondente é `postgresql://daverdinha:daverdinha@localhost:5432/daverdinha`. Os dados ficam num volume nomeado, então sobrevivem a um `docker compose down`.
+2. `cp .env.example .env` e preencher as variáveis (banco, Clerk, WhatsApp Cloud API).
+3. `npm install`
+4. `npx prisma migrate dev`
+5. `npx prisma db seed`
+6. `npm run start:dev`
+
+Os passos 4, 5 e 6 só funcionam com o banco no ar — daí o passo 1 vir primeiro. Em produção esse papel é do Neon; o `docker-compose.yml` existe só pra não precisar instalar Postgres na máquina.
 
 ## Deploy (fase de validação — Vercel)
 
@@ -24,7 +27,7 @@ Migração futura pra Railway (fase de produção): ver `SPEC.md` → "Stack (de
 ## Testes
 
 - `npm test` — unitários
-- `npm run test:e2e` — end-to-end (precisa de banco de dev rodando)
+- `npm run test:e2e` — end-to-end (precisa do banco do passo 1 no ar)
 
 ## Estrutura
 

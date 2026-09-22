@@ -1,0 +1,16 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: daverdinha-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: daverdinha
+      POSTGRES_PASSWORD: daverdinha
+      POSTGRES_DB: daverdinha
+    ports:
+      - "5432:5432"
+    volumes:
+      - daverdinha-db-data:/var/lib/postgresql/data
+
+volumes:
+  daverdinha-db-data:
