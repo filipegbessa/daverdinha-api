@@ -123,6 +123,7 @@ describe('BotEngineService', () => {
         create: jest
           .fn()
           .mockResolvedValue({ whatsappMessageId: 'wamid.default' }),
+        delete: jest.fn().mockResolvedValue({}),
       },
       // Prisma's $transaction takes either an array of operations or an
       // interactive callback; the code under test uses both, so the mock does too.
@@ -230,6 +231,38 @@ describe('BotEngineService', () => {
           data: expect.objectContaining({ status: expect.anything() }),
         }),
       );
+    });
+
+    // O wamid é reivindicado ANTES de processar, que é o que faz uma reentrega
+    // simultânea virar no-op. Segurar essa reivindicação através de uma falha
+    // transforma a reentrega da Meta num descarte silencioso: a mensagem do
+    // cliente simplesmente some.
+    it('releases the wamid claim when processing blows up, so the retry is not dropped', async () => {
+      prisma.conversation.findFirst.mockRejectedValue(new Error('db down'));
+
+      await expect(
+        service.handleIncomingMessage(
+          textMessagePayloadWithId('wamid.7', '5521999999999', 'oi'),
+        ),
+      ).rejects.toThrow('db down');
+
+      expect(prisma.processedWebhookMessage.delete).toHaveBeenCalledWith({
+        where: { whatsappMessageId: 'wamid.7' },
+      });
+    });
+
+    it('still surfaces the original failure if releasing the claim also fails', async () => {
+      prisma.conversation.findFirst.mockRejectedValue(new Error('db down'));
+      prisma.processedWebhookMessage.delete.mockRejectedValue(
+        new Error('delete failed too'),
+      );
+
+      // A falha que importa é a primeira — a segunda não pode mascará-la.
+      await expect(
+        service.handleIncomingMessage(
+          textMessagePayloadWithId('wamid.8', '5521999999999', 'oi'),
+        ),
+      ).rejects.toThrow('db down');
     });
 
     it('does not dedupe messages that have no id (defensive — real WhatsApp payloads always include one)', async () => {

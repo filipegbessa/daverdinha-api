@@ -8,6 +8,7 @@ import { DeliveryCheckService } from './delivery-check.service';
 import { normalizeText } from '../common/normalize-text';
 import {
   parseIncomingMessage,
+  type IncomingMessage,
   type OrderProductItem,
 } from '../whatsapp/incoming-message';
 
@@ -71,6 +72,27 @@ export class BotEngineService {
       return null;
     }
 
+    try {
+      return await this.processMessage(message);
+    } catch (error) {
+      // A reivindicação do wamid é o que faz uma reentrega simultânea virar
+      // no-op — por isso ela vem antes de processar. Só que mantê-la depois de
+      // uma falha transforma a reentrega da Meta num descarte silencioso: a
+      // mensagem do cliente some sem deixar rastro. Devolvendo a reivindicação,
+      // a reentrega volta a ser uma nova chance.
+      if (message.id) {
+        // Um erro aqui não pode mascarar o que de fato quebrou.
+        await this.prisma.processedWebhookMessage
+          .delete({ where: { whatsappMessageId: message.id } })
+          .catch(() => undefined);
+      }
+      throw error;
+    }
+  }
+
+  private async processMessage(
+    message: IncomingMessage,
+  ): Promise<HandledMessage | null> {
     const { conversation, isNew } = await this.resolveConversation(
       message.from,
       !!message.referredProductId,
