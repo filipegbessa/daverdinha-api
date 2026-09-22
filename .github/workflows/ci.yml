@@ -1,0 +1,68 @@
+# Portão antes do deploy. A Vercel publica sozinha a cada push na main, então
+# sem isto aqui não há nada entre um commit quebrado e a produção.
+#
+# Roda em pull request e também em push na main, porque hoje se commita direto
+# na main — um workflow só de PR nunca chegaria a rodar.
+#
+# O lint está de fora de propósito: a API tem ~500 problemas acumulados e o
+# script usa `--fix`, ou seja, altera arquivos em vez de verificar. Entrar assim
+# faria o CI nascer vermelho, e um CI que nasce vermelho é um CI que todo mundo
+# aprende a ignorar.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    name: Testes e build
+    runs-on: ubuntu-latest
+    env:
+      # `npm ci` dispara o postinstall, que roda `prisma generate`. O generate
+      # não abre conexão, mas quer a variável declarada.
+      DATABASE_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      # Suíte separada, fora do `npm test`, porque roda fora do contexto do Nest.
+      - run: npm run test:scripts
+      - run: npm run build
+
+  e2e:
+    name: End-to-end (com banco)
+    runs-on: ubuntu-latest
+    services:
+      # Mesma imagem e mesmas credenciais do docker-compose.yml local.
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: daverdinha
+          POSTGRES_PASSWORD: daverdinha
+          POSTGRES_DB: daverdinha
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://daverdinha:daverdinha@localhost:5432/daverdinha
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npx prisma migrate deploy
+      # O seed não é opcional aqui: `prisma-schema.e2e-spec.ts` conta as linhas
+      # que ele cria (160 bairros, 1 bot_settings) e falha sem elas.
+      - run: npx prisma db seed
+      - run: npm run test:e2e
