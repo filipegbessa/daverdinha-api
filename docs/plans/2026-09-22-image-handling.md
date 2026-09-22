@@ -111,8 +111,13 @@ grátis e o da Vercel não.
 
 - [ ] Adicionar `image` ao enum `MessageKind` (hoje `text | invalid_content | order`).
 - [ ] Adicionar em `Message` colunas anuláveis: `mediaKey` (chave no bucket),
-      `mediaMimeType`, `mediaSizeBytes`, `mediaCaption`.
+      `mediaMimeType`, `mediaSizeBytes`.
 - [ ] Regenerar a migration única.
+
+Sem coluna própria para legenda: `image.caption` do webhook chega e é
+gravado em `body`, o mesmo campo que qualquer mensagem de texto já usa — é
+o que a Tarefa 5 grava e a Tarefa 7 lê, sem campo novo na interface `Message`
+do frontend.
 
 Colunas em `Message` em vez de tabela nova: é sempre 1:1 com a mensagem, e a
 leitura da thread não ganha um `join`.
@@ -371,13 +376,23 @@ Hoje `POST /conversations/:id/reply` só manda texto, e o
 `ConversationMessengerService` é o único lugar autorizado a mandar e gravar ao
 mesmo tempo — é ele que ganha o caminho novo, não um atalho ao lado.
 
+> Pré-requisito: plano `2026-09-22-reply-to-message.md`. Ele já deixa
+> `WhatsAppClientService` preparado pra citar mensagem (`context.message_id`)
+> de forma genérica, e toda mensagem de saída passa a devolver seu próprio
+> `whatsappMessageId`. `sendImage` deve aceitar o mesmo
+> `options?: { replyToWamid?: string }` que `sendText` ganhou lá, e
+> `ConversationMessengerService.sendImage` o mesmo `replyToMessageId?` — assim
+> imagem fica citável desde o primeiro dia, sem desenho novo.
+
 - [ ] `WhatsAppClientService.uploadMedia(buffer, mimeType)`:
       `POST /v20.0/{phone-number-id}/media` (multipart), devolve um `media_id`.
-- [ ] `WhatsAppClientService.sendImage(to, mediaId, caption?)`: mensagem do tipo
-      `image` referenciando o id.
-- [ ] `ConversationMessengerService.sendImage(...)`: sobe pro R2 **e** pra Meta,
-      manda, e grava a mensagem `outbound` com `kind: 'image'` e o `mediaKey`.
-      Subir nos dois é proposital: o id da Meta expira, o nosso histórico não.
+- [ ] `WhatsAppClientService.sendImage(to, mediaId, caption?, options?: { replyToWamid?: string })`:
+      mensagem do tipo `image` referenciando o id, citando quando informado.
+- [ ] `ConversationMessengerService.sendImage(..., replyToMessageId?: string)`: sobe pro R2 **e** pra Meta,
+      manda, e grava a mensagem `outbound` com `kind: 'image'`, o `mediaKey`,
+      e `repliedToId`/`repliedToWamid`/`whatsappMessageId` do mesmo jeito que
+      `sendText` já faz. Subir nos dois é proposital: o id da Meta expira, o
+      nosso histórico não.
 - [ ] Endpoint de envio aceitando o arquivo, com `ClerkAuthGuard`, os mesmos
       limites de tamanho e mime da Tarefa 3, e a regra de status que o reply de
       texto já tem (só `paused_human`).
