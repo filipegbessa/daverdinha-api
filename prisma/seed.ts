@@ -105,12 +105,17 @@ const CONVERSATIONS: SeedConversation[] = [
     unread: true,
     categories: ['Dúvida'],
     messages: [
-      { direction: 'inbound', body: 'Oi, vocês entregam no Leblon?' },
+      { direction: 'inbound', body: 'Oi, vocês entregam no Leblon?', whatsappMessageId: 'wamid.seed.marina.1' },
       {
         direction: 'outbound',
         body: 'Oi! Que bom te ver por aqui 🌱 Bem-vinda(o) à Daverdinha — um espaço pra plantar, criar e brindar. Como posso te ajudar hoje?',
+        whatsappMessageId: 'wamid.seed.marina.2',
       },
-      { direction: 'inbound', body: 'Queria saber se entregam no meu bairro' },
+      {
+        direction: 'inbound',
+        body: 'Queria saber se entregam no meu bairro',
+        whatsappMessageId: 'wamid.seed.marina.3',
+      },
       {
         direction: 'outbound',
         body: 'Sim! entregamos aí no Leblon, aguarde um pouco que entro em contato',
@@ -119,6 +124,7 @@ const CONVERSATIONS: SeedConversation[] = [
       {
         direction: 'inbound',
         body: 'Perfeito, obrigada!',
+        whatsappMessageId: 'wamid.seed.marina.4',
         repliedToWamid: 'wamid.seed.1',
       },
     ],
@@ -131,10 +137,15 @@ const CONVERSATIONS: SeedConversation[] = [
     unread: true,
     categories: ['Reclamação'],
     messages: [
-      { direction: 'inbound', body: 'Meu pedido chegou com a planta quebrada' },
+      {
+        direction: 'inbound',
+        body: 'Meu pedido chegou com a planta quebrada',
+        whatsappMessageId: 'wamid.seed.joao.1',
+      },
       {
         direction: 'outbound',
         body: 'Poxa, sinto muito! Vou te chamar um atendente pra resolver isso.',
+        whatsappMessageId: 'wamid.seed.joao.2',
       },
     ],
   },
@@ -146,9 +157,21 @@ const CONVERSATIONS: SeedConversation[] = [
     unread: false,
     categories: ['Elogio', 'Pedido'],
     messages: [
-      { direction: 'inbound', body: 'Adorei o atendimento, muito obrigada!' },
-      { direction: 'outbound', body: 'Fico muito feliz em ouvir isso! 🌱' },
-      { direction: 'inbound', body: 'Queria fazer outro pedido' },
+      {
+        direction: 'inbound',
+        body: 'Adorei o atendimento, muito obrigada!',
+        whatsappMessageId: 'wamid.seed.ana.1',
+      },
+      {
+        direction: 'outbound',
+        body: 'Fico muito feliz em ouvir isso! 🌱',
+        whatsappMessageId: 'wamid.seed.ana.2',
+      },
+      {
+        direction: 'inbound',
+        body: 'Queria fazer outro pedido',
+        whatsappMessageId: 'wamid.seed.ana.3',
+      },
     ],
   },
 ];
