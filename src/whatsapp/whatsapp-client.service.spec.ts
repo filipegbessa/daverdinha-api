@@ -4,12 +4,18 @@ describe('WhatsAppClientService', () => {
   let service: WhatsAppClientService;
   let fetchMock: jest.Mock;
 
+  const mockSendResponse = {
+    messaging_product: 'whatsapp',
+    contacts: [{ input: '5521999999999', wa_id: '5521999999999' }],
+    messages: [{ id: 'wamid.HHBHYjkTest' }],
+  };
+
   beforeEach(() => {
     process.env.WHATSAPP_CLOUD_API_TOKEN = 'test-token';
     process.env.WHATSAPP_PHONE_NUMBER_ID = '1234567890';
     fetchMock = jest
       .fn()
-      .mockResolvedValue({ ok: true, json: async () => ({}) });
+      .mockResolvedValue({ ok: true, json: async () => mockSendResponse });
     global.fetch = fetchMock as any;
     service = new WhatsAppClientService();
   });
@@ -36,6 +42,30 @@ describe('WhatsAppClientService', () => {
     });
   });
 
+  it('sendText() sem options não inclui a chave context no payload e devolve o wamid', async () => {
+    const result = await service.sendText('5521999999999', 'Oi!');
+
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body).not.toHaveProperty('context');
+    expect(result).toEqual({ whatsappMessageId: 'wamid.HHBHYjkTest' });
+  });
+
+  it('sendText() com options.replyToWamid inclui context no payload', async () => {
+    const result = await service.sendText('5521999999999', 'Oi!', {
+      replyToWamid: 'wamid.ORIGINAL123',
+    });
+
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body).toEqual({
+      messaging_product: 'whatsapp',
+      to: '5521999999999',
+      type: 'text',
+      text: { body: 'Oi!' },
+      context: { message_id: 'wamid.ORIGINAL123' },
+    });
+    expect(result).toEqual({ whatsappMessageId: 'wamid.HHBHYjkTest' });
+  });
+
   it('sendInteractiveList() posts an interactive list message', async () => {
     await service.sendInteractiveList(
       '5521999999999',
@@ -58,6 +88,17 @@ describe('WhatsAppClientService', () => {
         },
       },
     });
+  });
+
+  it('sendInteractiveList() devolve o whatsappMessageId da resposta mockada', async () => {
+    const result = await service.sendInteractiveList(
+      '5521999999999',
+      'Como posso ajudar?',
+      'Ver opções',
+      [{ id: 'item-1', title: 'Locais de entrega' }],
+    );
+
+    expect(result).toEqual({ whatsappMessageId: 'wamid.HHBHYjkTest' });
   });
 
   it('throws when the Graph API responds with an error', async () => {
