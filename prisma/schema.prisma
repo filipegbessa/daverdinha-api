@@ -117,14 +117,19 @@ enum MessageKind {
 }
 
 model Message {
-  id             String           @id @default(uuid())
-  conversationId String           @map("conversation_id")
-  conversation   Conversation     @relation(fields: [conversationId], references: [id])
-  direction      MessageDirection
-  kind           MessageKind      @default(text)
-  body           String?
-  order          Order?
-  createdAt      DateTime         @default(now()) @map("created_at")
+  id                 String           @id @default(uuid())
+  conversationId     String           @map("conversation_id")
+  conversation       Conversation     @relation(fields: [conversationId], references: [id])
+  direction          MessageDirection
+  kind               MessageKind      @default(text)
+  body               String?
+  order              Order?
+  whatsappMessageId  String?          @unique @map("whatsapp_message_id")
+  repliedToWamid     String?          @map("replied_to_wamid")
+  repliedToId        String?          @map("replied_to_id")
+  repliedTo          Message?         @relation("MessageReplies", fields: [repliedToId], references: [id], onDelete: SetNull)
+  replies            Message[]        @relation("MessageReplies")
+  createdAt          DateTime         @default(now()) @map("created_at")
 
   // Every read of a thread is "this conversation, in time order" — as a page,
   // as a delta poll, or as older history.
