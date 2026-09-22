@@ -75,6 +75,31 @@ quando existir. `repliedToId` é a resolução em FK — setada só quando um
 `Message.whatsappMessageId` bate com o `repliedToWamid`; do contrário fica
 `null` e é o gatilho do aviso genérico (decisão 2).
 
+### Tarefa 1b — Seed: exemplo de mensagem citada
+
+**Arquivo:** `prisma/seed.ts`
+
+Só depende da Tarefa 1 (schema); não depende de nenhum código de leitura/escrita
+de citação ainda, porque o seed grava direto via Prisma Client — os campos já
+existem no schema.
+
+- [ ] `SeedMessage` ganha dois campos opcionais: `whatsappMessageId?: string`
+      (wamid fake, só precisa ser único dentro do seed) e `repliedToWamid?: string`
+      (referencia o `whatsappMessageId` de uma mensagem anterior na mesma
+      conversa).
+- [ ] Em `seedConversations()`, ao criar cada mensagem, gravar
+      `whatsappMessageId` quando presente, e resolver `repliedToId` como já
+      será feito em produção (Tarefa 4): procurar entre as mensagens já
+      criadas *nesta run* a que tem `whatsappMessageId === repliedToWamid`,
+      e gravar `repliedToId`/`repliedToWamid` junto.
+- [ ] Adicionar um exemplo de citação a uma das conversas existentes em
+      `CONVERSATIONS` (ex.: a de Marina Silva) — uma mensagem outbound com
+      `whatsappMessageId: 'wamid.seed.1'`, seguida de uma mensagem inbound
+      com `repliedToWamid: 'wamid.seed.1'`.
+- [ ] Rodar `npx prisma db seed` localmente (banco Docker) e conferir via
+      `psql`/Prisma Studio que a mensagem citante saiu com `repliedToId`
+      preenchido apontando pra própria mensagem citada.
+
 ### Tarefa 2 — Webhook: extrair a citação recebida
 
 **Arquivo:** `src/whatsapp/incoming-message.ts`
