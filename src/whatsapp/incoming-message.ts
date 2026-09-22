@@ -24,6 +24,11 @@ export interface IncomingMessage {
    * than at the menu.
    */
   referredProductId?: string;
+  /**
+   * Set when the customer is replying to a specific message, containing
+   * the wamid of the message being replied to.
+   */
+  repliedToWamid?: string;
 }
 
 export function parseIncomingMessage(payload: unknown): IncomingMessage | null {
@@ -38,5 +43,6 @@ export function parseIncomingMessage(payload: unknown): IncomingMessage | null {
     interactive: raw.interactive,
     order: raw.order,
     referredProductId: raw.context?.referred_product?.product_retailer_id,
+    repliedToWamid: raw.context?.id,
   };
 }
