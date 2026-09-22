@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { MessageKind } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { WhatsAppClientService } from '../whatsapp/whatsapp-client.service';
@@ -27,10 +27,58 @@ export class ConversationMessengerService {
     private readonly whatsapp: WhatsAppClientService,
   ) {}
 
-  /** Sends a plain text reply and records it in the transcript. */
-  async sendText(conversation: Recipient, body: string) {
-    await this.whatsapp.sendText(conversation.phone, body);
-    return this.persist(conversation.id, { direction: 'outbound', body });
+  /**
+   * Sends a plain text reply and records it in the transcript.
+   *
+   * With `options.replyToMessageId`, this sends a WhatsApp quoted reply:
+   * the target message has to belong to this same conversation (otherwise
+   * an operator could cite a message from someone else's thread) and has
+   * to have its own `whatsappMessageId` (you can't quote a message that
+   * never made it to WhatsApp). The target's id and wamid are already in
+   * hand at that point, so they're written straight onto the new message
+   * without a second lookup.
+   */
+  async sendText(
+    conversation: Recipient,
+    body: string,
+    options?: { replyToMessageId?: string },
+  ) {
+    if (options?.replyToMessageId) {
+      const target = await this.prisma.message.findUnique({
+        where: {
+          id: options.replyToMessageId,
+          conversationId: conversation.id,
+        },
+      });
+      if (!target || !target.whatsappMessageId) {
+        throw new BadRequestException(
+          'Não é possível responder citando esta mensagem.',
+        );
+      }
+
+      const { whatsappMessageId } = await this.whatsapp.sendText(
+        conversation.phone,
+        body,
+        { replyToWamid: target.whatsappMessageId },
+      );
+      return this.persist(conversation.id, {
+        direction: 'outbound',
+        body,
+        whatsappMessageId,
+        repliedToId: options.replyToMessageId,
+        repliedToWamid: target.whatsappMessageId,
+      });
+    }
+
+    const { whatsappMessageId } = await this.whatsapp.sendText(
+      conversation.phone,
+      body,
+    );
+    return this.persist(conversation.id, {
+      direction: 'outbound',
+      body,
+      whatsappMessageId,
+    });
   }
 
   /**
@@ -45,7 +93,7 @@ export class ConversationMessengerService {
     buttonText: string,
     options: { id: string; title: string }[],
   ) {
-    await this.whatsapp.sendInteractiveList(
+    const { whatsappMessageId } = await this.whatsapp.sendInteractiveList(
       conversation.phone,
       promptText,
       buttonText,
@@ -56,16 +104,44 @@ export class ConversationMessengerService {
       body: [promptText, ...options.map((option) => `- ${option.title}`)].join(
         '\n',
       ),
+      whatsappMessageId,
     });
   }
 
-  /** Records something the customer sent. Nothing is sent to WhatsApp. */
-  recordInbound(
+  /**
+   * Records something the customer sent. Nothing is sent to WhatsApp.
+   *
+   * When `options.repliedToWamid` is present, this resolves it to our own
+   * message id by looking it up globally (`whatsappMessageId` is unique
+   * across the whole table, so there's no need to scope by conversation).
+   * A miss isn't an error — WhatsApp will still report a reply even if the
+   * quoted message is older than our retention, or arrived before this
+   * feature existed — it's just recorded without a `repliedToId`, and the
+   * frontend shows a generic "replying to an earlier message" notice for
+   * that case.
+   */
+  async recordInbound(
     conversationId: string,
     body: string | null,
     kind: MessageKind = 'text',
+    options?: { whatsappMessageId?: string; repliedToWamid?: string },
   ) {
-    return this.persist(conversationId, { direction: 'inbound', kind, body });
+    let repliedToId: string | undefined;
+    if (options?.repliedToWamid) {
+      const target = await this.prisma.message.findFirst({
+        where: { whatsappMessageId: options.repliedToWamid },
+      });
+      repliedToId = target?.id;
+    }
+
+    return this.persist(conversationId, {
+      direction: 'inbound',
+      kind,
+      body,
+      whatsappMessageId: options?.whatsappMessageId,
+      repliedToWamid: options?.repliedToWamid,
+      repliedToId,
+    });
   }
 
   /**
@@ -83,6 +159,9 @@ export class ConversationMessengerService {
       direction: 'inbound' | 'outbound';
       body: string | null;
       kind?: MessageKind;
+      whatsappMessageId?: string;
+      repliedToWamid?: string;
+      repliedToId?: string;
     },
   ) {
     const [created] = await this.prisma.$transaction([

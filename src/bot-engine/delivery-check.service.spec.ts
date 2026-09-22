@@ -48,7 +48,9 @@ describe('DeliveryCheckService', () => {
       message: { create: jest.fn().mockResolvedValue({ id: 'msg1' }) },
       $transaction: jest.fn((ops: any[]) => Promise.all(ops)),
     };
-    whatsapp = { sendText: jest.fn() };
+    whatsapp = {
+      sendText: jest.fn().mockResolvedValue({ whatsappMessageId: 'wamid.out' }),
+    };
     menuItems = {
       findSystemDeliveryItem: jest.fn().mockResolvedValue(messages),
     };

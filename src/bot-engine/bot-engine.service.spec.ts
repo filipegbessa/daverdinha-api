@@ -132,8 +132,10 @@ describe('BotEngineService', () => {
       ),
     };
     whatsapp = {
-      sendText: jest.fn(),
-      sendInteractiveList: jest.fn(),
+      sendText: jest.fn().mockResolvedValue({ whatsappMessageId: 'wamid.out' }),
+      sendInteractiveList: jest
+        .fn()
+        .mockResolvedValue({ whatsappMessageId: 'wamid.out' }),
       getProductNames: jest.fn().mockResolvedValue({}),
     };
     botSettings = {
@@ -940,6 +942,7 @@ describe('BotEngineService', () => {
         conversationId: 'c1',
         direction: 'outbound',
         body: 'Bem-vinda(o)!',
+        whatsappMessageId: 'wamid.out',
       },
     });
   });
@@ -973,6 +976,7 @@ describe('BotEngineService', () => {
         conversationId: 'c1',
         direction: 'outbound',
         body: expect.stringContaining('Como posso te ajudar hoje?'),
+        whatsappMessageId: 'wamid.out',
       },
     });
     const menuMessageCall = prisma.message.create.mock.calls.find(
@@ -1225,6 +1229,7 @@ describe('BotEngineService', () => {
           conversationId: 'c1',
           direction: 'outbound',
           body: 'Esse tipo de mensagem não é válido por aqui!',
+          whatsappMessageId: 'wamid.out',
         },
       });
       expect(prisma.conversation.update).not.toHaveBeenCalledWith(

@@ -28,7 +28,9 @@ describe('ConversationsService', () => {
       conversationCategory: { upsert: jest.fn(), deleteMany: jest.fn() },
       $transaction: jest.fn((ops: any[]) => Promise.all(ops)),
     };
-    whatsapp = { sendText: jest.fn() };
+    whatsapp = {
+      sendText: jest.fn().mockResolvedValue({ whatsappMessageId: 'wamid.out' }),
+    };
     const moduleRef = await Test.createTestingModule({
       providers: [
         ConversationsService,
@@ -305,7 +307,12 @@ describe('ConversationsService', () => {
 
       expect(whatsapp.sendText).toHaveBeenCalledWith('5521999999999', 'Oi!');
       expect(prisma.message.create).toHaveBeenCalledWith({
-        data: { conversationId: 'c1', direction: 'outbound', body: 'Oi!' },
+        data: {
+          conversationId: 'c1',
+          direction: 'outbound',
+          body: 'Oi!',
+          whatsappMessageId: 'wamid.out',
+        },
       });
       // The messenger owns this now: an operator reply is outbound, so the
       // conversation stops being unread, and the update bumps updatedAt with it.
