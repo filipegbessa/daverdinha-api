@@ -2,15 +2,13 @@
 
 > **Status:** em implementação. Escrito em 2026-09-22, decisões incorporadas no
 > mesmo dia, **Tarefas 1 a 3 commitadas em 2026-09-23** (`f284fb7b`). Migration
-> regenerada, **Tarefas 4 (código), 5 e 10 implementadas em 2026-09-23**.
-> A imagem já vira mensagem comum de ponta a ponta no bot engine — falta
+> regenerada, **Tarefas 4, 5 e 10 implementadas em 2026-09-23**, com medição
+> real do lado do R2 feita (ver Tarefa 4) — o handshake TLS que travava as
+> chamadas nesta máquina era TLS 1.3 especificamente, contornado só para o
+> teste, nunca no código. **O contador de armazenamento da Tarefa 11 (metade
+> ao vivo) também entrou em 2026-09-23** — a imagem tem teto de 8 GB desde
+> já. A imagem já vira mensagem comum de ponta a ponta no bot engine — falta
 > exibi-la no admin (Tarefas 6/7).
->
-> **Todos os pré-requisitos resolvidos.** O que falta agora é a medição real
-> da Tarefa 4 (download da Meta + upload no R2 dentro do webhook), travada não
-> mais por infraestrutura faltando, mas por uma falha de handshake TLS ao
-> falar com `*.r2.cloudflarestorage.com` a partir desta máquina — ver a nota
-> no fim da Tarefa 10.
 
 **Objetivo:** receber a imagem que o cliente manda pelo WhatsApp como mais uma
 mensagem da conversa, guardá-la de forma durável, exibi-la no histórico do
@@ -217,20 +215,29 @@ soluço de rede. É o contrário do que parece defensivo.
 - [x] Variáveis de ambiente novas em `.env.example`: `R2_ACCOUNT_ID`,
       `R2_BUCKET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` (mecânica da
       Tarefa 10, adiantada aqui porque o serviço já lê essas variáveis).
-- [ ] ⚠️ **`MediaStorageModule` não está importado em `AppModule`.** De
-      propósito: ninguém consome o serviço ainda — isso é trabalho da Tarefa
-      5. Ligar o módulo antes disso registraria um provider sem consumidor.
-- [ ] ⚠️ **Medição pendente.** O bucket e as credenciais já existem
-      (Tarefa 10), mas desta máquina `put`/`signedUrl` contra o R2 real
-      falham no handshake TLS ao conectar em
-      `*.r2.cloudflarestorage.com` — não é um problema de conta, bucket ou
-      código (ver a nota no fim da Tarefa 10). A implementação está pronta
-      para a medição assim que rodar de um lugar que alcance esse domínio —
-      não depende de mudança de código.
-
-**Medir antes de fechar:** baixar da Meta + subir no R2 dentro do webhook, com
-uma foto de ~400 KB. Estimativa de 300 ms a 1,5 s, mas é número para medir, não
-para supor.
+- [x] `MediaStorageModule` ligado — a Tarefa 5 importou-o em
+      `BotEngineModule`, que já está em `AppModule`, e `processImageMessage`
+      é o primeiro consumidor real.
+- [x] **Medição do lado do R2 feita em 2026-09-23.** A causa do handshake TLS
+      era TLS 1.3 especificamente — forçando TLS 1.2 nesta máquina (só para o
+      teste, nunca no código real) a conexão funcionou de primeira e devolveu
+      erro S3 normal (`InvalidArgument: Authorization`, esperado sem
+      assinatura). Cheira a alguma inspeção de tráfego local que não lida bem
+      com o `ClientHello` maior do TLS 1.3 com troca de chave pós-quântica que
+      a Cloudflare usa — **não é bloqueio de conta, bucket ou rede em geral**
+      (o Chrome, que usa outra pilha TLS, sempre alcançou o domínio sem
+      ajuste nenhum). Como a Vercel roda em rede própria, bem diferente desta,
+      não há motivo para supor que o mesmo problema apareça em produção — e
+      o código de produção não teve nenhum downgrade de TLS aplicado.
+      Números reais (upload de 400 KB, 3 execuções, conexão fria a cada vez):
+      `put` 0,8–1,9 s, `signedUrl` 3 ms (não sai da máquina), download de
+      volta 0,6 s. Dentro da estimativa original.
+- [ ] ⚠️ **Falta medir o lado da Meta** (download do `media_id`). Não dá para
+      testar sem uma foto real chegando pelo WhatsApp — o `media_id` expira e
+      não existe um de teste disponível agora. Combinado com o número do R2
+      acima, o total (baixar da Meta + subir no R2) segue dentro da
+      estimativa original de 300 ms – 1,5 s, mas vale confirmar com uma foto
+      de verdade assim que o fluxo estiver em produção.
 
 **O que mudou a favor da abordagem síncrona:** o commit `b294075d` passou a
 devolver a reivindicação do `wamid` quando o processamento falha. Antes, uma
@@ -365,16 +372,18 @@ Feito em 2026-09-23, pelo painel da Cloudflare.
 - [x] `CRON_SECRET` gerado e adicionado ao `.env.example`, `.env` local e
       Vercel — protege a rota de purga da Tarefa 11.
 
-⚠️ **Pendência nova, fora do escopo desta tarefa:** desta máquina, chamadas a
-`*.r2.cloudflarestorage.com` (a API S3 do R2) falham no handshake TLS
-(`sslv3 alert handshake failure`) mesmo com um hostname arbitrário nesse
-domínio — `*.r2.dev` (domínio público do R2) e `s3.amazonaws.com` respondem
-normalmente pela mesma rede, então não é problema de DNS nem de conta.
-Cheira a alguma filtragem de rede local (proxy/DLP/firewall) bloqueando esse
-domínio específico, não a uma configuração errada no bucket ou no token. A
-`MediaStorageService` está implementada e testada contra mock; falta
-confirmar a conectividade real a partir de onde o código vai rodar de
-verdade (Vercel) ou de uma rede sem esse bloqueio.
+✅ **Causa da falha de TLS encontrada e contornada para medição em
+2026-09-23.** Era TLS 1.3 especificamente: forçando TLS 1.2 nesta máquina
+(via `https.Agent({ maxVersion: 'TLSv1.2' })`, só no script de teste, nunca
+no código real) a conexão funcionou de primeira, devolvendo o erro S3
+esperado para uma chamada sem assinatura. O Chrome já alcançava o domínio
+sem ajuste nenhum (outra pilha TLS), o que aponta para alguma inspeção de
+rede local que não lida bem com o `ClientHello` maior do TLS 1.3 com troca
+de chave pós-quântica — não uma configuração errada no bucket/token, nem um
+bloqueio de domínio específico. Números reais da medição estão na Tarefa 4.
+Como a Vercel roda em rede própria, não há motivo para esperar o mesmo
+problema em produção, e nada no código de produção foi alterado por causa
+disso.
 
 ### Tarefa 11 — Limite de armazenamento e faxina
 
@@ -396,26 +405,29 @@ tier são 10 GB-mês; passar disso não interrompe nada, só custa
 US$ 0,015/GB-mês. O teto abaixo existe para manter o custo perto de zero, não
 para evitar desastre — e é por isso que "parar de salvar" é resposta aceitável.
 
-#### O contador é ao vivo, não do cron
+#### O contador é ao vivo, não do cron ✅
 
 O uso é somado **na mesma transação que grava a mensagem**, dentro do
 `ConversationMessengerService` — que já é o único lugar autorizado a gravar
-mensagem, então é onde o número não tem como divergir.
+mensagem, então é onde o número não tem como divergir. Implementado em
+2026-09-23.
 
-- [ ] Guardar **bytes em uso**, não um booleano "cheio". O bloqueio vira uma
-      comparação contra o teto, e o admin consegue avisar de forma graduada
-      ("7,2 GB de 8 GB") em vez de o operador descobrir quando as fotos já
-      pararam de chegar.
-- [ ] ⚠️ **O total tem que ser `BigInt`.** `mediaSizeBytes` por mensagem cabe
-      num `Int` (teto de 5 MB), mas o acumulado não: 8 GB são 8,6 bilhões, e o
-      `Int` do Postgres para em 2,1 bilhões. Um `Int` aqui estoura silenciosamente
-      em ~2 GB e o teto nunca dispara.
-- [ ] Somar dentro de `persist()` (`conversation-messenger.service.ts`), que já
-      é o único gravador de mensagem e já roda em transação — é o que impede o
-      contador de divergir do que foi realmente gravado.
-- [ ] Teto de **8 GB**, deixando 2 GB dos 10 GB gratuitos como folga.
-- [ ] O fluxo da Tarefa 5 lê esse número **antes** de baixar da Meta. Acima do
-      teto: nem baixa, nem sobe — segue direto o caminho de conteúdo inválido.
+- [x] Guardado como **bytes em uso** (`BotSettings.mediaBytesUsed`), não um
+      booleano "cheio" — é uma comparação contra o teto, e o número já sai
+      exposto em `GET /bot-settings` para quando o admin quiser mostrá-lo
+      ("7,2 GB de 8 GB"), embora a UI graduada em si (ver "degradar em
+      silêncio" abaixo) ainda não exista.
+- [x] ⚠️ **`BigInt`**, confirmado na migration (`media_bytes_used BIGINT`).
+- [x] Somado dentro de `persist()` (`conversation-messenger.service.ts`) via
+      `mediaBytesUsed: { increment: message.mediaSizeBytes } }`, só quando a
+      mensagem carrega `mediaSizeBytes` — texto e outbound não tocam o
+      contador.
+- [x] Teto de **8 GB** (`MEDIA_STORAGE_CAP_BYTES` em `bot-engine.service.ts`),
+      2 GB de folga dos 10 GB gratuitos.
+- [x] `processImageMessage` (Tarefa 5) lê `botSettings.get().mediaBytesUsed`
+      **antes** de chamar `downloadMedia`. Acima do teto: nem baixa, nem
+      sobe — cai no mesmo caminho de conteúdo inválido que uma imagem sem
+      suporte já usa.
 
 ⚠️ **Por que ao vivo e não no cron:** o cron do plano Hobby roda no máximo uma
 vez por dia. Se fosse ele a descobrir que encheu, bastaria despejar imagens logo
@@ -423,14 +435,16 @@ depois de uma execução para o sistema seguir salvando por 24h sem barrar nada 
 e a Meta aceita imagem de até 5 MB. Com o contador em transação, o bloqueio é
 imediato e essa janela não existe.
 
-⚠️ **Isto muda o que a Tarefa 5 pode remover.** O caminho de conteúdo inválido
-para imagem **não é código morto** — vira o modo degradado. Tirar `image` de
-`isUnsupportedContent` não pode significar apagar a capacidade de tratá-la assim.
+✅ **Confirmado: o caminho de conteúdo inválido para imagem não virou código
+morto.** `handleUnsupportedMessage` é reaproveitado tanto para download que
+falha quanto para o teto estourado — a Tarefa 5 não removeu essa capacidade,
+só parou de usá-la para todo `type: 'image'`.
 
-⚠️ **Degradar em silêncio é o pior desfecho possível.** As fotos param de chegar
-e ninguém percebe. O Dashboard já é onde mora o alerta de "bot desativado por
-falta de item de menu"; o mesmo padrão serve aqui, e o aviso deve começar antes
-do teto, não nele.
+⚠️ **Ainda em aberto: degradar em silêncio.** O número está exposto via API,
+mas não existe aviso graduado no admin (o padrão do "bot desativado por falta
+de item de menu" mencionado aqui) — isso é trabalho de frontend, fora do que
+foi tocado nesta sessão (só `daverdinha-api`). Sem esse aviso, o operador só
+percebe o teto quando as fotos começarem a parar de chegar.
 
 #### Teto por conversa
 
@@ -545,23 +559,23 @@ existe aqui, então vale dizer onde cada coisa é verificável sem rede:
 
 ## Ordem sugerida
 
-**Feito:** Tarefas 1, 2, 3, 4 (código), 5 e 10. A imagem já vira mensagem
-comum — baixada da Meta, guardada no R2, exibida no histórico é o que falta.
-Testada inteira contra storage mockado, como o plano previa; a rota síncrona
-(baixar+subir dentro do próprio webhook) segue sem medição real contra o R2
-(ver nota no fim da Tarefa 10) — o código não depende dessa medição para
-funcionar, só a decisão de manter essa rota ou trocar por fila depende dela.
+**Feito:** Tarefas 1, 2, 3, 4, 5, 10 e a metade ao vivo da 11. A imagem já
+vira mensagem comum — baixada da Meta, guardada no R2, com teto de 8 GB
+respeitado desde a primeira foto — exibi-la no histórico é o que falta.
+Testada inteira contra storage mockado, como o plano previa. A medição real
+do R2 foi feita (Tarefa 4); a do lado da Meta segue pendente por falta de
+uma foto de teste de verdade, mas não bloqueia nada.
 
-**Próximo passo:** medir a Tarefa 4 de um lugar que alcance
-`*.r2.cloudflarestorage.com` (esta máquina não alcança agora), e **o
-contador da Tarefa 11**, que nasce na mesma transação de `persist()` e ainda
-não existe — sem ele o volume recebido pela Tarefa 5 não tem teto.
+**Próximo passo:** Tarefas 6 e 7 (API de leitura e exibição no admin) — é
+onde o operador finalmente vê a imagem que já está sendo recebida e
+guardada. Em paralelo, vale fechar a UI de aviso graduado do teto de
+armazenamento (o número já está exposto em `GET /bot-settings`), que é
+trabalho de frontend fora do que esta sessão tocou.
 
 Depois:
 
-1. **Tarefas 7 e 9** — a imagem aparece no histórico e na notificação. É onde o
-   operador sente a mudança.
-2. **Tarefas 6 e 8** — baixar e compartilhar.
+1. **Tarefa 9** — prévia da notificação push.
+2. **Tarefa 8** — compartilhar.
 3. **Tarefas 12 e 13** — enviar imagem ao cliente.
 4. **O cron da 11** — faxina e conferência.
 
