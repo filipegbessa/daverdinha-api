@@ -39,9 +39,14 @@ export class ConversationMessengerService {
    * não aceita bytes na mensagem e exige um id; e o R2, porque o id da Meta
    * expira em 30 dias e o histórico do operador não pode expirar junto.
    *
-   * Nada é gravado antes do envio dar certo. Subir para a Meta é o passo que
-   * falha por cota ou pela janela de 24 horas, e gravar antes deixaria no
-   * histórico uma mensagem que o cliente nunca recebeu.
+   * Os três passos — subir na Meta, mandar a mensagem, subir no R2 — são
+   * sequenciais, não paralelos, e nessa ordem de propósito: mandar é o passo
+   * que falha por cota ou pela janela de 24 horas, e é o mais provável de
+   * falhar dos três. Subir no R2 *antes* de saber se o envio deu certo
+   * deixaria um arquivo órfão no bucket — sem mensagem nenhuma apontando
+   * para ele, e fora da contagem de `mediaBytesUsed`, que só soma dentro de
+   * `persist()`. Nada é gravado — nem no R2, nem no banco — antes do envio
+   * dar certo.
    */
   async sendImage(
     conversation: Recipient,
@@ -65,11 +70,7 @@ export class ConversationMessengerService {
       repliedToWamid = target.whatsappMessageId;
     }
 
-    const mediaKey = buildMediaKey(conversation.id, file.mimeType);
-    const [, mediaId] = await Promise.all([
-      this.mediaStorage.put(mediaKey, file.buffer, file.mimeType),
-      this.whatsapp.uploadMedia(file.buffer, file.mimeType),
-    ]);
+    const mediaId = await this.whatsapp.uploadMedia(file.buffer, file.mimeType);
 
     const { whatsappMessageId } = await this.whatsapp.sendImage(
       conversation.phone,
@@ -77,6 +78,9 @@ export class ConversationMessengerService {
       options?.caption,
       repliedToWamid ? { replyToWamid: repliedToWamid } : undefined,
     );
+
+    const mediaKey = buildMediaKey(conversation.id, file.mimeType);
+    await this.mediaStorage.put(mediaKey, file.buffer, file.mimeType);
 
     return this.persist(conversation.id, {
       direction: 'outbound',

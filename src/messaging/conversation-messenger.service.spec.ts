@@ -141,6 +141,29 @@ describe('ConversationMessengerService', () => {
       await expect(service.sendImage(conversation, file)).rejects.toThrow();
       expect(prisma.message.create).not.toHaveBeenCalled();
     });
+
+    // Regression: put() used to run in parallel with the Meta upload, before
+    // knowing whether the send itself (the step most likely to fail — quota,
+    // the 24h window) would succeed. A failed send left an orphaned file in
+    // R2, pointed at by no message and outside mediaBytesUsed, since the
+    // counter only sums inside persist().
+    it('does not touch R2 when the send fails, leaving no orphaned file behind', async () => {
+      whatsapp.sendImage.mockRejectedValue(new Error('fora da janela de 24h'));
+
+      await expect(service.sendImage(conversation, file)).rejects.toThrow();
+
+      expect(mediaStorage.put).not.toHaveBeenCalled();
+    });
+
+    it('does not touch R2 or send to WhatsApp when the Meta upload itself fails', async () => {
+      whatsapp.uploadMedia.mockRejectedValue(new Error('upload failed'));
+
+      await expect(service.sendImage(conversation, file)).rejects.toThrow();
+
+      expect(whatsapp.sendImage).not.toHaveBeenCalled();
+      expect(mediaStorage.put).not.toHaveBeenCalled();
+      expect(prisma.message.create).not.toHaveBeenCalled();
+    });
   });
 
   describe('sendText()', () => {

@@ -15,6 +15,7 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ClerkAuthGuard } from '../common/auth/clerk-auth.guard';
+import { MAX_MEDIA_BYTES } from '../whatsapp/whatsapp-client.service';
 import { ConversationsService } from './conversations.service';
 import { ReplyDto } from './dto/reply.dto';
 import { ReplyImageDto } from './dto/reply-image.dto';
@@ -68,10 +69,16 @@ export class ConversationsController {
 
   /**
    * Multipart: o arquivo no campo `file`, legenda e citação como campos de
-   * texto. Tipo e tamanho são conferidos no service, junto da regra de status.
+   * texto. Tipo e tamanho são conferidos no service, junto da regra de status
+   * — mas o teto de tamanho também tem que estar aqui: sem `limits.fileSize`,
+   * o Multer bufferiza o arquivo inteiro em memória antes do service ter
+   * chance de rejeitar, e um upload de centenas de MB pode esgotar a memória
+   * da função. O Multer corta a leitura ao cruzar o teto.
    */
   @Post(':id/reply-image')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: MAX_MEDIA_BYTES } }),
+  )
   replyImage(
     @Param('id') id: string,
     @UploadedFile() file: UploadedImage,
