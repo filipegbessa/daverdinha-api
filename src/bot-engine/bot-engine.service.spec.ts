@@ -70,6 +70,28 @@ function mediaMessagePayload(from: string, type: string) {
   };
 }
 
+function interactivePayload(from: string, listReplyId: string) {
+  return {
+    entry: [
+      {
+        changes: [
+          {
+            value: {
+              messages: [
+                {
+                  from,
+                  type: 'interactive',
+                  interactive: { list_reply: { id: listReplyId } },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    ],
+  };
+}
+
 function orderMessagePayload(
   from: string,
   productItems: {
@@ -450,6 +472,103 @@ describe('BotEngineService', () => {
     });
 
     expect(deliveryCheck.start).toHaveBeenCalledWith(conversation);
+  });
+
+  describe('menu selection always replies, whatever the conversation status', () => {
+    // Regression: the first tap replied fine (still bot_active) and handed
+    // off to paused_human. Every tap after that on the same WhatsApp list —
+    // the customer picking a *different* option — went silent, because
+    // continueBotFlow's paused_human check short-circuited before ever
+    // reaching handleMenuSelection.
+    it('replies to an ordinary item even when the conversation is already paused_human', async () => {
+      const conversation = {
+        id: 'c1',
+        phone: '5521999999999',
+        status: 'paused_human',
+        invalidAttempts: 0,
+        awaitingDeliveryReply: false,
+        updatedAt: new Date(),
+      };
+      prisma.conversation.findFirst.mockResolvedValue(conversation);
+
+      await service.handleIncomingMessage(
+        interactivePayload('5521999999999', 'm2'),
+      );
+
+      expect(whatsapp.sendText).toHaveBeenCalledWith(
+        '5521999999999',
+        'Todo sábado às 16h!',
+      );
+    });
+
+    it('restarts the delivery/CEP sub-flow for the system item even when a human is already handling the conversation', async () => {
+      const conversation = {
+        id: 'c1',
+        phone: '5521999999999',
+        status: 'paused_human',
+        invalidAttempts: 0,
+        awaitingDeliveryReply: false,
+        updatedAt: new Date(),
+      };
+      prisma.conversation.findFirst.mockResolvedValue(conversation);
+
+      await service.handleIncomingMessage(
+        interactivePayload('5521999999999', 'm1'),
+      );
+
+      expect(deliveryCheck.start).toHaveBeenCalledWith(conversation);
+    });
+
+    // A tap on a stale/deactivated item (no longer in listActive()) is the
+    // same functional path as a valid one — it should still bypass the
+    // status gate and run the invalid-attempt counter, not go silent.
+    it('runs the invalid-attempt flow for an unresolved item id even when paused_human', async () => {
+      const conversation = {
+        id: 'c1',
+        phone: '5521999999999',
+        status: 'paused_human',
+        invalidAttempts: 0,
+        awaitingDeliveryReply: false,
+        updatedAt: new Date(),
+      };
+      prisma.conversation.findFirst.mockResolvedValue(conversation);
+
+      await service.handleIncomingMessage(
+        interactivePayload('5521999999999', 'deactivated-item'),
+      );
+
+      expect(prisma.conversation.update).toHaveBeenCalledWith({
+        where: { id: 'c1' },
+        data: { invalidAttempts: 1 },
+      });
+      expect(whatsapp.sendInteractiveList).toHaveBeenCalled();
+    });
+
+    // botEnabled is still the master switch: the tap is recorded (above),
+    // but nothing goes out, same as every other place the bot stays silent
+    // on purpose when it's globally off.
+    it('stays silent when the bot is globally disabled, even though the tap is still recorded', async () => {
+      botSettings.get.mockResolvedValue({
+        botEnabled: false,
+        welcomeMessage: 'Bem-vinda(o)!',
+      });
+      const conversation = {
+        id: 'c1',
+        phone: '5521999999999',
+        status: 'bot_active',
+        invalidAttempts: 0,
+        awaitingDeliveryReply: false,
+      };
+      prisma.conversation.findFirst.mockResolvedValue(conversation);
+
+      await service.handleIncomingMessage(
+        interactivePayload('5521999999999', 'm2'),
+      );
+
+      expect(whatsapp.sendText).not.toHaveBeenCalled();
+      expect(deliveryCheck.start).not.toHaveBeenCalled();
+      expect(prisma.conversation.update).not.toHaveBeenCalled();
+    });
   });
 
   it('picking any menu item while awaiting a CEP reply cancels the delivery sub-flow so the next free-text message is not misread as a CEP', async () => {

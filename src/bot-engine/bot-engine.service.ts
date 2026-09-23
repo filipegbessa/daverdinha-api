@@ -161,6 +161,7 @@ export class BotEngineService {
       });
     }
 
+    const listReplyId = message.interactive?.list_reply?.id;
     const listReplyTitle = message.interactive?.list_reply?.title;
     if (listReplyTitle) {
       await this.messenger.recordInbound(
@@ -177,6 +178,24 @@ export class BotEngineService {
     if (isMenuKeyword) {
       await this.resetToBot(conversation.id);
       await this.showMenu(conversation);
+      return handled;
+    }
+
+    // Tapping a menu item always gets a reply, whatever the conversation's
+    // status — same principle as the order confirmation and unsupported
+    // media above: the reply is about the tap, not about who owns the chat.
+    // Without this, the *first* selection replies fine (still bot_active),
+    // hands off to paused_human, and every tap after that on the same list
+    // — the customer picking a different option — went silent, since
+    // continueBotFlow's paused_human check short-circuits before ever
+    // reaching handleMenuSelection. `botEnabled` is still the master
+    // switch: with it off, a tap is recorded above but nothing is sent,
+    // same as everywhere else the bot stays silent on purpose.
+    if (listReplyId) {
+      const settings = await this.botSettings.get();
+      if (settings.botEnabled) {
+        await this.handleMenuSelection(conversation, listReplyId);
+      }
       return handled;
     }
 
