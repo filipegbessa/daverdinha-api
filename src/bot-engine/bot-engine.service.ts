@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { WhatsAppClientService } from '../whatsapp/whatsapp-client.service';
 import { ConversationMessengerService } from '../messaging/conversation-messenger.service';
@@ -64,6 +64,8 @@ interface HandledMessage {
 
 @Injectable()
 export class BotEngineService {
+  private readonly logger = new Logger(BotEngineService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly whatsapp: WhatsAppClientService,
@@ -300,7 +302,13 @@ export class BotEngineService {
       return handled;
     }
 
+    // Os dois tempos medidos separados, e não o total: o desenho inteiro
+    // depende de o ida-e-volta caber no webhook, e somados eles não dizem
+    // qual dos dois lados é o gargalo. Sem isto, uma foto real chega,
+    // funciona e não deixa medição nenhuma para trás.
+    const startedAt = Date.now();
     const download = await this.whatsapp.downloadMedia(image.id);
+    const downloadMs = Date.now() - startedAt;
 
     if (!download.ok) {
       await this.handleUnsupportedMessage(
@@ -314,7 +322,16 @@ export class BotEngineService {
     }
 
     const mediaKey = buildMediaKey(conversation.id, download.mimeType);
+    const uploadStartedAt = Date.now();
     await this.mediaStorage.put(mediaKey, download.buffer, download.mimeType);
+
+    // Só números e o tipo. Nada de telefone, legenda ou chave do arquivo:
+    // log de plataforma é lido por quem não precisa ver conteúdo de cliente.
+    this.logger.log(
+      `inbound image stored: download=${downloadMs}ms ` +
+        `upload=${Date.now() - uploadStartedAt}ms ` +
+        `bytes=${download.sizeBytes} type=${download.mimeType}`,
+    );
 
     // The caption is content, never a command — it lands in `body` for the
     // operator to read, but it plays no part in any decision below. Keeping

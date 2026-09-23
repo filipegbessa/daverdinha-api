@@ -239,6 +239,10 @@ soluço de rede. É o contrário do que parece defensivo.
       Números reais (upload de 400 KB, 3 execuções, conexão fria a cada vez):
       `put` 0,8–1,9 s, `signedUrl` 3 ms (não sai da máquina), download de
       volta 0,6 s. Dentro da estimativa original.
+- [x] **Instrumentação pronta.** `processImageMessage` loga
+      `download=..ms upload=..ms bytes=.. type=..` — os dois tempos separados,
+      porque somados não dizem qual lado é o gargalo. Só números e o tipo: sem
+      telefone, legenda ou chave do arquivo, com teste garantindo isso.
 - [ ] ⚠️ **Falta medir o lado da Meta** (download do `media_id`). Não dá para
       testar sem uma foto real chegando pelo WhatsApp — o `media_id` expira e
       não existe um de teste disponível agora. Combinado com o número do R2

@@ -1,4 +1,5 @@
 import { Test } from '@nestjs/testing';
+import { Logger } from '@nestjs/common';
 import { BotEngineService } from './bot-engine.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { WhatsAppClientService } from '../whatsapp/whatsapp-client.service';
@@ -2025,6 +2026,59 @@ describe('BotEngineService', () => {
         undefined,
         { whatsappMessageId: undefined, repliedToWamid: undefined },
       );
+    });
+  });
+
+  // A pergunta que ainda decide o desenho é se o ida-e-volta cabe no webhook,
+  // e sem isto uma foto real chega, funciona e não deixa medição nenhuma.
+  describe('instrumentação do caminho da imagem', () => {
+    it('logs how long Meta and R2 each took, and how big the photo was', async () => {
+      const log = jest
+        .spyOn(Logger.prototype, 'log')
+        .mockImplementation(() => undefined);
+      prisma.conversation.findFirst.mockResolvedValue({
+        id: 'c1',
+        phone: '5521999999999',
+        status: 'bot_active',
+        invalidAttempts: 0,
+        awaitingDeliveryReply: false,
+      });
+
+      await service.handleIncomingMessage(imageMessagePayload('5521999999999'));
+
+      const line = log.mock.calls.map(([first]) => String(first)).join('\n');
+      // Os dois tempos separados: somados não dizem qual lado é o gargalo.
+      expect(line).toMatch(/download=\d+ms/);
+      expect(line).toMatch(/upload=\d+ms/);
+      // O tamanho vem do que `downloadMedia` devolveu, não de um número solto.
+      expect(line).toContain('bytes=17');
+      expect(line).toContain('type=image/jpeg');
+      log.mockRestore();
+    });
+
+    it('keeps the log free of anything that identifies the customer', async () => {
+      const log = jest
+        .spyOn(Logger.prototype, 'log')
+        .mockImplementation(() => undefined);
+      prisma.conversation.findFirst.mockResolvedValue({
+        id: 'c1',
+        phone: '5521999999999',
+        status: 'bot_active',
+        invalidAttempts: 0,
+        awaitingDeliveryReply: false,
+      });
+
+      await service.handleIncomingMessage(
+        imageMessagePayload('5521999999999', { caption: 'meu comprovante' }),
+      );
+
+      // Log de plataforma é lido por quem não precisa ver conteúdo de cliente:
+      // nem telefone, nem legenda, nem a chave do arquivo no bucket.
+      const line = log.mock.calls.map(([first]) => String(first)).join('\n');
+      expect(line).not.toContain('5521999999999');
+      expect(line).not.toContain('meu comprovante');
+      expect(line).not.toContain('conversations/c1/');
+      log.mockRestore();
     });
   });
 });
