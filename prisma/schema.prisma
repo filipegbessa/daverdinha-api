@@ -17,6 +17,11 @@ model BotSettings {
   invalidAttemptsExceededMessage String   @default("Não consegui entender sua opção, vou te chamar um atendente!") @map("invalid_attempts_exceeded_message")
   mediaReceivedMessage           String   @default("Esse tipo de mensagem não é válido por aqui!") @map("media_received_message")
   orderReceivedMessage           String   @default("Aceito! Recebemos seu pedido, já vamos confirmar com você.") @map("order_received_message")
+  /// Bytes de mídia em uso no R2, somado ao vivo na mesma transação que
+  /// grava cada mensagem (ConversationMessengerService.persist). Tem que
+  /// ser BigInt: em bytes, o teto de 8 GB são ~8,6 bilhões — um Int do
+  /// Postgres estoura em ~2,1 bilhões e o teto nunca dispararia.
+  mediaBytesUsed                 BigInt   @default(0) @map("media_bytes_used")
   updatedAt                      DateTime @updatedAt @map("updated_at")
 
   @@map("bot_settings")
@@ -114,6 +119,7 @@ enum MessageKind {
   text
   invalid_content
   order
+  image
 }
 
 model Message {
@@ -124,6 +130,15 @@ model Message {
   kind               MessageKind      @default(text)
   body               String?
   order              Order?
+  /// Chave do arquivo no bucket. Nulo em mensagem sem mídia, e também na que
+  /// já teve a mídia expurgada pela retenção — o registro de que o cliente
+  /// mandou algo continua, o arquivo não.
+  mediaKey           String?          @map("media_key")
+  mediaMimeType      String?          @map("media_mime_type")
+  /// Alimenta o total em uso, que é somado na mesma transação que grava a
+  /// mensagem. É esse número que faz o teto de armazenamento ser imediato em
+  /// vez de depender do cron diário.
+  mediaSizeBytes     Int?             @map("media_size_bytes")
   whatsappMessageId  String?          @unique @map("whatsapp_message_id")
   repliedToWamid     String?          @map("replied_to_wamid")
   repliedToId        String?          @map("replied_to_id")

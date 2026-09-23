@@ -110,7 +110,14 @@ export class DeliveryCheckService {
     return { kind: 'not-covered', bairro: lookup.bairro };
   }
 
-  private async registerUnresolvedAttempt(conversation: {
+  /**
+   * Same escalation the CEP-retry path uses (`deliveryRetryMessage` then
+   * `deliveryUnrecognizedMessage` + handoff), exposed for callers that
+   * already recorded the inbound message themselves — an image during the
+   * CEP wait, for instance — and only need the counting/reply half, not a
+   * second write of the message.
+   */
+  async registerUnresolvedAttempt(conversation: {
     id: string;
     phone: string;
     invalidAttempts: number;

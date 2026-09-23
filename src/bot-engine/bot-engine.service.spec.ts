@@ -1,4 +1,5 @@
 import { Test } from '@nestjs/testing';
+import { Logger } from '@nestjs/common';
 import { BotEngineService } from './bot-engine.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { WhatsAppClientService } from '../whatsapp/whatsapp-client.service';
@@ -6,6 +7,36 @@ import { BotSettingsService } from '../bot-settings/bot-settings.service';
 import { MenuItemsService } from '../menu-items/menu-items.service';
 import { ConversationMessengerService } from '../messaging/conversation-messenger.service';
 import { DeliveryCheckService } from './delivery-check.service';
+import { MediaStorageService } from '../media/media-storage.service';
+
+function imageMessagePayload(
+  from: string,
+  options?: { caption?: string; mediaId?: string; wamid?: string },
+) {
+  return {
+    entry: [
+      {
+        changes: [
+          {
+            value: {
+              messages: [
+                {
+                  id: options?.wamid,
+                  from,
+                  type: 'image',
+                  image: {
+                    id: options?.mediaId ?? 'media123',
+                    caption: options?.caption,
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    ],
+  };
+}
 
 function textMessagePayload(from: string, text: string) {
   return {
@@ -77,10 +108,16 @@ describe('BotEngineService', () => {
     sendText: jest.Mock;
     sendInteractiveList: jest.Mock;
     getProductNames: jest.Mock;
+    downloadMedia: jest.Mock;
   };
   let botSettings: { get: jest.Mock };
   let menuItems: { listActive: jest.Mock };
-  let deliveryCheck: { start: jest.Mock; handleReply: jest.Mock };
+  let deliveryCheck: {
+    start: jest.Mock;
+    handleReply: jest.Mock;
+    registerUnresolvedAttempt: jest.Mock;
+  };
+  let mediaStorage: { put: jest.Mock; signedUrl: jest.Mock };
 
   // m1 is the one system item (the delivery-location flow); everything else
   // is the plain topic + reply the admin creates.
@@ -121,8 +158,10 @@ describe('BotEngineService', () => {
       message: {
         create: jest.fn().mockResolvedValue({ id: 'msg1' }),
         findFirst: jest.fn().mockResolvedValue(null),
+        count: jest.fn().mockResolvedValue(0),
       },
       order: { create: jest.fn() },
+      botSettings: { update: jest.fn() },
       processedWebhookMessage: {
         create: jest
           .fn()
@@ -141,6 +180,12 @@ describe('BotEngineService', () => {
         .fn()
         .mockResolvedValue({ whatsappMessageId: 'wamid.out' }),
       getProductNames: jest.fn().mockResolvedValue({}),
+      downloadMedia: jest.fn().mockResolvedValue({
+        ok: true,
+        buffer: Buffer.from('fake-image-bytes'),
+        mimeType: 'image/jpeg',
+        sizeBytes: 17,
+      }),
     };
     botSettings = {
       get: jest.fn().mockResolvedValue({
@@ -151,10 +196,19 @@ describe('BotEngineService', () => {
         mediaReceivedMessage: 'Esse tipo de mensagem não é válido por aqui!',
         orderReceivedMessage:
           'Aceito! Recebemos seu pedido, já vamos confirmar com você.',
+        mediaBytesUsed: 0n,
       }),
     };
     menuItems = { listActive: jest.fn().mockResolvedValue(activeMenu) };
-    deliveryCheck = { start: jest.fn(), handleReply: jest.fn() };
+    deliveryCheck = {
+      start: jest.fn(),
+      handleReply: jest.fn(),
+      registerUnresolvedAttempt: jest.fn(),
+    };
+    mediaStorage = {
+      put: jest.fn().mockResolvedValue(undefined),
+      signedUrl: jest.fn(),
+    };
 
     const moduleRef = await Test.createTestingModule({
       providers: [
@@ -164,6 +218,7 @@ describe('BotEngineService', () => {
         { provide: BotSettingsService, useValue: botSettings },
         { provide: MenuItemsService, useValue: menuItems },
         { provide: DeliveryCheckService, useValue: deliveryCheck },
+        { provide: MediaStorageService, useValue: mediaStorage },
         ConversationMessengerService,
       ],
     }).compile();
@@ -1100,39 +1155,6 @@ describe('BotEngineService', () => {
   });
 
   describe('unsupported message types (media, order)', () => {
-    it('an image message gets the same invalid-content treatment as any other media', async () => {
-      const conversation = {
-        id: 'c1',
-        phone: '5521999999999',
-        status: 'bot_active',
-        invalidAttempts: 0,
-        awaitingDeliveryReply: false,
-      };
-      prisma.conversation.findFirst.mockResolvedValue(conversation);
-
-      await service.handleIncomingMessage(
-        mediaMessagePayload('5521999999999', 'image'),
-      );
-
-      expect(prisma.message.create).toHaveBeenCalledWith({
-        data: {
-          conversationId: 'c1',
-          direction: 'inbound',
-          kind: 'invalid_content',
-          body: '[Conteúdo inválido]',
-        },
-      });
-      expect(whatsapp.sendText).toHaveBeenCalledWith(
-        '5521999999999',
-        'Esse tipo de mensagem não é válido por aqui!',
-      );
-      expect(prisma.conversation.update).not.toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({ status: expect.anything() }),
-        }),
-      );
-    });
-
     // Regression: media sent to a conversation a human was handling fell
     // through the paused_human early return without being recorded at all.
     // The photo vanished from the transcript, and the push fired right after
@@ -1149,7 +1171,7 @@ describe('BotEngineService', () => {
       prisma.conversation.findFirst.mockResolvedValue(conversation);
 
       await service.handleIncomingMessage(
-        mediaMessagePayload('5521999999999', 'image'),
+        mediaMessagePayload('5521999999999', 'audio'),
       );
 
       expect(prisma.message.create).toHaveBeenCalledWith({
@@ -1574,6 +1596,341 @@ describe('BotEngineService', () => {
     });
   });
 
+  describe('image messages', () => {
+    it('downloads from Meta, uploads to R2, and records the message as kind image with the media columns', async () => {
+      const conversation = {
+        id: 'c1',
+        phone: '5521999999999',
+        status: 'bot_active',
+        invalidAttempts: 0,
+        awaitingDeliveryReply: false,
+      };
+      prisma.conversation.findFirst.mockResolvedValue(conversation);
+
+      await service.handleIncomingMessage(imageMessagePayload('5521999999999'));
+
+      expect(whatsapp.downloadMedia).toHaveBeenCalledWith('media123');
+      expect(mediaStorage.put).toHaveBeenCalledWith(
+        expect.stringMatching(/^conversations\/c1\/[0-9a-f-]{36}\.jpg$/),
+        Buffer.from('fake-image-bytes'),
+        'image/jpeg',
+      );
+      expect(prisma.message.create).toHaveBeenCalledWith({
+        data: {
+          conversationId: 'c1',
+          direction: 'inbound',
+          kind: 'image',
+          body: null,
+          mediaKey: expect.stringMatching(
+            /^conversations\/c1\/[0-9a-f-]{36}\.jpg$/,
+          ),
+          mediaMimeType: 'image/jpeg',
+          mediaSizeBytes: 17,
+        },
+      });
+    });
+
+    it('uses the caption as the message body, without treating it as a command', async () => {
+      const conversation = {
+        id: 'c1',
+        phone: '5521999999999',
+        status: 'bot_active',
+        invalidAttempts: 0,
+        awaitingDeliveryReply: false,
+      };
+      prisma.conversation.findFirst.mockResolvedValue(conversation);
+
+      await service.handleIncomingMessage(
+        imageMessagePayload('5521999999999', { caption: 'menu' }),
+      );
+
+      expect(prisma.message.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ body: 'menu' }),
+      });
+      // A captioned "menu" must not reset the conversation the way typing
+      // the bare word does — the caption is content, never a command.
+      expect(prisma.conversation.update).not.toHaveBeenCalledWith({
+        where: { id: 'c1' },
+        data: {
+          status: 'bot_active',
+          invalidAttempts: 0,
+          awaitingDeliveryReply: false,
+        },
+      });
+    });
+
+    it('in bot_active, behaves like an unmatched menu selection — spends an attempt and re-shows the menu', async () => {
+      const conversation = {
+        id: 'c1',
+        phone: '5521999999999',
+        status: 'bot_active',
+        invalidAttempts: 0,
+        awaitingDeliveryReply: false,
+      };
+      prisma.conversation.findFirst.mockResolvedValue(conversation);
+
+      await service.handleIncomingMessage(imageMessagePayload('5521999999999'));
+
+      expect(prisma.conversation.update).toHaveBeenCalledWith({
+        where: { id: 'c1' },
+        data: { invalidAttempts: 1 },
+      });
+      expect(whatsapp.sendInteractiveList).toHaveBeenCalled();
+    });
+
+    it('records and answers even when a human is already handling the conversation, without disturbing the handoff', async () => {
+      const conversation = {
+        id: 'c1',
+        phone: '5521999999999',
+        status: 'paused_human',
+        invalidAttempts: 0,
+        awaitingDeliveryReply: false,
+        updatedAt: new Date(),
+      };
+      prisma.conversation.findFirst.mockResolvedValue(conversation);
+
+      await service.handleIncomingMessage(imageMessagePayload('5521999999999'));
+
+      expect(prisma.message.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ kind: 'image' }),
+      });
+      expect(whatsapp.sendText).not.toHaveBeenCalled();
+      expect(whatsapp.sendInteractiveList).not.toHaveBeenCalled();
+      expect(prisma.conversation.update).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ status: expect.anything() }),
+        }),
+      );
+    });
+
+    it('during the delivery-CEP wait, records the image then registers an unresolved attempt instead of running menu-selection', async () => {
+      const conversation = {
+        id: 'c1',
+        phone: '5521999999999',
+        status: 'bot_active',
+        invalidAttempts: 0,
+        awaitingDeliveryReply: true,
+      };
+      prisma.conversation.findFirst.mockResolvedValue(conversation);
+
+      await service.handleIncomingMessage(
+        imageMessagePayload('5521999999999', { caption: 'aqui ó' }),
+      );
+
+      expect(prisma.message.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ kind: 'image', body: 'aqui ó' }),
+      });
+      expect(deliveryCheck.registerUnresolvedAttempt).toHaveBeenCalledWith(
+        conversation,
+      );
+      // DeliveryCheckService.handleReply records its own message as text —
+      // it must not also run here, since the image is already recorded.
+      expect(deliveryCheck.handleReply).not.toHaveBeenCalled();
+      expect(whatsapp.sendInteractiveList).not.toHaveBeenCalled();
+    });
+
+    it('a download that fails definitively (unsupported type/too large) gets the same invalid-content treatment as other unreadable media', async () => {
+      whatsapp.downloadMedia.mockResolvedValue({
+        ok: false,
+        reason: 'too-large',
+      });
+      const conversation = {
+        id: 'c1',
+        phone: '5521999999999',
+        status: 'bot_active',
+        invalidAttempts: 0,
+        awaitingDeliveryReply: false,
+      };
+      prisma.conversation.findFirst.mockResolvedValue(conversation);
+
+      await service.handleIncomingMessage(imageMessagePayload('5521999999999'));
+
+      expect(mediaStorage.put).not.toHaveBeenCalled();
+      expect(prisma.message.create).toHaveBeenCalledWith({
+        data: {
+          conversationId: 'c1',
+          direction: 'inbound',
+          kind: 'invalid_content',
+          body: '[Conteúdo inválido]',
+        },
+      });
+      expect(whatsapp.sendText).toHaveBeenCalledWith(
+        '5521999999999',
+        'Esse tipo de mensagem não é válido por aqui!',
+      );
+    });
+
+    it('a download that fails during the delivery-CEP wait is treated as invalid content, not as the CEP reply', async () => {
+      whatsapp.downloadMedia.mockResolvedValue({
+        ok: false,
+        reason: 'unsupported-type',
+      });
+      const conversation = {
+        id: 'c1',
+        phone: '5521999999999',
+        status: 'bot_active',
+        invalidAttempts: 0,
+        awaitingDeliveryReply: true,
+      };
+      prisma.conversation.findFirst.mockResolvedValue(conversation);
+
+      await service.handleIncomingMessage(imageMessagePayload('5521999999999'));
+
+      expect(deliveryCheck.registerUnresolvedAttempt).not.toHaveBeenCalled();
+      expect(deliveryCheck.handleReply).not.toHaveBeenCalled();
+      expect(prisma.message.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ kind: 'invalid_content' }),
+      });
+    });
+
+    it('a transient download failure (network/5xx/timeout) is not swallowed — it releases the wamid claim so Meta redelivery gets a fresh attempt', async () => {
+      whatsapp.downloadMedia.mockRejectedValue(new Error('ECONNRESET'));
+      const conversation = {
+        id: 'c1',
+        phone: '5521999999999',
+        status: 'bot_active',
+        invalidAttempts: 0,
+        awaitingDeliveryReply: false,
+      };
+      prisma.conversation.findFirst.mockResolvedValue(conversation);
+
+      await expect(
+        service.handleIncomingMessage(
+          imageMessagePayload('5521999999999', { wamid: 'wamid.guarded' }),
+        ),
+      ).rejects.toThrow('ECONNRESET');
+
+      expect(mediaStorage.put).not.toHaveBeenCalled();
+      expect(prisma.message.create).not.toHaveBeenCalled();
+      expect(prisma.processedWebhookMessage.delete).toHaveBeenCalledWith({
+        where: { whatsappMessageId: 'wamid.guarded' },
+      });
+    });
+
+    it('above the 8 GB storage cap, skips the Meta download entirely and answers with invalid content instead', async () => {
+      botSettings.get.mockResolvedValue({
+        botEnabled: true,
+        mediaReceivedMessage: 'Esse tipo de mensagem não é válido por aqui!',
+        mediaBytesUsed: 8n * 1024n * 1024n * 1024n,
+      });
+      const conversation = {
+        id: 'c1',
+        phone: '5521999999999',
+        status: 'bot_active',
+        invalidAttempts: 0,
+        awaitingDeliveryReply: false,
+      };
+      prisma.conversation.findFirst.mockResolvedValue(conversation);
+
+      await service.handleIncomingMessage(imageMessagePayload('5521999999999'));
+
+      expect(whatsapp.downloadMedia).not.toHaveBeenCalled();
+      expect(mediaStorage.put).not.toHaveBeenCalled();
+      expect(prisma.message.create).toHaveBeenCalledWith({
+        data: {
+          conversationId: 'c1',
+          direction: 'inbound',
+          kind: 'invalid_content',
+          body: '[Conteúdo inválido]',
+        },
+      });
+      expect(whatsapp.sendText).toHaveBeenCalledWith(
+        '5521999999999',
+        'Esse tipo de mensagem não é válido por aqui!',
+      );
+    });
+
+    it('just under the cap, still downloads and records normally', async () => {
+      botSettings.get.mockResolvedValue({
+        botEnabled: true,
+        mediaReceivedMessage: 'Esse tipo de mensagem não é válido por aqui!',
+        mediaBytesUsed: 8n * 1024n * 1024n * 1024n - 1n,
+      });
+      const conversation = {
+        id: 'c1',
+        phone: '5521999999999',
+        status: 'bot_active',
+        invalidAttempts: 0,
+        awaitingDeliveryReply: false,
+      };
+      prisma.conversation.findFirst.mockResolvedValue(conversation);
+
+      await service.handleIncomingMessage(imageMessagePayload('5521999999999'));
+
+      expect(whatsapp.downloadMedia).toHaveBeenCalled();
+      expect(mediaStorage.put).toHaveBeenCalled();
+    });
+
+    it('at the per-conversation daily cap, skips the download and answers with invalid content', async () => {
+      prisma.message.count.mockResolvedValue(20);
+      const conversation = {
+        id: 'c1',
+        phone: '5521999999999',
+        status: 'bot_active',
+        invalidAttempts: 0,
+        awaitingDeliveryReply: false,
+      };
+      prisma.conversation.findFirst.mockResolvedValue(conversation);
+
+      await service.handleIncomingMessage(imageMessagePayload('5521999999999'));
+
+      expect(prisma.message.count).toHaveBeenCalledWith({
+        where: {
+          conversationId: 'c1',
+          kind: 'image',
+          direction: 'inbound',
+          createdAt: { gte: expect.any(Date) },
+        },
+      });
+      expect(whatsapp.downloadMedia).not.toHaveBeenCalled();
+      expect(mediaStorage.put).not.toHaveBeenCalled();
+      expect(prisma.message.create).toHaveBeenCalledWith({
+        data: {
+          conversationId: 'c1',
+          direction: 'inbound',
+          kind: 'invalid_content',
+          body: '[Conteúdo inválido]',
+        },
+      });
+    });
+
+    it('just under the per-conversation cap, still downloads normally', async () => {
+      prisma.message.count.mockResolvedValue(19);
+      const conversation = {
+        id: 'c1',
+        phone: '5521999999999',
+        status: 'bot_active',
+        invalidAttempts: 0,
+        awaitingDeliveryReply: false,
+      };
+      prisma.conversation.findFirst.mockResolvedValue(conversation);
+
+      await service.handleIncomingMessage(imageMessagePayload('5521999999999'));
+
+      expect(whatsapp.downloadMedia).toHaveBeenCalled();
+    });
+
+    it('the per-conversation count does not leak across conversations', async () => {
+      prisma.message.count.mockResolvedValue(0);
+      const conversation = {
+        id: 'c2',
+        phone: '5521988888888',
+        status: 'bot_active',
+        invalidAttempts: 0,
+        awaitingDeliveryReply: false,
+      };
+      prisma.conversation.findFirst.mockResolvedValue(conversation);
+
+      await service.handleIncomingMessage(imageMessagePayload('5521988888888'));
+
+      expect(prisma.message.count).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ conversationId: 'c2' }),
+        }),
+      );
+    });
+  });
+
   describe('propagating the wamid and quoted-message metadata to recordInbound', () => {
     // Citing a message is pure metadata (Task 5): it must reach every
     // recordInbound call site unchanged, without altering how the bot
@@ -1668,8 +2025,8 @@ describe('BotEngineService', () => {
                     {
                       id: 'wamid.777',
                       from: '5521999999999',
-                      type: 'image',
-                      image: { id: 'media123' },
+                      type: 'audio',
+                      audio: { id: 'media123' },
                       context: { id: 'wamid.parent3' },
                     },
                   ],
@@ -1688,6 +2045,43 @@ describe('BotEngineService', () => {
       );
     });
 
+    it('a successfully downloaded image carries its wamid, repliedToWamid, and media columns into recordInbound', async () => {
+      prisma.conversation.findFirst.mockResolvedValue(conversation);
+      const recordInboundSpy = jest.spyOn(messenger, 'recordInbound');
+
+      await service.handleIncomingMessage({
+        entry: [
+          {
+            changes: [
+              {
+                value: {
+                  messages: [
+                    {
+                      id: 'wamid.666',
+                      from: '5521999999999',
+                      type: 'image',
+                      image: { id: 'media123', caption: 'olha só' },
+                      context: { id: 'wamid.parent4' },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      });
+
+      expect(recordInboundSpy).toHaveBeenCalledWith('c1', 'olha só', 'image', {
+        whatsappMessageId: 'wamid.666',
+        repliedToWamid: 'wamid.parent4',
+        mediaKey: expect.stringMatching(
+          /^conversations\/c1\/[0-9a-f-]{36}\.jpg$/,
+        ),
+        mediaMimeType: 'image/jpeg',
+        mediaSizeBytes: 17,
+      });
+    });
+
     it('a message with no context (not a reply) reaches recordInbound with repliedToWamid undefined, without breaking', async () => {
       prisma.conversation.findFirst.mockResolvedValue(conversation);
       const recordInboundSpy = jest.spyOn(messenger, 'recordInbound');
@@ -1702,6 +2096,59 @@ describe('BotEngineService', () => {
         undefined,
         { whatsappMessageId: undefined, repliedToWamid: undefined },
       );
+    });
+  });
+
+  // A pergunta que ainda decide o desenho é se o ida-e-volta cabe no webhook,
+  // e sem isto uma foto real chega, funciona e não deixa medição nenhuma.
+  describe('instrumentação do caminho da imagem', () => {
+    it('logs how long Meta and R2 each took, and how big the photo was', async () => {
+      const log = jest
+        .spyOn(Logger.prototype, 'log')
+        .mockImplementation(() => undefined);
+      prisma.conversation.findFirst.mockResolvedValue({
+        id: 'c1',
+        phone: '5521999999999',
+        status: 'bot_active',
+        invalidAttempts: 0,
+        awaitingDeliveryReply: false,
+      });
+
+      await service.handleIncomingMessage(imageMessagePayload('5521999999999'));
+
+      const line = log.mock.calls.map(([first]) => String(first)).join('\n');
+      // Os dois tempos separados: somados não dizem qual lado é o gargalo.
+      expect(line).toMatch(/download=\d+ms/);
+      expect(line).toMatch(/upload=\d+ms/);
+      // O tamanho vem do que `downloadMedia` devolveu, não de um número solto.
+      expect(line).toContain('bytes=17');
+      expect(line).toContain('type=image/jpeg');
+      log.mockRestore();
+    });
+
+    it('keeps the log free of anything that identifies the customer', async () => {
+      const log = jest
+        .spyOn(Logger.prototype, 'log')
+        .mockImplementation(() => undefined);
+      prisma.conversation.findFirst.mockResolvedValue({
+        id: 'c1',
+        phone: '5521999999999',
+        status: 'bot_active',
+        invalidAttempts: 0,
+        awaitingDeliveryReply: false,
+      });
+
+      await service.handleIncomingMessage(
+        imageMessagePayload('5521999999999', { caption: 'meu comprovante' }),
+      );
+
+      // Log de plataforma é lido por quem não precisa ver conteúdo de cliente:
+      // nem telefone, nem legenda, nem a chave do arquivo no bucket.
+      const line = log.mock.calls.map(([first]) => String(first)).join('\n');
+      expect(line).not.toContain('5521999999999');
+      expect(line).not.toContain('meu comprovante');
+      expect(line).not.toContain('conversations/c1/');
+      log.mockRestore();
     });
   });
 });

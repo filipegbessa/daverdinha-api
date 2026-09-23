@@ -14,7 +14,11 @@ export interface IncomingMessage {
   /** Meta's own `wamid`, globally unique — used to dedupe webhook retries. */
   id?: string;
   from: string;
-  type: string;
+  /**
+   * Opcional porque o webhook não garante o campo — e os dois lugares que o
+   * leem (`=== 'order'` e `isUnsupportedContent`) já tratam a ausência.
+   */
+  type?: string;
   text?: { body: string };
   interactive?: { list_reply?: { id: string; title?: string } };
   order?: { catalog_id?: string; product_items?: OrderProductItem[] };
@@ -29,10 +33,48 @@ export interface IncomingMessage {
    * the wamid of the message being replied to.
    */
   repliedToWamid?: string;
+  /**
+   * The webhook never carries the photo itself — only an id that still has to
+   * be exchanged for the file, in two authenticated calls, within five
+   * minutes. See `WhatsAppClientService.downloadMedia`.
+   *
+   * `caption` deliberately stays here instead of being folded into `text`:
+   * it's content to show the operator, never a command to the bot, and
+   * keeping the two fields apart is what enforces that.
+   */
+  image?: {
+    id: string;
+    mime_type?: string;
+    sha256?: string;
+    caption?: string;
+  };
+}
+
+/**
+ * O envelope da Meta, só até onde a gente lê. Descrever esta forma é o que
+ * permite desembrulhar a mensagem sem espalhar acesso não verificado: tudo é
+ * opcional de propósito, porque nada aqui é garantido pelo webhook.
+ */
+interface RawWebhookPayload {
+  entry?: {
+    changes?: {
+      value?: {
+        messages?: (Partial<
+          Omit<IncomingMessage, 'referredProductId' | 'repliedToWamid'>
+        > & {
+          context?: {
+            id?: string;
+            referred_product?: { product_retailer_id?: string };
+          };
+        })[];
+      };
+    }[];
+  }[];
 }
 
 export function parseIncomingMessage(payload: unknown): IncomingMessage | null {
-  const raw = (payload as any)?.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
+  const raw = (payload as RawWebhookPayload)?.entry?.[0]?.changes?.[0]?.value
+    ?.messages?.[0];
   if (!raw || typeof raw.from !== 'string') return null;
 
   return {
@@ -44,5 +86,6 @@ export function parseIncomingMessage(payload: unknown): IncomingMessage | null {
     order: raw.order,
     referredProductId: raw.context?.referred_product?.product_retailer_id,
     repliedToWamid: raw.context?.id,
+    image: raw.image,
   };
 }

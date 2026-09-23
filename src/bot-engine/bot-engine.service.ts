@@ -1,10 +1,14 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { WhatsAppClientService } from '../whatsapp/whatsapp-client.service';
 import { ConversationMessengerService } from '../messaging/conversation-messenger.service';
 import { BotSettingsService } from '../bot-settings/bot-settings.service';
 import { MenuItemsService } from '../menu-items/menu-items.service';
 import { DeliveryCheckService } from './delivery-check.service';
+import {
+  MediaStorageService,
+  buildMediaKey,
+} from '../media/media-storage.service';
 import { normalizeText } from '../common/normalize-text';
 import {
   parseIncomingMessage,
@@ -17,21 +21,44 @@ const MENU_PROMPT = 'Como posso te ajudar hoje?';
 const MENU_BUTTON = 'Ver opções';
 const STALE_HANDOFF_MS = 30 * 24 * 60 * 60 * 1000;
 
+/**
+ * Teto de armazenamento de mídia (Tarefa 11), 2 GB abaixo dos 10 GB
+ * gratuitos do R2 — folga para o excedente de checar-antes-de-agir (o
+ * total só é conferido antes do download, nunca durante) e para o custo
+ * ficar perto de zero mesmo passando um pouco do teto.
+ */
+const MEDIA_STORAGE_CAP_BYTES = 8n * 1024n * 1024n * 1024n;
+
+/**
+ * Teto por conversa (Tarefa 11, item opcional do plano): sem ele, uma única
+ * conversa poderia consumir sozinha o teto global e desligar o recurso para
+ * todos os outros clientes. Janela móvel de 24h, não dia calendário — um
+ * reset à meia-noite seria fácil de burlar. 20 imagens/dia a 5 MB (o teto de
+ * cada uma) são ~100 MB — folgado para uso legítimo (fotos de produto,
+ * comprovante), e ainda assim uma fração pequena dos 8 GB totais.
+ */
+const MAX_IMAGES_PER_CONVERSATION_PER_DAY = 20;
+const CONVERSATION_IMAGE_WINDOW_MS = 24 * 60 * 60 * 1000;
+
 // Typing "menu" is the customer's escape hatch out of any sub-flow, so it's
 // matched before anything else looks at the text.
 const MENU_KEYWORD = 'menu';
 
 // Persisted as a stand-in for the actual content on any message type the bot
-// can't interpret (image/audio/sticker/video/etc — we never download or store
-// the media itself).
+// can't interpret (audio/sticker/video/document/etc — we never download or
+// store that media). Image is handled separately — see processImageMessage —
+// but a photo the download rejects (bad type, too large) lands here too.
 const INVALID_CONTENT_LABEL = '[Conteúdo inválido]';
 
 /**
- * Anything that is neither plain text nor a tap on the menu. A catalog
- * `order` never reaches this check — it returns earlier, through its own flow.
+ * Anything that is neither plain text, a tap on the menu, nor an image
+ * (which has its own download-and-record path). A catalog `order` never
+ * reaches this check — it returns earlier, through its own flow.
  */
 function isUnsupportedContent(type: string | undefined): boolean {
-  return !!type && type !== 'text' && type !== 'interactive';
+  return (
+    !!type && type !== 'text' && type !== 'interactive' && type !== 'image'
+  );
 }
 
 /** The state a conversation is reset to whenever it returns to the bot. */
@@ -48,6 +75,8 @@ interface HandledMessage {
 
 @Injectable()
 export class BotEngineService {
+  private readonly logger = new Logger(BotEngineService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly whatsapp: WhatsAppClientService,
@@ -55,6 +84,7 @@ export class BotEngineService {
     private readonly botSettings: BotSettingsService,
     private readonly menuItems: MenuItemsService,
     private readonly deliveryCheck: DeliveryCheckService,
+    private readonly mediaStorage: MediaStorageService,
   ) {}
 
   /**
@@ -106,6 +136,13 @@ export class BotEngineService {
       const settings = await this.botSettings.get();
       await this.handleOrderMessage(conversation, settings, message.order);
       return handled;
+    }
+
+    // Image is content, not something the bot can't read — it gets its own
+    // download-and-record path (including the CEP-wait special case) rather
+    // than falling into the generic text/unsupported-content branches below.
+    if (message.type === 'image' && message.image) {
+      return this.processImageMessage(conversation, isNew, message, handled);
     }
 
     const text = message.text?.body;
@@ -174,6 +211,30 @@ export class BotEngineService {
       return handled;
     }
 
+    return this.continueBotFlow(conversation, isNew, message, handled);
+  }
+
+  /**
+   * The shared tail once a message turns out to be neither an order, a menu
+   * reset, a delivery-CEP reply, nor content the bot can't read: hand off
+   * checks, then either start the delivery sub-flow, greet a new customer,
+   * or treat whatever's left as a menu selection. Text/interactive messages
+   * reach this after `processMessage` records them; a successfully
+   * downloaded image reaches it from `processImageMessage`, already
+   * recorded the same way — from here on the two are indistinguishable.
+   */
+  private async continueBotFlow(
+    conversation: {
+      id: string;
+      phone: string;
+      status: string;
+      invalidAttempts: number;
+      updatedAt: Date;
+    },
+    isNew: boolean,
+    message: IncomingMessage,
+    handled: HandledMessage,
+  ): Promise<HandledMessage> {
     if (conversation.status === 'paused_human') {
       // A handoff nobody ever picked up shouldn't strand the customer
       // forever — after a month, hand the conversation back to the bot.
@@ -209,6 +270,130 @@ export class BotEngineService {
       message.interactive?.list_reply?.id,
     );
     return handled;
+  }
+
+  /**
+   * Downloads the photo from Meta, uploads it to R2, and records it as a
+   * normal inbound message with the media columns filled in. A definitive
+   * download failure (bad type, too large) is content the bot can't read,
+   * same as any other unsupported media — it gets the same invalid-content
+   * treatment `isUnsupportedContent` gives audio/video/etc. A transient
+   * failure (network, 5xx, timeout) is not caught here: it propagates to
+   * `handleIncomingMessage`, which releases the wamid claim so Meta's
+   * redelivery is a fresh attempt at the same photo — swallowing it would
+   * lose the photo over a network blip instead.
+   */
+  private async processImageMessage(
+    conversation: {
+      id: string;
+      phone: string;
+      status: string;
+      invalidAttempts: number;
+      awaitingDeliveryReply: boolean;
+      updatedAt: Date;
+    },
+    isNew: boolean,
+    message: IncomingMessage,
+    handled: HandledMessage,
+  ): Promise<HandledMessage> {
+    const image = message.image!;
+    const settings = await this.botSettings.get();
+
+    // Checked before spending anything on the Meta round trip: past the
+    // cap, the acervo simply stops growing — no purge, no exception, the
+    // same invalid-content path a photo the bot can't read already uses.
+    if (settings.mediaBytesUsed >= MEDIA_STORAGE_CAP_BYTES) {
+      await this.handleUnsupportedMessage(
+        conversation,
+        settings,
+        settings.botEnabled,
+        message.id,
+        message.repliedToWamid,
+      );
+      return handled;
+    }
+
+    // Corta o vetor na origem: sem isto, uma única conversa em enxurrada (ou
+    // travada num laço de reenvio) poderia sozinha consumir o teto global e
+    // desligar o recebimento de imagem para todo mundo.
+    const recentImages = await this.prisma.message.count({
+      where: {
+        conversationId: conversation.id,
+        kind: 'image',
+        direction: 'inbound',
+        createdAt: {
+          gte: new Date(Date.now() - CONVERSATION_IMAGE_WINDOW_MS),
+        },
+      },
+    });
+    if (recentImages >= MAX_IMAGES_PER_CONVERSATION_PER_DAY) {
+      await this.handleUnsupportedMessage(
+        conversation,
+        settings,
+        settings.botEnabled,
+        message.id,
+        message.repliedToWamid,
+      );
+      return handled;
+    }
+
+    // Os dois tempos medidos separados, e não o total: o desenho inteiro
+    // depende de o ida-e-volta caber no webhook, e somados eles não dizem
+    // qual dos dois lados é o gargalo. Sem isto, uma foto real chega,
+    // funciona e não deixa medição nenhuma para trás.
+    const startedAt = Date.now();
+    const download = await this.whatsapp.downloadMedia(image.id);
+    const downloadMs = Date.now() - startedAt;
+
+    if (!download.ok) {
+      await this.handleUnsupportedMessage(
+        conversation,
+        settings,
+        settings.botEnabled,
+        message.id,
+        message.repliedToWamid,
+      );
+      return handled;
+    }
+
+    const mediaKey = buildMediaKey(conversation.id, download.mimeType);
+    const uploadStartedAt = Date.now();
+    await this.mediaStorage.put(mediaKey, download.buffer, download.mimeType);
+
+    // Só números e o tipo. Nada de telefone, legenda ou chave do arquivo:
+    // log de plataforma é lido por quem não precisa ver conteúdo de cliente.
+    this.logger.log(
+      `inbound image stored: download=${downloadMs}ms ` +
+        `upload=${Date.now() - uploadStartedAt}ms ` +
+        `bytes=${download.sizeBytes} type=${download.mimeType}`,
+    );
+
+    // The caption is content, never a command — it lands in `body` for the
+    // operator to read, but it plays no part in any decision below. Keeping
+    // it out of the CEP-wait check (which looks at `text`, not the caption)
+    // is what stops a captioned "menu" from restarting the conversation.
+    await this.messenger.recordInbound(
+      conversation.id,
+      image.caption ?? null,
+      'image',
+      {
+        whatsappMessageId: message.id,
+        repliedToWamid: message.repliedToWamid,
+        mediaKey,
+        mediaMimeType: download.mimeType,
+        mediaSizeBytes: download.sizeBytes,
+      },
+    );
+
+    // Same effect as an unreadable CEP today: retry once, then hand off.
+    // DeliveryCheckService.handleReply can't be reused here — it records
+    // the reply itself, as text, and the image is already recorded above.
+    if (conversation.awaitingDeliveryReply) {
+      await this.deliveryCheck.registerUnresolvedAttempt(conversation);
+      return handled;
+    }
+
+    return this.continueBotFlow(conversation, isNew, message, handled);
   }
 
   private resetToBot(conversationId: string) {

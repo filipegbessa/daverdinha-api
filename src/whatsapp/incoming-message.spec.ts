@@ -152,4 +152,79 @@ describe('parseIncomingMessage', () => {
 
     expect(result).toBeNull();
   });
+
+  function imagePayload(image: Record<string, unknown>) {
+    return {
+      entry: [
+        {
+          changes: [
+            {
+              value: {
+                messages: [
+                  {
+                    id: 'wamid_img',
+                    from: '5521999999999',
+                    type: 'image',
+                    image,
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    };
+  }
+
+  it('extracts the image id and metadata, which is all the webhook carries', () => {
+    // A foto não vem no webhook: vem um id que ainda precisa ser trocado pelo
+    // arquivo em duas chamadas autenticadas.
+    const result = parseIncomingMessage(
+      imagePayload({ id: 'media_123', mime_type: 'image/jpeg', sha256: 'abc' }),
+    );
+
+    expect(result?.type).toBe('image');
+    expect(result?.image).toEqual({
+      id: 'media_123',
+      mime_type: 'image/jpeg',
+      sha256: 'abc',
+    });
+  });
+
+  it('extracts the caption, which lives on the image and not on text', () => {
+    const result = parseIncomingMessage(
+      imagePayload({ id: 'media_123', caption: 'segue o comprovante' }),
+    );
+
+    expect(result?.image?.caption).toBe('segue o comprovante');
+    // Decisão 6 do plano: legenda é conteúdo, nunca comando. Mantê-la fora de
+    // `text` é o que impede o bot de tratá-la como resposta de CEP ou como a
+    // palavra "menu".
+    expect(result?.text).toBeUndefined();
+  });
+
+  it('leaves image undefined on a message that has none', () => {
+    const result = parseIncomingMessage({
+      entry: [
+        {
+          changes: [
+            {
+              value: {
+                messages: [
+                  {
+                    id: 'w1',
+                    from: '5521999999999',
+                    type: 'text',
+                    text: { body: 'oi' },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(result?.image).toBeUndefined();
+  });
 });

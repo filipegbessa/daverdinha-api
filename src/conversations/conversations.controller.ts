@@ -9,11 +9,17 @@ import {
   Patch,
   Post,
   Query,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { ClerkAuthGuard } from '../common/auth/clerk-auth.guard';
+import { MAX_MEDIA_BYTES } from '../whatsapp/whatsapp-client.service';
 import { ConversationsService } from './conversations.service';
 import { ReplyDto } from './dto/reply.dto';
+import { ReplyImageDto } from './dto/reply-image.dto';
+import type { UploadedImage } from './conversations.service';
 import { UpdateConversationDto } from './dto/update-conversation.dto';
 import { ListConversationsDto } from './dto/list-conversations.dto';
 import { ListMessagesDto } from './dto/list-messages.dto';
@@ -38,6 +44,19 @@ export class ConversationsController {
     return this.service.listMessages(id, query);
   }
 
+  /**
+   * Devolve `{ url }`, não os bytes nem um redirect — ver `mediaUrl` no
+   * service para o porquê (resumo: `<img>` não manda header de auth).
+   */
+  @Get(':id/messages/:messageId/media')
+  mediaUrl(
+    @Param('id') id: string,
+    @Param('messageId') messageId: string,
+    @Query('download') download?: string,
+  ) {
+    return this.service.mediaUrl(id, messageId, { download: download === '1' });
+  }
+
   @Patch(':id')
   updateName(@Param('id') id: string, @Body() dto: UpdateConversationDto) {
     return this.service.updateName(id, dto.name);
@@ -46,6 +65,29 @@ export class ConversationsController {
   @Post(':id/reply')
   reply(@Param('id') id: string, @Body() dto: ReplyDto) {
     return this.service.reply(id, dto.text, dto.replyToMessageId);
+  }
+
+  /**
+   * Multipart: o arquivo no campo `file`, legenda e citação como campos de
+   * texto. Tipo e tamanho são conferidos no service, junto da regra de status
+   * — mas o teto de tamanho também tem que estar aqui: sem `limits.fileSize`,
+   * o Multer bufferiza o arquivo inteiro em memória antes do service ter
+   * chance de rejeitar, e um upload de centenas de MB pode esgotar a memória
+   * da função. O Multer corta a leitura ao cruzar o teto.
+   */
+  @Post(':id/reply-image')
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: MAX_MEDIA_BYTES } }),
+  )
+  replyImage(
+    @Param('id') id: string,
+    @UploadedFile() file: UploadedImage,
+    @Body() dto: ReplyImageDto,
+  ) {
+    return this.service.replyImage(id, file, {
+      caption: dto.caption,
+      replyToMessageId: dto.replyToMessageId,
+    });
   }
 
   @Post(':id/reactivate')

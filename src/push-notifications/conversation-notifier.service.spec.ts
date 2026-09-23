@@ -72,6 +72,39 @@ describe('ConversationNotifierService', () => {
     );
   });
 
+  it('labels a photo, since an image with no caption has no body to show', async () => {
+    prisma.conversation.findUnique.mockResolvedValue({
+      id: 'c1',
+      name: 'Maria',
+      phone: '5521999999999',
+      status: 'paused_human',
+      messages: [{ kind: 'image', body: null }],
+    });
+
+    await service.notifyNewInboundMessage('c1');
+
+    expect(pushNotifications.notifyNewMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ messagePreview: '📷 Foto' }),
+    );
+  });
+
+  it('shows the caption alongside the photo marker when there is one', async () => {
+    prisma.conversation.findUnique.mockResolvedValue({
+      id: 'c1',
+      name: 'Maria',
+      phone: '5521999999999',
+      status: 'paused_human',
+      messages: [{ kind: 'image', body: 'segue o comprovante' }],
+    });
+
+    await service.notifyNewInboundMessage('c1');
+
+    // O marcador diz o que chegou; a legenda diz o que o cliente escreveu.
+    expect(pushNotifications.notifyNewMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ messagePreview: '📷 segue o comprovante' }),
+    );
+  });
+
   it('labels a catalog order instead of showing its empty body', async () => {
     prisma.conversation.findUnique.mockResolvedValue({
       id: 'c1',

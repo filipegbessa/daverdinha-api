@@ -2,6 +2,10 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { MessageKind } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { WhatsAppClientService } from '../whatsapp/whatsapp-client.service';
+import {
+  MediaStorageService,
+  buildMediaKey,
+} from '../media/media-storage.service';
 
 interface Recipient {
   id: string;
@@ -25,7 +29,71 @@ export class ConversationMessengerService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly whatsapp: WhatsAppClientService,
+    private readonly mediaStorage: MediaStorageService,
   ) {}
+
+  /**
+   * Manda uma imagem ao cliente e a registra no histórico.
+   *
+   * O arquivo vai para **dois** destinos de propósito: a Meta, porque a API
+   * não aceita bytes na mensagem e exige um id; e o R2, porque o id da Meta
+   * expira em 30 dias e o histórico do operador não pode expirar junto.
+   *
+   * Os três passos — subir na Meta, mandar a mensagem, subir no R2 — são
+   * sequenciais, não paralelos, e nessa ordem de propósito: mandar é o passo
+   * que falha por cota ou pela janela de 24 horas, e é o mais provável de
+   * falhar dos três. Subir no R2 *antes* de saber se o envio deu certo
+   * deixaria um arquivo órfão no bucket — sem mensagem nenhuma apontando
+   * para ele, e fora da contagem de `mediaBytesUsed`, que só soma dentro de
+   * `persist()`. Nada é gravado — nem no R2, nem no banco — antes do envio
+   * dar certo.
+   */
+  async sendImage(
+    conversation: Recipient,
+    file: { buffer: Buffer; mimeType: string },
+    options?: { caption?: string; replyToMessageId?: string },
+  ) {
+    // A citação é validada antes de gastar upload: mesma regra do `sendText`.
+    let repliedToWamid: string | undefined;
+    if (options?.replyToMessageId) {
+      const target = await this.prisma.message.findUnique({
+        where: {
+          id: options.replyToMessageId,
+          conversationId: conversation.id,
+        },
+      });
+      if (!target?.whatsappMessageId) {
+        throw new BadRequestException(
+          'Não é possível responder citando esta mensagem.',
+        );
+      }
+      repliedToWamid = target.whatsappMessageId;
+    }
+
+    const mediaId = await this.whatsapp.uploadMedia(file.buffer, file.mimeType);
+
+    const { whatsappMessageId } = await this.whatsapp.sendImage(
+      conversation.phone,
+      mediaId,
+      options?.caption,
+      repliedToWamid ? { replyToWamid: repliedToWamid } : undefined,
+    );
+
+    const mediaKey = buildMediaKey(conversation.id, file.mimeType);
+    await this.mediaStorage.put(mediaKey, file.buffer, file.mimeType);
+
+    return this.persist(conversation.id, {
+      direction: 'outbound',
+      kind: 'image',
+      body: options?.caption ?? null,
+      whatsappMessageId,
+      repliedToId: options?.replyToMessageId,
+      repliedToWamid,
+      mediaKey,
+      mediaMimeType: file.mimeType,
+      mediaSizeBytes: file.buffer.byteLength,
+    });
+  }
 
   /**
    * Sends a plain text reply and records it in the transcript.
@@ -124,7 +192,13 @@ export class ConversationMessengerService {
     conversationId: string,
     body: string | null,
     kind: MessageKind = 'text',
-    options?: { whatsappMessageId?: string; repliedToWamid?: string },
+    options?: {
+      whatsappMessageId?: string;
+      repliedToWamid?: string;
+      mediaKey?: string;
+      mediaMimeType?: string;
+      mediaSizeBytes?: number;
+    },
   ) {
     let repliedToId: string | undefined;
     if (options?.repliedToWamid) {
@@ -141,6 +215,9 @@ export class ConversationMessengerService {
       whatsappMessageId: options?.whatsappMessageId,
       repliedToWamid: options?.repliedToWamid,
       repliedToId,
+      mediaKey: options?.mediaKey,
+      mediaMimeType: options?.mediaMimeType,
+      mediaSizeBytes: options?.mediaSizeBytes,
     });
   }
 
@@ -162,14 +239,31 @@ export class ConversationMessengerService {
       whatsappMessageId?: string;
       repliedToWamid?: string;
       repliedToId?: string;
+      mediaKey?: string;
+      mediaMimeType?: string;
+      mediaSizeBytes?: number;
     },
   ) {
+    // Summed here, in the same transaction as the message it describes, so
+    // the running total can never drift from what actually got written —
+    // it's what lets the Tarefa 11 cap be checked live instead of trusting
+    // a number a separate write could leave stale.
     const [created] = await this.prisma.$transaction([
       this.prisma.message.create({ data: { conversationId, ...message } }),
       this.prisma.conversation.update({
         where: { id: conversationId },
         data: { unread: message.direction === 'inbound' },
       }),
+      ...(message.mediaSizeBytes
+        ? [
+            this.prisma.botSettings.update({
+              where: { id: 1 },
+              data: {
+                mediaBytesUsed: { increment: message.mediaSizeBytes },
+              },
+            }),
+          ]
+        : []),
     ]);
     return created;
   }
