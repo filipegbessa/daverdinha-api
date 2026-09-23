@@ -1,7 +1,11 @@
 # Recebimento, exibição e compartilhamento de imagens — plano de implementação
 
-> **Status:** plano, nada implementado. Escrito em 2026-09-22, decisões do dono
-> do projeto incorporadas em 2026-09-22.
+> **Status:** em implementação. Escrito em 2026-09-22, decisões incorporadas no
+> mesmo dia, **Tarefas 1 a 3 implementadas em 2026-09-23**. As três estão como
+> alteração pendente, sem commit.
+>
+> **Parado na Tarefa 4** — bloqueada por pré-requisitos que não são de código
+> (ver "Pré-requisitos" abaixo).
 
 **Objetivo:** receber a imagem que o cliente manda pelo WhatsApp como mais uma
 mensagem da conversa, guardá-la de forma durável, exibi-la no histórico do
@@ -12,6 +16,19 @@ ou perto disso.
 **Hoje:** imagem cai no bucket de conteúdo inválido (`kind: invalid_content`,
 corpo `[Conteúdo inválido]`) e o bot responde *"Esse tipo de mensagem não é
 válido por aqui!"*. A imagem nunca é baixada.
+
+## Pré-requisitos que travam o resto
+
+Três coisas precisam existir antes da Tarefa 4, e nenhuma delas é código:
+
+| # | O quê | Comando / onde |
+|---|---|---|
+| 1 | **Postgres de pé** para regenerar a migration única. O `schema.prisma` da Tarefa 1 já está editado e o client gerado, mas a migration não foi refeita. | `docker compose up -d && npx prisma migrate dev` |
+| 2 | **SDK do R2 instalado.** Sem ele não há como assinar requisição (implementar SigV4 à mão seria pior em todos os aspectos). | `npm i @aws-sdk/client-s3 @aws-sdk/s3-request-presigner` |
+| 3 | **Bucket e credenciais** criados no console da Cloudflare — é a Tarefa 10. | Console |
+
+A medição que decide o desenho da Tarefa 4 (download + upload cabem dentro do
+webhook?) depende das três.
 
 ## Decisões já tomadas
 
@@ -103,16 +120,33 @@ grátis e o da Vercel não.
   no `schema.prisma`, apague a pasta existente e regenere uma só.
 - Testes ficam ao lado do arquivo testado, dentro de `src/` (`rootDir: 'src'`).
 
+### O que mudou no projeto depois que este plano foi escrito
+
+O plano `2026-09-22-reply-to-message.md` já está no `main`, e ele move o chão
+debaixo de algumas destas tarefas:
+
+- `Message` ganhou `whatsappMessageId`, `repliedToWamid` e `repliedToId`.
+- `ConversationMessengerService.recordInbound` agora é
+  `(conversationId, body, kind, options?: { whatsappMessageId?, repliedToWamid? })`
+  — a Tarefa 5 escreve por aí, e as colunas de mídia entram nesse mesmo
+  `options`, não num caminho paralelo.
+- `persist()` continua sendo o **único** lugar que grava mensagem, e já roda em
+  transação. É lá que o contador da Tarefa 11 tem que somar: mesmo write,
+  mesma transação, sem chance de divergir.
+- `sendText` aceita `options?: { replyToMessageId? }`, que é o que a Tarefa 12
+  espelha em `sendImage`.
+
 ---
 
 ## Tarefas
 
-### Tarefa 1 — Schema
+### Tarefa 1 — Schema ✅ *(parcial — falta a migration)*
 
-- [ ] Adicionar `image` ao enum `MessageKind` (hoje `text | invalid_content | order`).
-- [ ] Adicionar em `Message` colunas anuláveis: `mediaKey` (chave no bucket),
-      `mediaMimeType`, `mediaSizeBytes`.
-- [ ] Regenerar a migration única.
+- [x] `image` no enum `MessageKind`.
+- [x] Colunas anuláveis em `Message`: `mediaKey`, `mediaMimeType`,
+      `mediaSizeBytes`. Client do Prisma gerado.
+- [ ] ⚠️ **Regenerar a migration única** — depende do pré-requisito 1. Enquanto
+      não rodar, o código compila mas o banco não tem as colunas.
 
 Sem coluna própria para legenda: `image.caption` do webhook chega e é
 gravado em `body`, o mesmo campo que qualquer mensagem de texto já usa — é
@@ -122,27 +156,42 @@ do frontend.
 Colunas em `Message` em vez de tabela nova: é sempre 1:1 com a mensagem, e a
 leitura da thread não ganha um `join`.
 
-### Tarefa 2 — Parser do webhook
+### Tarefa 2 — Parser do webhook ✅
 
-- [ ] `parseIncomingMessage` (`src/whatsapp/incoming-message.ts`) hoje **não
-      extrai mídia nenhuma**. Adicionar `image?: { id, mime_type, sha256, caption }`
-      à interface `IncomingMessage` e ao mapeamento.
-- [ ] A legenda vem em `image.caption`, **não** em `text.body`. Ela é guardada e
+- [x] `parseIncomingMessage` extrai `image?: { id, mime_type, sha256, caption }`.
+- [x] `IncomingMessage.type` virou opcional no caminho: o webhook não garante o
+      campo, e os dois lugares que o leem (`=== 'order'` e
+      `isUnsupportedContent`) já tratavam a ausência.
+- [x] O envelope da Meta passou a ser tipado em vez de `any`, o que zerou os 19
+      problemas de lint que o arquivo carregava.
+- [x] A legenda vem em `image.caption`, **não** em `text.body`. Ela é guardada e
       exibida (decisão 6), mas **não** entra no cálculo de `text` em
       `bot-engine.service.ts:111` — é esse detalhe que mantém a legenda fora das
       decisões do bot. Manter os dois campos separados é o que implementa a
       regra "conteúdo, não comando"; bastaria juntá-los para quebrá-la sem
       querer.
 
-### Tarefa 3 — Cliente de mídia
+### Tarefa 3 — Cliente de mídia ✅
 
-- [ ] `WhatsAppClientService.downloadMedia(mediaId)`: `GET /v20.0/{id}` → pega
-      `url` → baixa com `Bearer`. Devolve `{ buffer, mimeType, sizeBytes }`.
-- [ ] **Prazo obrigatório nas duas chamadas** (`AbortSignal.timeout`), pelo mesmo
-      motivo que o `CepLookupService` ganhou o dele: chamada externa sem prazo
-      dentro do webhook segura a requisição até o teto de 30s da Vercel.
-- [ ] Guardrails: teto de tamanho (a Meta já limita imagem a 5 MB) e allowlist
-      de mime (`image/jpeg`, `image/png`, `image/webp`).
+- [x] `WhatsAppClientService.downloadMedia(mediaId)`, nas duas etapas
+      autenticadas.
+- [x] Prazo nas duas chamadas: **4s** nos metadados, **10s** no download. Somam
+      14s, dentro do `maxDuration` de 30s e com folga para o resto do webhook.
+- [x] Tipo e tamanho conferidos **nos metadados, antes de baixar os bytes** —
+      não há por que trazer 5 MB para descartar em seguida.
+
+#### O contrato que a Tarefa 5 tem que honrar
+
+Não estava no plano original e é o ponto mais importante desta tarefa. O retorno
+é uma união discriminada, porque os dois tipos de falha pedem reações opostas:
+
+| Falha | Retorno | Por quê |
+|---|---|---|
+| Tipo não suportado, arquivo grande demais | `{ ok: false, reason }` | Definitivo. Tentar de novo dá o mesmo — o chamador grava conteúdo inválido. |
+| Rede, 5xx, prazo estourado | **estoura** | O erro sobe ao webhook, devolve a reivindicação do wamid, e a reentrega da Meta vira outra chance. |
+
+Engolir a falha transitória num `ok: false` perderia a foto do cliente por um
+soluço de rede. É o contrário do que parece defensivo.
 
 ### Tarefa 4 — Armazenamento (⚠️ a decisão de risco)
 
@@ -168,10 +217,13 @@ baixar no primeiro acesso do admin — só funciona dentro da janela de 7 dias, 
 
 - [ ] Tirar `image` de `isUnsupportedContent` (`bot-engine.service.ts`). Áudio,
       vídeo, figurinha e documento continuam como conteúdo inválido.
-- [ ] Gravar como `kind: 'image'`, com a legenda do cliente no `body` quando
-      houver.
-- [ ] Se o download falhar depois dos retries, gravar como `invalid_content`
-      para não perder o registro de que algo chegou.
+- [ ] Gravar via `recordInbound(conversationId, caption ?? null, 'image', {...})`
+      — a legenda vai no `body`, e as colunas de mídia entram no mesmo `options`
+      que já leva `whatsappMessageId` e `repliedToWamid`. Nada de caminho
+      paralelo: `persist()` continua sendo o único lugar que grava mensagem.
+- [ ] Tratar o retorno de `downloadMedia` conforme o contrato da Tarefa 3:
+      `{ ok: false }` vira `invalid_content`; erro **não** é capturado aqui,
+      sobe para o webhook devolver a reivindicação do wamid.
 
 **Imagem durante a espera do CEP** (decisão 6). `isDeliveryReply` exige `!!text`
 (`bot-engine.service.ts:117`), e a legenda não conta como texto — então a
@@ -301,6 +353,13 @@ mensagem, então é onde o número não tem como divergir.
       comparação contra o teto, e o admin consegue avisar de forma graduada
       ("7,2 GB de 8 GB") em vez de o operador descobrir quando as fotos já
       pararam de chegar.
+- [ ] ⚠️ **O total tem que ser `BigInt`.** `mediaSizeBytes` por mensagem cabe
+      num `Int` (teto de 5 MB), mas o acumulado não: 8 GB são 8,6 bilhões, e o
+      `Int` do Postgres para em 2,1 bilhões. Um `Int` aqui estoura silenciosamente
+      em ~2 GB e o teto nunca dispara.
+- [ ] Somar dentro de `persist()` (`conversation-messenger.service.ts`), que já
+      é o único gravador de mensagem e já roda em transação — é o que impede o
+      contador de divergir do que foi realmente gravado.
 - [ ] Teto de **8 GB**, deixando 2 GB dos 10 GB gratuitos como folga.
 - [ ] O fluxo da Tarefa 5 lê esse número **antes** de baixar da Meta. Acima do
       teto: nem baixa, nem sobe — segue direto o caminho de conteúdo inválido.
@@ -433,14 +492,22 @@ existe aqui, então vale dizer onde cada coisa é verificável sem rede:
 
 ## Ordem sugerida
 
-1. **Tarefas 1, 2, 3, 4, 10, e o contador da 11** — a imagem chega, fica
-   guardada e o teto já é respeitado. Nada aparece ainda, mas para de se perder,
-   que é o prejuízo que está correndo hoje.
-2. **Tarefas 5, 7, 9** — a imagem aparece no histórico e na notificação. É aqui
-   que o operador sente a mudança.
+**Feito:** Tarefas 1 (sem a migration), 2 e 3.
+
+**Próximo passo, e é o único que não depende de pré-requisito:** a **Tarefa 5**.
+Ela é a lógica mais delicada do plano — imagem durante a espera do CEP, a regra
+da legenda, o contrato de falha da Tarefa 3 — e o plano já previa testá-la
+contra storage mockado. Dá para escrevê-la inteira antes de o R2 existir.
+
+Depois que os três pré-requisitos estiverem resolvidos:
+
+1. **Tarefas 4 e 10, e o contador da 11** — a imagem fica guardada e o teto já
+   é respeitado. É aqui que a medição do webhook acontece, e é o momento em que
+   o desenho pode mudar.
+2. **Tarefas 7 e 9** — a imagem aparece no histórico e na notificação. É onde o
+   operador sente a mudança.
 3. **Tarefas 6 e 8** — baixar e compartilhar.
-4. **Tarefas 12 e 13** — enviar imagem ao cliente. Depende da 4 (mesmo storage)
-   e da 7 (mesmo componente de exibição).
+4. **Tarefas 12 e 13** — enviar imagem ao cliente.
 5. **O cron da 11** — faxina e conferência.
 
 ⚠️ **A Tarefa 11 não é uma coisa só, e as duas metades não vão juntas.** O
@@ -448,9 +515,6 @@ contador é escrito na mesma transação que grava a mensagem, então ele **nasc
 junto com a Tarefa 4** — deixá-lo para depois significa rodar sem teto nenhum,
 e é o teto que segura o custo. Já o cron (faxina dos 3 anos e conferência) pode
 esperar de verdade: no primeiro ano não há sequer o que apagar.
-
-A **Tarefa 4** entra cedo de propósito por outro motivo: é a única que pode
-derrubar o desenho inteiro, dependendo da medição dentro do webhook.
 
 ## O que este plano deliberadamente não faz
 
