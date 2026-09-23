@@ -323,8 +323,7 @@ origem**. A requisição sairia sem Authorization e o guard responderia 401.
       só contaria ao cliente o que existe.
 - [x] A URL continua **fora do payload da thread**: expira em 5 min e a thread
       fica em cache no cliente.
-- [ ] Tratar a expiração no admin: `onError` no `<img>` refaz a busca. Fica
-      com a Tarefa 7.
+- [x] Expiração tratada na Tarefa 7: `onError` refaz a busca uma vez.
 
 ### Tarefa 7 — Admin: exibir ✅
 
