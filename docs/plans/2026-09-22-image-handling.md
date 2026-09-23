@@ -186,6 +186,13 @@ leitura da thread não ganha um `join`.
       14s, dentro do `maxDuration` de 30s e com folga para o resto do webhook.
 - [x] Tipo e tamanho conferidos **nos metadados, antes de baixar os bytes** —
       não há por que trazer 5 MB para descartar em seguida.
+- [x] ⚠️ **Corrigido em 2026-09-23:** o teto era conferido *só* contra o
+      `file_size` declarado. Esse campo pode vir ausente, e aí `0 > MAX` é
+      falso — o download acontecia **sem limite nenhum**, carregando a resposta
+      inteira em memória dentro do webhook. Agora são três guardas:
+      `file_size` dos metadados, `content-length` da resposta (que evita
+      bufferizar) e `buffer.byteLength` depois (porque `content-length` some em
+      resposta com chunked encoding).
 
 #### O contrato que a Tarefa 5 tem que honrar
 
@@ -297,19 +304,32 @@ já no histórico.
 
 ### Tarefa 6 — API de leitura
 
+⚠️ **Corrigido em 2026-09-23: o desenho anterior (302) não funcionava.** O
+plano dizia "rota com `ClerkAuthGuard` devolvendo redirect 302", com o `<img>`
+da Tarefa 7 apontando para ela. Uma tag `<img src>` **não manda header
+nenhum** — e o admin autentica com `Authorization: Bearer <token do Clerk>`
+montado pelo `apiFetch` (`api-client.ts:12`), contra uma API em **outra
+origem**. A requisição sairia sem Authorization e o guard responderia 401.
+
 - [ ] `GET /conversations/:id/messages/:messageId/media` com `ClerkAuthGuard`,
-      devolvendo redirect 302 para a URL pré-assinada (TTL de minutos).
+      devolvendo **`{ url }` em JSON** — não um 302. Quem busca é o `apiFetch`,
+      que leva o token; a URL assinada devolvida não precisa de auth e vai
+      direto no `src` da imagem.
 - [ ] Parâmetro `?download=1` que gera a URL com
       `response-content-disposition=attachment`, que é o que faz o navegador
       salvar em vez de abrir.
-- [ ] Não embutir a URL assinada no payload da thread: ela expira, e a thread
-      fica em cache no cliente.
+- [ ] A URL continua **fora do payload da thread**: ela expira em 5 minutos e a
+      thread fica em cache no cliente. Busca sob demanda, por imagem.
+- [ ] Tratar a expiração: `onError` no `<img>` refaz a busca. Cinco minutos
+      passam fácil com a aba aberta.
 
 ### Tarefa 7 — Admin: exibir
 
 - [ ] Renderizar `kind === 'image'` em `src/app/admin/conversas/[id]/page.tsx`
-      (o `switch` de bolha por `kind` já existe), com `<img>` apontando para a
-      rota da Tarefa 6, `loading="lazy"` e clique para abrir em tamanho cheio.
+      (o `switch` de bolha por `kind` já existe), com `loading="lazy"` e clique
+      para abrir em tamanho cheio.
+- [ ] O `src` é a **URL assinada** que a Tarefa 6 devolve, buscada via
+      `apiFetch`, e não a rota da API — ver o aviso lá.
 - [ ] **Exibir a legenda junto da imagem** (decisão 6) — ela é conteúdo que o
       cliente escreveu e precisa aparecer, mesmo não valendo como comando.
 - [ ] Adicionar `'image'` ao tipo `MessageKind` em `src/features/admin/types/admin.ts`.
@@ -326,6 +346,9 @@ solução certa.
       o resto**. Cobre os dois pedidos (salvar no aparelho e mandar pro Drive)
       **sem nenhum OAuth, sem token, sem backend**. Fluxo: buscar a URL assinada
       → `fetch` → `blob` → `new File(...)` → `navigator.share`.
+- [ ] ⚠️ **Depende de CORS no bucket** (Tarefa 10). O `fetch` da URL assinada
+      é cross-origin contra o R2; sem CORS ele falha e só o botão "baixar"
+      funciona. É o único item do plano que exige isso.
 - [ ] Guardar atrás de `navigator.canShare({ files })`, porque o suporte a
       arquivos não é universal — Android Chrome e Safari do iOS sim, desktop
       varia, Firefox não.
@@ -366,9 +389,20 @@ Feito em 2026-09-23, pelo painel da Cloudflare.
       `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` — no `.env.example`, no
       `.env` local e no painel da Vercel (`target: production`, tipo
       `sensitive`, mesmo padrão dos demais segredos do projeto).
-- [x] Sem CORS no bucket: nada foi configurado, que é o padrão — o navegador
-      nunca fala com o R2 direto, ele segue o redirect da rota da Tarefa 6
-      para uma URL assinada.
+- [ ] ⚠️ **CORS: a conclusão anterior estava errada e precisa ser refeita.**
+      Estava marcado como resolvido ("nada a configurar, o navegador nunca fala
+      com o R2 direto"), premissa que caiu junto com o redirect 302 da Tarefa 6.
+      O navegador **vai** falar com o R2 direto. Nem todo uso exige CORS:
+
+      | Uso | Precisa de CORS? |
+      |---|---|
+      | `<img src>` apontando pro R2 (Tarefa 7) | Não |
+      | `<a download>` com `response-content-disposition` (Tarefa 8) | Não |
+      | `fetch` → `blob` → `navigator.share` (Tarefa 8) | **Sim** |
+
+      Só o compartilhamento nativo precisa. Configurar CORS no bucket
+      **restrito à origem do admin**, não aberto — e só quando a Tarefa 8
+      chegar, para não liberar antes de ser necessário.
 - [x] `CRON_SECRET` gerado e adicionado ao `.env.example`, `.env` local e
       Vercel — protege a rota de purga da Tarefa 11.
 
