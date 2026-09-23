@@ -176,12 +176,26 @@ export class ConversationMessengerService {
       mediaSizeBytes?: number;
     },
   ) {
+    // Summed here, in the same transaction as the message it describes, so
+    // the running total can never drift from what actually got written —
+    // it's what lets the Tarefa 11 cap be checked live instead of trusting
+    // a number a separate write could leave stale.
     const [created] = await this.prisma.$transaction([
       this.prisma.message.create({ data: { conversationId, ...message } }),
       this.prisma.conversation.update({
         where: { id: conversationId },
         data: { unread: message.direction === 'inbound' },
       }),
+      ...(message.mediaSizeBytes
+        ? [
+            this.prisma.botSettings.update({
+              where: { id: 1 },
+              data: {
+                mediaBytesUsed: { increment: message.mediaSizeBytes },
+              },
+            }),
+          ]
+        : []),
     ]);
     return created;
   }

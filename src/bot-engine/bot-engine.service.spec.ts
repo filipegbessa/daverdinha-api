@@ -159,6 +159,7 @@ describe('BotEngineService', () => {
         findFirst: jest.fn().mockResolvedValue(null),
       },
       order: { create: jest.fn() },
+      botSettings: { update: jest.fn() },
       processedWebhookMessage: {
         create: jest
           .fn()
@@ -193,6 +194,7 @@ describe('BotEngineService', () => {
         mediaReceivedMessage: 'Esse tipo de mensagem não é válido por aqui!',
         orderReceivedMessage:
           'Aceito! Recebemos seu pedido, já vamos confirmar com você.',
+        mediaBytesUsed: 0n,
       }),
     };
     menuItems = { listActive: jest.fn().mockResolvedValue(activeMenu) };
@@ -1801,6 +1803,60 @@ describe('BotEngineService', () => {
       expect(prisma.processedWebhookMessage.delete).toHaveBeenCalledWith({
         where: { whatsappMessageId: 'wamid.guarded' },
       });
+    });
+
+    it('above the 8 GB storage cap, skips the Meta download entirely and answers with invalid content instead', async () => {
+      botSettings.get.mockResolvedValue({
+        botEnabled: true,
+        mediaReceivedMessage: 'Esse tipo de mensagem não é válido por aqui!',
+        mediaBytesUsed: 8n * 1024n * 1024n * 1024n,
+      });
+      const conversation = {
+        id: 'c1',
+        phone: '5521999999999',
+        status: 'bot_active',
+        invalidAttempts: 0,
+        awaitingDeliveryReply: false,
+      };
+      prisma.conversation.findFirst.mockResolvedValue(conversation);
+
+      await service.handleIncomingMessage(imageMessagePayload('5521999999999'));
+
+      expect(whatsapp.downloadMedia).not.toHaveBeenCalled();
+      expect(mediaStorage.put).not.toHaveBeenCalled();
+      expect(prisma.message.create).toHaveBeenCalledWith({
+        data: {
+          conversationId: 'c1',
+          direction: 'inbound',
+          kind: 'invalid_content',
+          body: '[Conteúdo inválido]',
+        },
+      });
+      expect(whatsapp.sendText).toHaveBeenCalledWith(
+        '5521999999999',
+        'Esse tipo de mensagem não é válido por aqui!',
+      );
+    });
+
+    it('just under the cap, still downloads and records normally', async () => {
+      botSettings.get.mockResolvedValue({
+        botEnabled: true,
+        mediaReceivedMessage: 'Esse tipo de mensagem não é válido por aqui!',
+        mediaBytesUsed: 8n * 1024n * 1024n * 1024n - 1n,
+      });
+      const conversation = {
+        id: 'c1',
+        phone: '5521999999999',
+        status: 'bot_active',
+        invalidAttempts: 0,
+        awaitingDeliveryReply: false,
+      };
+      prisma.conversation.findFirst.mockResolvedValue(conversation);
+
+      await service.handleIncomingMessage(imageMessagePayload('5521999999999'));
+
+      expect(whatsapp.downloadMedia).toHaveBeenCalled();
+      expect(mediaStorage.put).toHaveBeenCalled();
     });
   });
 

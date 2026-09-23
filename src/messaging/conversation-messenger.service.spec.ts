@@ -9,6 +9,7 @@ describe('ConversationMessengerService', () => {
   let prisma: {
     message: { create: jest.Mock; findUnique: jest.Mock; findFirst: jest.Mock };
     conversation: { update: jest.Mock };
+    botSettings: { update: jest.Mock };
     $transaction: jest.Mock;
   };
   let whatsapp: { sendText: jest.Mock; sendInteractiveList: jest.Mock };
@@ -23,6 +24,7 @@ describe('ConversationMessengerService', () => {
         findFirst: jest.fn(),
       },
       conversation: { update: jest.fn() },
+      botSettings: { update: jest.fn() },
       $transaction: jest.fn((ops: any[]) => Promise.all(ops)),
     };
     whatsapp = {
@@ -250,6 +252,22 @@ describe('ConversationMessengerService', () => {
           mediaSizeBytes: 123456,
         },
       });
+      // Summed in the same transaction as the message — the Tarefa 11 cap
+      // has no other way to stay accurate.
+      expect(prisma.botSettings.update).toHaveBeenCalledWith({
+        where: { id: 1 },
+        data: { mediaBytesUsed: { increment: 123456 } },
+      });
+    });
+
+    it('without a mediaSizeBytes: does not touch the storage counter', async () => {
+      const created = { id: 'm8', conversationId: 'c1' };
+      prisma.message.create.mockResolvedValue(created);
+      prisma.conversation.update.mockResolvedValue({ id: 'c1' });
+
+      await service.recordInbound('c1', 'oi', 'text');
+
+      expect(prisma.botSettings.update).not.toHaveBeenCalled();
     });
 
     it('with a repliedToWamid that resolves to nothing: still persists the message, without throwing and without repliedToId', async () => {

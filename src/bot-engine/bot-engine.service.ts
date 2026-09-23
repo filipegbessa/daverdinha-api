@@ -21,6 +21,14 @@ const MENU_PROMPT = 'Como posso te ajudar hoje?';
 const MENU_BUTTON = 'Ver opções';
 const STALE_HANDOFF_MS = 30 * 24 * 60 * 60 * 1000;
 
+/**
+ * Teto de armazenamento de mídia (Tarefa 11), 2 GB abaixo dos 10 GB
+ * gratuitos do R2 — folga para o excedente de checar-antes-de-agir (o
+ * total só é conferido antes do download, nunca durante) e para o custo
+ * ficar perto de zero mesmo passando um pouco do teto.
+ */
+const MEDIA_STORAGE_CAP_BYTES = 8n * 1024n * 1024n * 1024n;
+
 // Typing "menu" is the customer's escape hatch out of any sub-flow, so it's
 // matched before anything else looks at the text.
 const MENU_KEYWORD = 'menu';
@@ -276,10 +284,25 @@ export class BotEngineService {
     handled: HandledMessage,
   ): Promise<HandledMessage> {
     const image = message.image!;
+    const settings = await this.botSettings.get();
+
+    // Checked before spending anything on the Meta round trip: past the
+    // cap, the acervo simply stops growing — no purge, no exception, the
+    // same invalid-content path a photo the bot can't read already uses.
+    if (settings.mediaBytesUsed >= MEDIA_STORAGE_CAP_BYTES) {
+      await this.handleUnsupportedMessage(
+        conversation,
+        settings,
+        settings.botEnabled,
+        message.id,
+        message.repliedToWamid,
+      );
+      return handled;
+    }
+
     const download = await this.whatsapp.downloadMedia(image.id);
 
     if (!download.ok) {
-      const settings = await this.botSettings.get();
       await this.handleUnsupportedMessage(
         conversation,
         settings,
