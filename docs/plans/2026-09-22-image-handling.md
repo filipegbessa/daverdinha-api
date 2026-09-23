@@ -363,7 +363,7 @@ que a folha nativa já entrega de graça. Só vale se aparecer necessidade de
 enviar ao Drive **pelo desktop** ou de forma automática, sem clique. Registrado
 aqui como decisão consciente, para não parecer esquecimento.
 
-### Tarefa 9 — Prévia da notificação push
+### Tarefa 9 — Prévia da notificação push ✅
 
 O `ConversationNotifierService` monta o corpo do push a partir da última
 mensagem recebida. Com `kind: 'image'` isso fica errado dos dois lados: hoje o
@@ -371,9 +371,11 @@ operador receberia `[Conteúdo inválido]`, e depois da Tarefa 5 receberia
 `Nova mensagem` sempre que a foto vier sem legenda — o mesmo lugar onde o
 pedido de catálogo já vira "Novo pedido pelo catálogo".
 
-- [ ] Prévia `📷 Foto` para imagem sem legenda, e `📷 <legenda>` quando houver.
-- [ ] A prévia já passa por `truncateBody` (120 caracteres), então legenda longa
+- [x] Prévia `📷 Foto` para imagem sem legenda, e `📷 <legenda>` quando houver.
+- [x] A prévia já passa por `truncateBody` (120 caracteres), então legenda longa
       não precisa de tratamento próprio.
+- [x] A montagem saiu do ternário e virou `buildPreview()`, porque com três
+      casos (pedido, imagem, texto) o encadeado já não dizia mais o que fazia.
 
 ### Tarefa 10 — Configuração do R2 ✅
 
