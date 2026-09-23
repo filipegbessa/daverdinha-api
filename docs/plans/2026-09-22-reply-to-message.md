@@ -1,13 +1,15 @@
 # Responder mensagem citada (reply/quote do WhatsApp) — plano de implementação
 
-> **Status:** plano, nada implementado. Escrito em 2026-09-22.
+> **Status: implementado e em produção.** Escrito e implementado em
+> 2026-09-22 — este cabeçalho nunca foi atualizado depois disso, apesar do
+> mecanismo estar em uso desde então. `whatsappMessageId`/`repliedToWamid`/
+> `repliedToId` existem em `Message`, `WhatsAppClientService.sendText`
+> aceita `context.message_id`, e `ConversationMessengerService` resolve e
+> valida a citação em `sendText`/`recordInbound`.
 >
-> **Ordem:** este plano roda **antes** do plano de imagens
-> (`2026-09-22-image-handling.md`). O mecanismo de citação aqui construído
-> (`context.message_id` no `WhatsAppClientService`) é genérico o bastante
-> para a Tarefa 12/13 daquele plano reaproveitar de graça quando `sendImage`
-> existir — mensagem de imagem também ganha `whatsappMessageId` e também
-> vira citável, sem desenho novo.
+> **Confirmado:** o mecanismo genérico de citação foi de fato reaproveitado
+> pela Tarefa 12/13 do plano de imagens sem desenho novo — `sendImage`
+> aceita `replyToMessageId` do mesmo jeito que `sendText`.
 
 **Objetivo:** quando o cliente usa o recurso nativo do WhatsApp de responder
 citando uma mensagem específica, isso hoje chega solto — sem nenhum vínculo

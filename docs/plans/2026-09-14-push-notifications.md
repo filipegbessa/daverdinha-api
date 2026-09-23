@@ -1,5 +1,12 @@
 # Push Notifications (API) Implementation Plan
 
+> **Status: implementado e em produção.** Os checkboxes abaixo nunca foram
+> marcados durante a implementação, mas `PushNotificationsService` e
+> `ConversationNotifierService` estão no ar — ver `src/push-notifications/`
+> e a seção "Notificações push" do `README.md` (inclusive a prévia
+> `📷 Foto`/`📷 <legenda>` adicionada depois, pelo plano de imagens).
+> Mantido como registro da decisão de design original.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Let the backend send a Web Push notification to the attendant's phone/browser whenever a conversation ends up needing a human, so they don't have to keep the admin open to notice new messages.

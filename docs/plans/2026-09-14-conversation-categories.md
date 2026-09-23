@@ -1,5 +1,11 @@
 # Conversation Categories (API) Implementation Plan
 
+> **Status: implementado e em produção.** Os checkboxes abaixo nunca foram
+> marcados durante a implementação, mas o módulo `categories` (CRUD,
+> anexar/desanexar de conversas, cascade delete) está no ar — ver
+> `src/categories/` e a seção "Categorias" do `README.md`. Mantido como
+> registro da decisão de design original.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Let the attendant tag conversations with one or more categories (e.g. "bingo", "fechou compra"), managed through a full CRUD, with categories deletable even while attached to conversations.

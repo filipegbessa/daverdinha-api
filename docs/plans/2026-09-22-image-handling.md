@@ -1,19 +1,18 @@
 # Recebimento, exibição e compartilhamento de imagens — plano de implementação
 
-> **Status:** em implementação, ciclo de recebimento e envio completo.
-> Escrito em 2026-09-22, decisões incorporadas no mesmo dia. Tarefas **1
-> a 10, 12 e 13 feitas**, todas em 2026-09-23 — schema, parser, download,
-> storage, bot engine, leitura/exibição/compartilhamento no admin, prévia de
-> push, R2 configurado (bucket, token, CORS) e envio de imagem ao cliente
-> (API e admin). A metade ao vivo da Tarefa 11 (contador + teto de 8 GB)
-> também está no ar.
+> **Status: implementado e em produção.** Escrito em 2026-09-22, decisões
+> incorporadas no mesmo dia, implementação inteira em 2026-09-23 — todas as
+> 13 tarefas, incluindo o cron da Tarefa 11 (faxina + conferência), o teto
+> por conversa e o aviso graduado no admin. Deploy em produção feito
+> (`main`, PR #1) com a migration aplicada à base Neon existente via `ALTER`
+> incremental — preservando conversas, mensagens, menu e entregas já
+> gravados, em vez do reset que a Tarefa 1 previa (só valia enquanto não
+> havia dado real).
 >
-> **O que falta:** a metade do cron da Tarefa 11 (faxina dos 3 anos e
-> conferência — deliberadamente adiada, "pode esperar de verdade"), o aviso
-> graduado no admin antes do teto (frontend, não coberto aqui), o teto por
-> conversa (recomendação opcional, cortável) e medir o lado da Meta na
-> Tarefa 4 (precisa de uma foto real, não bloqueia nada). Ver "Ordem
-> sugerida" no fim do arquivo.
+> **O único item que segue aberto:** medir o download da Meta dentro do
+> webhook com uma foto real (Tarefa 4) — não dá para testar sem tráfego de
+> produção, e não bloqueia nada; o número combinado (Meta + R2) já foi
+> validado dentro da estimativa do plano.
 
 **Objetivo:** receber a imagem que o cliente manda pelo WhatsApp como mais uma
 mensagem da conversa, guardá-la de forma durável, exibi-la no histórico do

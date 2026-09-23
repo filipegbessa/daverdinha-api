@@ -13,14 +13,44 @@ Backend do bot de atendimento da Daverdinha (NestJS + Prisma + Postgres).
 
 Os passos 4, 5 e 6 só funcionam com o banco no ar — daí o passo 1 vir primeiro. Em produção esse papel é do Neon; o `docker-compose.yml` existe só pra não precisar instalar Postgres na máquina.
 
-## Deploy (fase de validação — Vercel)
+## Deploy (Vercel)
 
-1. Conectar o repositório no [vercel.com](https://vercel.com).
-2. Configurar as env vars do `.env.example` no dashboard do projeto (usar o `DATABASE_URL` do Neon).
-3. O `vercel.json` já direciona todas as rotas pra `api/index.ts` — não precisa configurar build command especial.
-4. Rodar `npx prisma migrate deploy` apontando pro banco do Neon antes do primeiro deploy.
+1. Repositório conectado em [vercel.com](https://vercel.com).
+2. Env vars do `.env.example` configuradas no dashboard do projeto (`DATABASE_URL` do Neon, mais `R2_*` e `CRON_SECRET` — ver "Imagens" abaixo).
+3. `vercel.json` já direciona todas as rotas pra `api/index.ts` e agenda o cron de retenção de mídia — não precisa configurar build command especial.
 
-O projeto tem uma **única migration** (`20260916124517_init`), que descreve o schema inteiro. Como ainda não há banco de produção no ar, ela é reescrita no lugar quando o schema muda, em vez de acumular migrations incrementais. A partir do primeiro deploy real isso deixa de valer: qualquer mudança de schema passa a exigir uma migration nova, e a ordem entre aplicar a migration e publicar o código volta a importar.
+### ⚠️ Migration única + banco de produção com dado real
+
+O projeto squasha o histórico de migration num único `*_init` (hoje
+`prisma/migrations/20260923181318_init`): a cada mudança de schema, a pasta
+é apagada e regenerada do zero, em vez de acumular migrations incrementais.
+
+**Isso deixou de ser inofensivo.** Há banco de produção no ar (Neon) com
+dado real — conversas, mensagens, menu, entregas. Rodar `prisma migrate
+reset` ou `prisma migrate deploy` direto contra ele, depois de regenerar a
+migration localmente, **apaga tudo**: o nome/checksum da migration muda a
+cada squash, o Prisma não reconhece o que já está aplicado e tenta recriar
+o schema inteiro do zero.
+
+O caminho seguro depois de mudar `schema.prisma`:
+
+1. Gerar só a diferença, sem tocar em produção ainda:
+   ```bash
+   DATABASE_URL="<url de produção>" npx prisma migrate diff \
+     --from-url "<url de produção>" \
+     --to-schema-datamodel prisma/schema.prisma \
+     --script > delta.sql
+   ```
+2. **Ler o `delta.sql` inteiro.** Só deve conter `ALTER TABLE ADD COLUMN`, `ALTER TYPE ADD VALUE` ou equivalente — qualquer `DROP`/`TRUNCATE` é motivo pra parar e reconsiderar a mudança de schema antes de aplicar.
+3. Aplicar o delta revisado:
+   ```bash
+   DATABASE_URL="<url de produção>" npx prisma db execute --file delta.sql
+   ```
+4. Registrar a migration local como aplicada, pra o próximo deploy não tentar recriar as tabelas:
+   ```bash
+   DATABASE_URL="<url de produção>" npx prisma migrate resolve --applied <nome_da_pasta_da_migration>
+   ```
+5. Conferir com `prisma migrate status` — deve dizer "Database schema is up to date!".
 
 Migração futura pra Railway (fase de produção): ver `SPEC.md` → "Stack (decidida)".
 
@@ -31,7 +61,8 @@ Migração futura pra Railway (fase de produção): ver `SPEC.md` → "Stack (de
 
 ## Estrutura
 
-- `src/` — módulos NestJS (`bot-settings`, `menu-items`, `delivery-locations`, `whatsapp`, `bot-engine`, `messaging`, `conversations`, `categories`, `push-notifications`, `prisma`, `common/auth`).
+- `src/` — módulos NestJS (`bot-settings`, `menu-items`, `delivery-locations`, `whatsapp`, `bot-engine`, `messaging`, `conversations`, `categories`, `push-notifications`, `media`, `prisma`, `common/auth`).
+- `src/media/` — `MediaStorageService` (R2), `MediaRetentionService` (faxina + conferência) e a rota de cron que os liga. Ver "Imagens" abaixo.
 - `src/bootstrap.ts` — a configuração de app (body parser, CORS, `ValidationPipe`) compartilhada pelos dois entry points, pra que local e produção não divirjam.
 - `src/messaging/` — `ConversationMessengerService`, o único lugar que manda mensagem pro WhatsApp e grava no histórico. Os dois andam sempre juntos; fazer isso à mão em cada branch era como o histórico ficava com buracos.
 - `api/index.ts` — entry point serverless usado pelo deploy na Vercel (envolve o `AppModule` num handler Express com instância cacheada entre invocações).
@@ -106,8 +137,10 @@ Dá ao admin visão e controle manual sobre as conversas do bot:
 - `GET /conversations/:id/messages?since=` — só o que chegou depois daquele instante. É o que o poll de 5s usa: antes ele rebaixava a thread inteira a cada tique.
   - `since` é **inclusivo**. `created_at` tem resolução de milissegundo e o bot escreve duas mensagens dentro do mesmo (boas-vindas + menu), então um `>` estrito perderia a segunda. A mensagem da borda volta e o cliente descarta pelo `id`.
 - `GET /conversations/:id/messages?before=&limit=` — a página imediatamente anterior, pro scroll pra cima.
+- `GET /conversations/:id/messages/:messageId/media?download=` — URL pré-assinada (5 min) do R2 pra mídia daquela mensagem, em JSON (`{ url }`). `?download=1` força `Content-Disposition: attachment`. Ver "Imagens" abaixo.
 - `PATCH /conversations/:id` — edita o nome do contato (sem pré-condição de status).
 - `POST /conversations/:id/reply` — envia uma mensagem de texto ao cliente via WhatsApp. Só funciona em conversas com status `paused_human`; fora disso retorna `400`.
+- `POST /conversations/:id/reply-image` — multipart (`file` + `caption`/`replyToMessageId` opcionais); mesma regra de status do reply de texto. Ver "Imagens" abaixo.
 - `POST /conversations/:id/pause` — transfere a conversa do bot pro atendimento humano (`bot_active` → `paused_human`). Só funciona em conversas com status `bot_active`; fora disso retorna `400`.
 - `POST /conversations/:id/reactivate` — devolve a conversa pro bot (`paused_human` → `bot_active`), resetando `invalidAttempts` e `awaitingDeliveryReply`. Só funciona em conversas com status `paused_human`; fora disso retorna `400`.
 
@@ -172,10 +205,40 @@ Por isso o filtro é `where: { direction: 'inbound' }`, com `id` desempatando `c
 
 ### Conteúdo inválido é respondido no gatilho do bot, em qualquer status
 
-Mídia (imagem, áudio, vídeo, figurinha, documento, tipo desconhecido) é gravada como `invalid_content` com o rótulo `[Conteúdo inválido]` e respondida com `mediaReceivedMessage` **independente do status da conversa** — mesmo com um humano atendendo. Mesmo princípio que o pedido de catálogo já seguia: a resposta é sobre a mensagem, não sobre quem está tocando a conversa.
+Mídia que o bot não sabe processar (áudio, vídeo, figurinha, documento, tipo desconhecido) é gravada como `invalid_content` com o rótulo `[Conteúdo inválido]` e respondida com `mediaReceivedMessage` **independente do status da conversa** — mesmo com um humano atendendo. Mesmo princípio que o pedido de catálogo já seguia: a resposta é sobre a mensagem, não sobre quem está tocando a conversa.
 
-A checagem fica **acima** do return de `paused_human` de propósito. Abaixo dele, uma foto mandada pra conversa em atendimento humano caía fora sem ser gravada: o histórico do operador ficava com um buraco no lugar da foto, e o push disparado em seguida mostrava a mensagem anterior da thread.
+A checagem fica **acima** do return de `paused_human` de propósito. Abaixo dele, mídia mandada pra conversa em atendimento humano caía fora sem ser gravada: o histórico do operador ficava com um buraco, e o push disparado em seguida mostrava a mensagem anterior da thread.
 
 `botEnabled` continua sendo a chave geral: com ele desligado a mensagem ainda é **gravada** (perder a mensagem é o que deixa buraco no histórico), mas o bot não responde.
 
-Imagem deixou de ser ignorada. Antes ela era excluída de propósito do bucket de conteúdo inválido, "pending a dedicated image flow" — o que, somado ao ponto acima, era justamente o caminho que produzia push de mensagem antiga em conversa `paused_human`.
+**Imagem não passa mais por aqui** — ver "Imagens" abaixo. Ela só cai neste caminho quando o download falha de forma definitiva (tipo não suportado, arquivo grande demais) ou quando um teto de armazenamento é atingido; nesses casos o tratamento é idêntico ao de qualquer outra mídia não suportada.
+
+## Imagens (módulo `media`)
+
+O cliente manda foto pelo WhatsApp, ela vira mensagem comum no histórico (com legenda, se houver), fica guardada no Cloudflare R2, e o operador pode visualizar, baixar, compartilhar e **responder com outra imagem** — tudo isso gastando egress zero (R2 não cobra pra servir o arquivo de volta).
+
+### Recebimento (`BotEngineService.processImageMessage`)
+
+1. Confere o teto global de armazenamento (`BotSettings.mediaBytesUsed`, 8 GB) e o teto por conversa (20 imagens/24h) **antes** de gastar a chamada à Meta. Acima de qualquer um dos dois, cai no mesmo caminho de `invalid_content` acima.
+2. Baixa da Meta em duas etapas autenticadas (`WhatsAppClientService.downloadMedia`), com prazo próprio em cada uma — a Meta reentrega o que não recebe `200` dentro do `maxDuration` da Vercel.
+3. Sobe pro R2 (`MediaStorageService.put`) e grava a mensagem (`kind: 'image'`, legenda em `body`, `mediaKey`/`mediaMimeType`/`mediaSizeBytes`) via `ConversationMessengerService.recordInbound` — o mesmo caminho de gravação de qualquer mensagem, sem atalho paralelo.
+4. A legenda é conteúdo, nunca comando: ela não participa de nenhuma decisão do bot, nem durante a espera de um CEP (onde uma foto conta como tentativa não resolvida, igual a um CEP ilegível).
+
+### Envio (`ConversationMessengerService.sendImage`, `POST /conversations/:id/reply-image`)
+
+Sobe **sequencialmente**, não em paralelo: primeiro pra Meta (`uploadMedia` + `sendImage`, o passo mais provável de falhar — cota, janela de 24h fechada), só depois pro R2. Fazer na ordem inversa deixaria um arquivo órfão no bucket sempre que o envio falhasse depois do upload. Nada é gravado — nem no R2, nem no banco — antes do envio à Meta dar certo.
+
+### Armazenamento e teto (`MediaStorageService`, `BotSettings.mediaBytesUsed`)
+
+- `MediaStorageService` fala com o R2 via `@aws-sdk/client-s3` (protocolo S3, o que torna o egress grátis). Chave sem nada adivinhável: `conversations/{conversationId}/{uuid}.{ext}`. Bucket privado — o admin acessa via URL pré-assinada de 5 minutos (`GET /conversations/:id/messages/:messageId/media`, que devolve `{ url }` em JSON, não um redirect, porque uma tag `<img>` não manda header de `Authorization`).
+- O uso total é somado **na mesma transação** que grava a mensagem (`ConversationMessengerService.persist`) — não há como esse número divergir do que foi realmente gravado. Teto de 8 GB (2 GB de folga dos 10 GB grátis do R2); acima dele, o sistema **para de salvar** em vez de apagar algo pra abrir espaço.
+- Teto por conversa (20 imagens/24h, janela móvel) impede uma única conversa de consumir sozinha o teto global.
+
+### Retenção (`MediaRetentionService`, `GET /cron/media-retention`)
+
+Cron diário (`vercel.json`, `CronSecretGuard` protegendo a rota — a Vercel manda `Authorization: Bearer $CRON_SECRET`) que faz o que pode esperar um dia:
+
+- **Faxina:** apaga do R2 o arquivo de toda imagem com mais de 3 anos. A mensagem permanece no histórico — só `mediaKey`/`mediaMimeType`/`mediaSizeBytes` viram `null`. Ordem por arquivo: R2 primeiro, banco depois (uma falha no meio deixa a próxima execução tentar de novo; apagar do R2 é idempotente).
+- **Conferência:** recalcula `SUM(media_size_bytes)` real e corrige `mediaBytesUsed`, caso ele tenha saído do lugar.
+
+Nenhuma exclusão acontece por capacidade — só por idade. Encher o acervo bloqueia recebimento de foto nova, nunca apaga histórico antes da hora.
