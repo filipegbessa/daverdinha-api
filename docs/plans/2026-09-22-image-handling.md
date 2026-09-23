@@ -428,7 +428,7 @@ Como a Vercel roda em rede própria, não há motivo para esperar o mesmo
 problema em produção, e nada no código de produção foi alterado por causa
 disso.
 
-### Tarefa 11 — Limite de armazenamento e faxina
+### Tarefa 11 — Limite de armazenamento e faxina ✅ *(backend completo; aviso no admin é frontend, pendente)*
 
 **Uma regra só apaga: idade.** Passou de 3 anos, sai. Encher o acervo não apaga
 nada — quando o uso cruza o teto, o sistema **para de salvar** e volta ao
@@ -489,17 +489,22 @@ de item de menu" mencionado aqui) — isso é trabalho de frontend, fora do que
 foi tocado nesta sessão (só `daverdinha-api`). Sem esse aviso, o operador só
 percebe o teto quando as fotos começarem a parar de chegar.
 
-#### Teto por conversa
+#### Teto por conversa ✅
 
 **Recomendação minha, não decisão sua — corte se achar demais.** O contador
 protege o total, mas não impede que **uma única conversa** consuma os 8 GB e
-desligue o recurso para todos os outros clientes.
+desligue o recurso para todos os outros clientes. Implementado em
+2026-09-23: aceito, não cortado.
 
-- [ ] Teto de imagens aceitas por conversa por dia; acima dele, caminho de
-      conteúdo inválido. É um `count` barato sobre `messages`, e corta o vetor
-      na origem em vez de depender do teto global.
+- [x] Teto de **20 imagens por conversa em janela móvel de 24h** (não dia
+      calendário — resetar à meia-noite seria fácil de burlar), em
+      `processImageMessage` (`bot-engine.service.ts`), logo após o teto
+      global. Acima dele, mesmo caminho de conteúdo inválido. É um `count`
+      barato sobre `messages`, e corta o vetor na origem em vez de depender
+      do teto global. 20/dia a 5 MB cada são ~100 MB — folgado para uso
+      legítimo, pequeno fração dos 8 GB totais.
 
-#### O cron: faxina e conferência
+#### O cron: faxina e conferência ✅
 
 Na Vercel, cron **não é processo em segundo plano** — é a Vercel chamando uma
 URL da própria API no horário marcado. Como é só uma URL, qualquer um pode
@@ -510,30 +515,44 @@ dentro da hora. Isso deixou de ser limitação: o que era urgente (bloquear ao
 encher) virou instantâneo com o contador, e sobrou para o cron só o que pode
 esperar.
 
-- [ ] **Faxina:** apagar o que passou de 3 anos. Um dia a mais num arquivo de
-      três anos não muda nada.
-- [ ] **Conferência:** recalcular o `SUM(media_size_bytes)` real e corrigir o
-      contador, que pode sair do lugar por exclusão manual ou gravação
-      interrompida.
-- [ ] ⚠️ **Proteger a rota.** A Vercel envia `Authorization: Bearer $CRON_SECRET`
-      quando a variável existe. Verificar é obrigatório: sem isso, a rota que
-      apaga imagens fica aberta.
-- [ ] **Lotear a exclusão.** O `maxDuration` do `vercel.json` é 30s e vale aqui
-      também. Apagar por lote com orçamento de tempo, deixando o resto para a
-      execução seguinte.
-- [ ] Escolher horário de baixo movimento (madrugada), lembrando que o Hobby
-      garante a hora, não o minuto.
+Implementado em 2026-09-23.
 
-**Ordem dentro do job: apagar → reconciliar → gravar o contador.** Reconciliar
-antes de apagar grava um número que a própria execução vai invalidar.
+- [x] **Faxina:** `MediaRetentionService.purgeExpired()` apaga o arquivo de
+      toda imagem com mais de 3 anos. Um dia a mais num arquivo de três anos
+      não muda nada.
+- [x] **Conferência:** `MediaRetentionService.reconcileUsage()` recalcula
+      `SUM(media_size_bytes)` real (só sobre mensagens com `mediaKey`
+      presente — arquivo purgado não entra na soma) e grava direto em
+      `BotSettings.mediaBytesUsed`, corrigindo o que a exclusão manual ou
+      uma gravação interrompida deixarem desalinhado.
+- [x] ⚠️ **Rota protegida.** `CronSecretGuard`
+      (`src/common/auth/cron-secret.guard.ts`) compara
+      `Authorization: Bearer` com `CRON_SECRET` via `timingSafeEqual`, e
+      recusa se a variável não estiver configurada — a rota nunca abre por
+      omissão. Testado ao vivo contra o servidor local: sem token e com
+      token errado devolvem 401; com o `CRON_SECRET` certo, roda.
+- [x] **Loteado.** `purgeExpired()` busca em lotes de 50 e para dentro de um
+      orçamento de 20s (o `maxDuration` do `vercel.json` é 30s) — uma
+      faxina atrasada de meses não estoura o tempo, só faz o que cabe e
+      deixa o resto para a execução seguinte.
+- [x] Horário de baixo movimento: `vercel.json` agenda `0 7 * * *` (7h UTC =
+      4h BRT), lembrando que o Hobby garante a hora, não o minuto.
+
+**Ordem dentro do job: apagar → reconciliar → gravar o contador.**
+`MediaRetentionController` chama `purgeExpired()` e só depois
+`reconcileUsage()` — reconciliar antes gravaria um número que a própria
+purga desta execução ia invalidar.
 
 **Ordem da exclusão de cada arquivo: R2 primeiro, `mediaKey` depois.** Se o R2
-falhar, a linha ainda aponta e a próxima execução tenta de novo; se o banco
-falhar depois de um R2 bem-sucedido, o delete se repete e é idempotente. A ordem
-inversa deixaria `mediaKey` apontando para arquivo inexistente.
+falhar, a linha ainda aponta e a próxima execução tenta de novo (testado: uma
+falha do R2 não toca o banco); se o banco falhar depois de um R2 bem-sucedido,
+o delete se repete e é idempotente. A ordem inversa deixaria `mediaKey`
+apontando para arquivo inexistente.
 
-- [ ] A mensagem **permanece** no histórico, marcada como imagem expirada — some
-      o arquivo, não o registro de que o cliente mandou algo.
+- [x] A mensagem **permanece** no histórico, marcada como imagem expirada —
+      `mediaKey`, `mediaMimeType` e `mediaSizeBytes` viram `null`, mas
+      `kind` continua `'image'`. Some o arquivo, não o registro de que o
+      cliente mandou algo.
 
 Se um dia a frequência diária apertar, há duas saídas sem custo: o Cron Trigger
 de Workers da Cloudflare (conta que já vai existir por causa do R2) ou um
