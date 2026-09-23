@@ -26,7 +26,9 @@ describe('ConversationMessengerService', () => {
       $transaction: jest.fn((ops: any[]) => Promise.all(ops)),
     };
     whatsapp = {
-      sendText: jest.fn().mockResolvedValue({ whatsappMessageId: 'wamid.OUT1' }),
+      sendText: jest
+        .fn()
+        .mockResolvedValue({ whatsappMessageId: 'wamid.OUT1' }),
       sendInteractiveList: jest
         .fn()
         .mockResolvedValue({ whatsappMessageId: 'wamid.OUT1' }),
@@ -218,6 +220,34 @@ describe('ConversationMessengerService', () => {
           whatsappMessageId: 'wamid.IN-NEW',
           repliedToWamid: 'wamid.IN-ORIGINAL',
           repliedToId: 'm-original',
+        },
+      });
+    });
+
+    it('with media columns: persists mediaKey, mediaMimeType, and mediaSizeBytes alongside the message', async () => {
+      const created = { id: 'm7', conversationId: 'c1' };
+      prisma.message.create.mockResolvedValue(created);
+      prisma.conversation.update.mockResolvedValue({ id: 'c1' });
+
+      await service.recordInbound('c1', 'olha essa foto', 'image', {
+        whatsappMessageId: 'wamid.IN-IMG',
+        mediaKey: 'conversations/c1/uuid.jpg',
+        mediaMimeType: 'image/jpeg',
+        mediaSizeBytes: 123456,
+      });
+
+      expect(prisma.message.create).toHaveBeenCalledWith({
+        data: {
+          conversationId: 'c1',
+          direction: 'inbound',
+          kind: 'image',
+          body: 'olha essa foto',
+          whatsappMessageId: 'wamid.IN-IMG',
+          repliedToWamid: undefined,
+          repliedToId: undefined,
+          mediaKey: 'conversations/c1/uuid.jpg',
+          mediaMimeType: 'image/jpeg',
+          mediaSizeBytes: 123456,
         },
       });
     });

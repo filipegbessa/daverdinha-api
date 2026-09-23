@@ -124,7 +124,13 @@ export class ConversationMessengerService {
     conversationId: string,
     body: string | null,
     kind: MessageKind = 'text',
-    options?: { whatsappMessageId?: string; repliedToWamid?: string },
+    options?: {
+      whatsappMessageId?: string;
+      repliedToWamid?: string;
+      mediaKey?: string;
+      mediaMimeType?: string;
+      mediaSizeBytes?: number;
+    },
   ) {
     let repliedToId: string | undefined;
     if (options?.repliedToWamid) {
@@ -141,6 +147,9 @@ export class ConversationMessengerService {
       whatsappMessageId: options?.whatsappMessageId,
       repliedToWamid: options?.repliedToWamid,
       repliedToId,
+      mediaKey: options?.mediaKey,
+      mediaMimeType: options?.mediaMimeType,
+      mediaSizeBytes: options?.mediaSizeBytes,
     });
   }
 
@@ -162,6 +171,9 @@ export class ConversationMessengerService {
       whatsappMessageId?: string;
       repliedToWamid?: string;
       repliedToId?: string;
+      mediaKey?: string;
+      mediaMimeType?: string;
+      mediaSizeBytes?: number;
     },
   ) {
     const [created] = await this.prisma.$transaction([
