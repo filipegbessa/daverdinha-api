@@ -199,6 +199,51 @@ describe('WhatsAppClientService', () => {
       expect(fetchMock).toHaveBeenCalledTimes(1);
     });
 
+    // Regressão: o teto era conferido só contra o `file_size` que a Meta
+    // declara. Sem esse campo, `0 > 5MB` é falso e o download acontecia sem
+    // limite nenhum — carregando a resposta inteira em memória, dentro do
+    // webhook.
+    it('rejects an oversized body when the metadata declared no size', async () => {
+      const huge = Buffer.alloc(6 * 1024 * 1024);
+      fetchMock.mockReset();
+      fetchMock
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ url: 'https://x/y', mime_type: 'image/jpeg' }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          headers: { get: () => null },
+          arrayBuffer: async () =>
+            huge.buffer.slice(huge.byteOffset, huge.byteOffset + huge.byteLength),
+        });
+
+      const result = await service.downloadMedia('media_123');
+
+      expect(result).toEqual({ ok: false, reason: 'too-large' });
+    });
+
+    it('trusts Content-Length to bail out before buffering the body', async () => {
+      const arrayBuffer = jest.fn();
+      fetchMock.mockReset();
+      fetchMock
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ url: 'https://x/y', mime_type: 'image/jpeg' }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          headers: { get: () => String(6 * 1024 * 1024) },
+          arrayBuffer,
+        });
+
+      const result = await service.downloadMedia('media_123');
+
+      expect(result).toEqual({ ok: false, reason: 'too-large' });
+      // O ponto é não trazer 6 MB para memória só para descartar.
+      expect(arrayBuffer).not.toHaveBeenCalled();
+    });
+
     // A distinção que importa: falha de validação é definitiva e vira
     // conteúdo inválido; falha transitória tem que estourar, porque o erro
     // devolve a reivindicação do wamid e a reentrega da Meta é outra chance.

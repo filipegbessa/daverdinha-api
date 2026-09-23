@@ -157,7 +157,21 @@ export class WhatsAppClientService {
       );
     }
 
+    // O teto é conferido três vezes, e não por excesso de zelo: o `file_size`
+    // dos metadados **pode vir ausente**, e aí sozinho ele não barra nada
+    // (`0 > MAX` é falso). Sem esta segunda e terceira conferência, uma
+    // resposta grande entrava inteira em memória, dentro do webhook.
+    const declaredLength = Number(fileResponse.headers?.get('content-length'));
+    if (declaredLength > MAX_MEDIA_BYTES) {
+      return { ok: false, reason: 'too-large' };
+    }
+
     const buffer = Buffer.from(await fileResponse.arrayBuffer());
+    // Último guarda: `content-length` some em resposta com chunked encoding.
+    if (buffer.byteLength > MAX_MEDIA_BYTES) {
+      return { ok: false, reason: 'too-large' };
+    }
+
     // O `file_size` dos metadados é o que a Meta diz; este é o que chegou.
     // Guardamos o segundo, porque é ele que ocupa espaço no bucket.
     return { ok: true, buffer, mimeType, sizeBytes: buffer.byteLength };
