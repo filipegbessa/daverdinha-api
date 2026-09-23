@@ -111,4 +111,122 @@ describe('WhatsAppClientService', () => {
       'bad request',
     );
   });
+
+  describe('downloadMedia()', () => {
+    /** Passo 1 devolve metadados + a url; passo 2 devolve os bytes. */
+    function mockTwoStep(
+      meta: Record<string, unknown>,
+      bytes = Buffer.from('fake-jpeg'),
+    ) {
+      fetchMock.mockReset();
+      fetchMock
+        .mockResolvedValueOnce({ ok: true, json: async () => meta })
+        .mockResolvedValueOnce({
+          ok: true,
+          arrayBuffer: async () =>
+            bytes.buffer.slice(
+              bytes.byteOffset,
+              bytes.byteOffset + bytes.byteLength,
+            ),
+        });
+    }
+
+    it('trades the id for the file in two authenticated calls', async () => {
+      mockTwoStep({
+        url: 'https://lookaside.fbsbx.com/whatsapp/abc',
+        mime_type: 'image/jpeg',
+        file_size: 9,
+      });
+
+      const result = await service.downloadMedia('media_123');
+
+      expect(fetchMock).toHaveBeenNthCalledWith(
+        1,
+        'https://graph.facebook.com/v20.0/media_123',
+        expect.objectContaining({
+          headers: { Authorization: 'Bearer test-token' },
+        }),
+      );
+      // A url do passo 2 não é pública: precisa do Bearer de novo.
+      expect(fetchMock).toHaveBeenNthCalledWith(
+        2,
+        'https://lookaside.fbsbx.com/whatsapp/abc',
+        expect.objectContaining({
+          headers: { Authorization: 'Bearer test-token' },
+        }),
+      );
+      expect(result).toMatchObject({
+        ok: true,
+        mimeType: 'image/jpeg',
+        sizeBytes: 9,
+      });
+    });
+
+    it('puts a deadline on both calls, so a hung Meta cannot hold the webhook', async () => {
+      mockTwoStep({ url: 'https://x/y', mime_type: 'image/png', file_size: 9 });
+
+      await service.downloadMedia('media_123');
+
+      for (const call of fetchMock.mock.calls) {
+        expect(call[1].signal).toBeInstanceOf(AbortSignal);
+      }
+    });
+
+    it('rejects an unsupported type from the metadata, without downloading it', async () => {
+      mockTwoStep({
+        url: 'https://x/y',
+        mime_type: 'image/tiff',
+        file_size: 10,
+      });
+
+      const result = await service.downloadMedia('media_123');
+
+      expect(result).toEqual({ ok: false, reason: 'unsupported-type' });
+      // Só o passo 1 rodou: não faz sentido baixar o que será descartado.
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('rejects an oversized file from the metadata, without downloading it', async () => {
+      mockTwoStep({
+        url: 'https://x/y',
+        mime_type: 'image/jpeg',
+        file_size: 6 * 1024 * 1024,
+      });
+
+      const result = await service.downloadMedia('media_123');
+
+      expect(result).toEqual({ ok: false, reason: 'too-large' });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    // A distinção que importa: falha de validação é definitiva e vira
+    // conteúdo inválido; falha transitória tem que estourar, porque o erro
+    // devolve a reivindicação do wamid e a reentrega da Meta é outra chance.
+    it('throws on a transient failure instead of discarding the photo', async () => {
+      fetchMock.mockReset();
+      fetchMock.mockResolvedValueOnce({
+        ok: false,
+        status: 503,
+        json: async () => ({}),
+      });
+
+      await expect(service.downloadMedia('media_123')).rejects.toThrow();
+    });
+
+    it('throws when the download of the bytes fails', async () => {
+      fetchMock.mockReset();
+      fetchMock
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            url: 'https://x/y',
+            mime_type: 'image/jpeg',
+            file_size: 9,
+          }),
+        })
+        .mockResolvedValueOnce({ ok: false, status: 500 });
+
+      await expect(service.downloadMedia('media_123')).rejects.toThrow();
+    });
+  });
 });

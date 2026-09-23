@@ -114,6 +114,7 @@ enum MessageKind {
   text
   invalid_content
   order
+  image
 }
 
 model Message {
@@ -124,6 +125,15 @@ model Message {
   kind               MessageKind      @default(text)
   body               String?
   order              Order?
+  /// Chave do arquivo no bucket. Nulo em mensagem sem mídia, e também na que
+  /// já teve a mídia expurgada pela retenção — o registro de que o cliente
+  /// mandou algo continua, o arquivo não.
+  mediaKey           String?          @map("media_key")
+  mediaMimeType      String?          @map("media_mime_type")
+  /// Alimenta o total em uso, que é somado na mesma transação que grava a
+  /// mensagem. É esse número que faz o teto de armazenamento ser imediato em
+  /// vez de depender do cron diário.
+  mediaSizeBytes     Int?             @map("media_size_bytes")
   whatsappMessageId  String?          @unique @map("whatsapp_message_id")
   repliedToWamid     String?          @map("replied_to_wamid")
   repliedToId        String?          @map("replied_to_id")
