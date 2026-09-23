@@ -2,12 +2,13 @@
 
 > **Status:** em implementação. Escrito em 2026-09-22, decisões incorporadas no
 > mesmo dia, **Tarefas 1 a 3 commitadas em 2026-09-23** (`f284fb7b`). Migration
-> regenerada e **Tarefa 4 (código) implementada em 2026-09-23**.
+> regenerada, **Tarefa 4 (código) e Tarefa 10 implementadas em 2026-09-23**.
 >
-> **Parado depois da Tarefa 4** — falta só o pré-requisito 3 (bucket e
-> credenciais reais no console da Cloudflare, Tarefa 10) para medir download +
-> upload dentro do webhook de verdade. Sem isso a Tarefa 5 não tem como decidir
-> entre síncrono e fila (ver Tarefa 4).
+> **Todos os pré-requisitos resolvidos.** O que falta agora é a medição real
+> da Tarefa 4 (download da Meta + upload no R2 dentro do webhook), travada não
+> mais por infraestrutura faltando, mas por uma falha de handshake TLS ao
+> falar com `*.r2.cloudflarestorage.com` a partir desta máquina — ver a nota
+> no fim da Tarefa 10.
 
 **Objetivo:** receber a imagem que o cliente manda pelo WhatsApp como mais uma
 mensagem da conversa, guardá-la de forma durável, exibi-la no histórico do
@@ -27,12 +28,13 @@ Três coisas precisam existir antes da Tarefa 4, e nenhuma delas é código:
 |---|---|---|
 | 1 | **Postgres de pé** para regenerar a migration única. | ✅ Resolvido em 2026-09-23 — migration `20260923164240_init` regenerada e aplicada, banco local com `image`, `media_key`, `media_mime_type`, `media_size_bytes`. |
 | 2 | **SDK do R2 instalado.** Sem ele não há como assinar requisição (implementar SigV4 à mão seria pior em todos os aspectos). | ✅ Resolvido em 2026-09-23 — `@aws-sdk/client-s3` e `@aws-sdk/s3-request-presigner` instalados. |
-| 3 | **Bucket e credenciais** criados no console da Cloudflare — é a Tarefa 10. | ⚠️ **Ainda pendente.** Ação fora do repositório, no console da Cloudflare — não é algo que dá para fazer por aqui. |
+| 3 | **Bucket e credenciais** criados no console da Cloudflare — é a Tarefa 10. | ✅ Resolvido em 2026-09-23 — bucket privado `daverdinha-media`, token escopado, variáveis no `.env`/`.env.example`/Vercel. |
 
 A medição que decide o desenho da Tarefa 4 (download + upload cabem dentro do
-webhook?) depende das três — as duas primeiras já não bloqueiam mais, mas a
-medição de verdade só acontece com bucket real, então segue parada até o
-pré-requisito 3.
+webhook?) depende das três, e as três agora existem. O que falta não é mais
+pré-requisito — é conseguir falar com o R2 a partir de algum lugar que não
+bloqueie `*.r2.cloudflarestorage.com` na camada de TLS (ver a nota no fim da
+Tarefa 10).
 
 ## Decisões já tomadas
 
@@ -216,11 +218,13 @@ soluço de rede. É o contrário do que parece defensivo.
 - [ ] ⚠️ **`MediaStorageModule` não está importado em `AppModule`.** De
       propósito: ninguém consome o serviço ainda — isso é trabalho da Tarefa
       5. Ligar o módulo antes disso registraria um provider sem consumidor.
-- [ ] ⚠️ **Medição pendente.** Sem bucket real (pré-requisito 3, Tarefa 10) não
-      dá para medir download da Meta + upload no R2 dentro do webhook. A
-      implementação está pronta para a medição assim que o bucket existir —
-      ela não depende de mudança de código, só de rodar contra o R2 de
-      verdade.
+- [ ] ⚠️ **Medição pendente.** O bucket e as credenciais já existem
+      (Tarefa 10), mas desta máquina `put`/`signedUrl` contra o R2 real
+      falham no handshake TLS ao conectar em
+      `*.r2.cloudflarestorage.com` — não é um problema de conta, bucket ou
+      código (ver a nota no fim da Tarefa 10). A implementação está pronta
+      para a medição assim que rodar de um lugar que alcance esse domínio —
+      não depende de mudança de código.
 
 **Medir antes de fechar:** baixar da Meta + subir no R2 dentro do webhook, com
 uma foto de ~400 KB. Estimativa de 300 ms a 1,5 s, mas é número para medir, não
@@ -332,19 +336,36 @@ pedido de catálogo já vira "Novo pedido pelo catálogo".
 - [ ] A prévia já passa por `truncateBody` (120 caracteres), então legenda longa
       não precisa de tratamento próprio.
 
-### Tarefa 10 — Configuração do R2
+### Tarefa 10 — Configuração do R2 ✅
 
 Mecânico, mas é o que faz o resto rodar, e não estava escrito em lugar nenhum.
+Feito em 2026-09-23, pelo painel da Cloudflare.
 
-- [ ] Criar o bucket, **privado** (a Tarefa 4 depende disso).
-- [ ] Token de API do R2 com escopo só nesse bucket, não na conta inteira.
-- [ ] Variáveis novas: endpoint da conta, bucket, access key id e secret.
-      Acrescentar ao `.env.example` **e** ao painel da Vercel — o `.env` não é
-      versionado, então quem só olha o repositório não descobre sozinho.
-- [ ] Sem CORS no bucket: o navegador nunca fala com o R2 direto, ele segue o
-      redirect da rota da Tarefa 6 para uma URL assinada.
-- [ ] `CRON_SECRET` também entra aqui — é o que protege a rota de purga da
-      Tarefa 11, e sem ela a rota que apaga imagens fica aberta.
+- [x] Bucket **privado** `daverdinha-media` criado (a Tarefa 4 depende
+      disso). "By default buckets are not publicly accessible" — confirmado
+      na própria tela de criação, nada a configurar além do padrão.
+- [x] Token de API do R2 com escopo só nesse bucket (`daverdinha-media`),
+      permissão Object Read & Write, não na conta inteira.
+- [x] Variáveis novas — endpoint da conta (`R2_ACCOUNT_ID`), `R2_BUCKET`,
+      `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` — no `.env.example`, no
+      `.env` local e no painel da Vercel (`target: production`, tipo
+      `sensitive`, mesmo padrão dos demais segredos do projeto).
+- [x] Sem CORS no bucket: nada foi configurado, que é o padrão — o navegador
+      nunca fala com o R2 direto, ele segue o redirect da rota da Tarefa 6
+      para uma URL assinada.
+- [x] `CRON_SECRET` gerado e adicionado ao `.env.example`, `.env` local e
+      Vercel — protege a rota de purga da Tarefa 11.
+
+⚠️ **Pendência nova, fora do escopo desta tarefa:** desta máquina, chamadas a
+`*.r2.cloudflarestorage.com` (a API S3 do R2) falham no handshake TLS
+(`sslv3 alert handshake failure`) mesmo com um hostname arbitrário nesse
+domínio — `*.r2.dev` (domínio público do R2) e `s3.amazonaws.com` respondem
+normalmente pela mesma rede, então não é problema de DNS nem de conta.
+Cheira a alguma filtragem de rede local (proxy/DLP/firewall) bloqueando esse
+domínio específico, não a uma configuração errada no bucket ou no token. A
+`MediaStorageService` está implementada e testada contra mock; falta
+confirmar a conectividade real a partir de onde o código vai rodar de
+verdade (Vercel) ou de uma rede sem esse bloqueio.
 
 ### Tarefa 11 — Limite de armazenamento e faxina
 
@@ -515,26 +536,28 @@ existe aqui, então vale dizer onde cada coisa é verificável sem rede:
 
 ## Ordem sugerida
 
-**Feito:** Tarefas 1, 2, 3 e 4 (código; falta só a medição contra R2 real).
+**Feito:** Tarefas 1, 2, 3, 4 (código) e 10. Todos os pré-requisitos de
+infraestrutura estão resolvidos.
 
-**Próximo passo, e é o único que não depende do pré-requisito 3:** a **Tarefa
-5**. Ela é a lógica mais delicada do plano — imagem durante a espera do CEP, a
-regra da legenda, o contrato de falha da Tarefa 3 — e o plano já previa
-testá-la contra storage mockado (o `MediaStorageService` já existe para isso).
-Dá para escrevê-la inteira antes de o R2 existir; só não dá para fechar a
-decisão síncrono-vs-fila sem a medição real.
+**Próximo passo:** a **Tarefa 5**. Ela é a lógica mais delicada do plano —
+imagem durante a espera do CEP, a regra da legenda, o contrato de falha da
+Tarefa 3 — e o plano já previa testá-la contra storage mockado (o
+`MediaStorageService` já existe para isso). Dá para escrevê-la inteira sem
+depender da medição da Tarefa 4.
 
-Depois que o pré-requisito 3 (bucket real) estiver resolvido:
+Em paralelo, ou assim que possível: **medir a Tarefa 4** de um lugar que
+alcance `*.r2.cloudflarestorage.com` (esta máquina não alcança agora — ver a
+nota no fim da Tarefa 10). É aqui que o desenho síncrono-vs-fila pode mudar,
+e é o que destrava ligar `MediaStorageModule` de verdade. **O contador da
+Tarefa 11** nasce junto com isso, na mesma transação de `persist()`.
 
-1. **Tarefa 10** (criar o bucket) **e medir a Tarefa 4** dentro do webhook —
-   é aqui que o desenho pode mudar, e é o que destrava ligar
-   `MediaStorageModule` de verdade. **O contador da Tarefa 11** nasce junto
-   com isso, na mesma transação de `persist()`.
-2. **Tarefas 7 e 9** — a imagem aparece no histórico e na notificação. É onde o
+Depois:
+
+1. **Tarefas 7 e 9** — a imagem aparece no histórico e na notificação. É onde o
    operador sente a mudança.
-3. **Tarefas 6 e 8** — baixar e compartilhar.
-4. **Tarefas 12 e 13** — enviar imagem ao cliente.
-5. **O cron da 11** — faxina e conferência.
+2. **Tarefas 6 e 8** — baixar e compartilhar.
+3. **Tarefas 12 e 13** — enviar imagem ao cliente.
+4. **O cron da 11** — faxina e conferência.
 
 ⚠️ **A Tarefa 11 não é uma coisa só, e as duas metades não vão juntas.** O
 contador é escrito na mesma transação que grava a mensagem, então ele **nasce
