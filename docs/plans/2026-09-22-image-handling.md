@@ -1,14 +1,19 @@
 # Recebimento, exibição e compartilhamento de imagens — plano de implementação
 
-> **Status:** em implementação. Escrito em 2026-09-22, decisões incorporadas no
-> mesmo dia, **Tarefas 1 a 3 commitadas em 2026-09-23** (`f284fb7b`). Migration
-> regenerada, **Tarefas 4, 5 e 10 implementadas em 2026-09-23**, com medição
-> real do lado do R2 feita (ver Tarefa 4) — o handshake TLS que travava as
-> chamadas nesta máquina era TLS 1.3 especificamente, contornado só para o
-> teste, nunca no código. **O contador de armazenamento da Tarefa 11 (metade
-> ao vivo) também entrou em 2026-09-23** — a imagem tem teto de 8 GB desde
-> já. A imagem já vira mensagem comum de ponta a ponta no bot engine — falta
-> exibi-la no admin (Tarefas 6/7).
+> **Status:** em implementação, ciclo de recebimento e envio completo.
+> Escrito em 2026-09-22, decisões incorporadas no mesmo dia. Tarefas **1
+> a 10, 12 e 13 feitas**, todas em 2026-09-23 — schema, parser, download,
+> storage, bot engine, leitura/exibição/compartilhamento no admin, prévia de
+> push, R2 configurado (bucket, token, CORS) e envio de imagem ao cliente
+> (API e admin). A metade ao vivo da Tarefa 11 (contador + teto de 8 GB)
+> também está no ar.
+>
+> **O que falta:** a metade do cron da Tarefa 11 (faxina dos 3 anos e
+> conferência — deliberadamente adiada, "pode esperar de verdade"), o aviso
+> graduado no admin antes do teto (frontend, não coberto aqui), o teto por
+> conversa (recomendação opcional, cortável) e medir o lado da Meta na
+> Tarefa 4 (precisa de uma foto real, não bloqueia nada). Ver "Ordem
+> sugerida" no fim do arquivo.
 
 **Objetivo:** receber a imagem que o cliente manda pelo WhatsApp como mais uma
 mensagem da conversa, guardá-la de forma durável, exibi-la no histórico do
@@ -352,12 +357,10 @@ solução certa.
       o resto**. Cobre os dois pedidos (salvar no aparelho e mandar pro Drive)
       **sem nenhum OAuth, sem token, sem backend**. Fluxo: buscar a URL assinada
       → `fetch` → `blob` → `new File(...)` → `navigator.share`.
-- [x] ⚠️ **Depende de CORS no bucket** (Tarefa 10), ainda não configurado —
-      até lá o botão de compartilhar falha em silêncio e só o de baixar
-      funciona. Implementado assim de propósito.
-- [x] ⚠️ **Depende de CORS no bucket** (Tarefa 10). O `fetch` da URL assinada
-      é cross-origin contra o R2; sem CORS ele falha e só o botão "baixar"
-      funciona. É o único item do plano que exige isso.
+- [x] **CORS configurado em 2026-09-23** (ver Tarefa 10) — o botão
+      "compartilhar" já busca os bytes de verdade. Até a configuração, ele
+      falhava em silêncio e só o de baixar funcionava; era o único item do
+      plano que dependia de CORS no bucket.
 - [x] Guardar atrás de `navigator.canShare({ files })`, porque o suporte a
       arquivos não é universal — Android Chrome e Safari do iOS sim, desktop
       varia, Firefox não.
@@ -401,20 +404,14 @@ Feito em 2026-09-23, pelo painel da Cloudflare.
       `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` — no `.env.example`, no
       `.env` local e no painel da Vercel (`target: production`, tipo
       `sensitive`, mesmo padrão dos demais segredos do projeto).
-- [ ] ⚠️ **CORS: a conclusão anterior estava errada e precisa ser refeita.**
-      Estava marcado como resolvido ("nada a configurar, o navegador nunca fala
-      com o R2 direto"), premissa que caiu junto com o redirect 302 da Tarefa 6.
-      O navegador **vai** falar com o R2 direto. Nem todo uso exige CORS:
-
-      | Uso | Precisa de CORS? |
-      |---|---|
-      | `<img src>` apontando pro R2 (Tarefa 7) | Não |
-      | `<a download>` com `response-content-disposition` (Tarefa 8) | Não |
-      | `fetch` → `blob` → `navigator.share` (Tarefa 8) | **Sim** |
-
-      Só o compartilhamento nativo precisa. Configurar CORS no bucket
-      **restrito à origem do admin**, não aberto — e só quando a Tarefa 8
-      chegar, para não liberar antes de ser necessário.
+- [x] **CORS configurado em 2026-09-23**, pelo painel da Cloudflare, restrito
+      à origem do admin — não aberto. `AllowedOrigins`: `https://daverdinha.com.br`
+      e `http://localhost:3000` (dev). `AllowedMethods`: só `GET`. A conclusão
+      anterior deste item estava errada ("nada a configurar, o navegador nunca
+      fala com o R2 direto") — essa premissa caiu junto com o redirect 302 da
+      Tarefa 6, que virou `{ url }` em JSON. O navegador **passou a falar** com
+      o R2 direto, mas só para `fetch` → `blob` → `navigator.share` (Tarefa 8);
+      `<img src>` e `<a download>` não precisam de CORS.
 - [x] `CRON_SECRET` gerado e adicionado ao `.env.example`, `.env` local e
       Vercel — protege a rota de purga da Tarefa 11.
 
@@ -617,31 +614,27 @@ existe aqui, então vale dizer onde cada coisa é verificável sem rede:
 
 ## Ordem sugerida
 
-**Feito:** Tarefas 1, 2, 3, 4, 5, 10 e a metade ao vivo da 11. A imagem já
-vira mensagem comum — baixada da Meta, guardada no R2, com teto de 8 GB
-respeitado desde a primeira foto — exibi-la no histórico é o que falta.
-Testada inteira contra storage mockado, como o plano previa. A medição real
-do R2 foi feita (Tarefa 4); a do lado da Meta segue pendente por falta de
-uma foto de teste de verdade, mas não bloqueia nada.
+**Feito:** o ciclo inteiro de imagem — receber, guardar, exibir, baixar,
+compartilhar, notificar e **enviar** — está no ar. Tarefas 1 a 10, 12, 13 e a
+metade ao vivo da 11. Medição real do R2 feita (Tarefa 4); a do lado da Meta
+segue pendente por falta de uma foto de teste de verdade, mas não bloqueia
+nada. CORS do bucket configurado (Tarefa 10), restrito à origem do admin —
+é o que fez o botão "compartilhar" da Tarefa 8 passar de decorativo a
+funcional.
 
-**Próximo passo:** Tarefas 6 e 7 (API de leitura e exibição no admin) — é
-onde o operador finalmente vê a imagem que já está sendo recebida e
-guardada. Em paralelo, vale fechar a UI de aviso graduado do teto de
-armazenamento (o número já está exposto em `GET /bot-settings`), que é
-trabalho de frontend fora do que esta sessão tocou.
+**Três coisas deliberadamente adiadas, nenhuma bloqueando o resto:**
 
-Depois:
+1. **O cron da Tarefa 11** — faxina dos 3 anos e conferência do contador.
+   Pode esperar de verdade: no primeiro ano não há sequer o que apagar. O
+   que era urgente (o teto) já está ao vivo desde que a Tarefa 4 nasceu.
+2. **Aviso graduado no admin antes do teto de 8 GB** — o número já sai em
+   `GET /bot-settings`, falta só a UI. Trabalho de frontend.
+3. **Teto por conversa** (Tarefa 11) — recomendação registrada no plano, não
+   decisão do dono do produto. Cortável.
 
-1. **Tarefa 9** — prévia da notificação push.
-2. **Tarefa 8** — compartilhar.
-3. **Tarefas 12 e 13** — enviar imagem ao cliente.
-4. **O cron da 11** — faxina e conferência.
-
-⚠️ **A Tarefa 11 não é uma coisa só, e as duas metades não vão juntas.** O
-contador é escrito na mesma transação que grava a mensagem, então ele **nasce
-junto com a Tarefa 4** — deixá-lo para depois significa rodar sem teto nenhum,
-e é o teto que segura o custo. Já o cron (faxina dos 3 anos e conferência) pode
-esperar de verdade: no primeiro ano não há sequer o que apagar.
+⚠️ **A Tarefa 11 não é uma coisa só, e as duas metades não iam juntas.** O
+contador é escrito na mesma transação que grava a mensagem, então nasceu
+junto com a Tarefa 4 — é o que segura o custo. Já o cron pode esperar.
 
 ## O que este plano deliberadamente não faz
 
