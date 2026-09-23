@@ -326,38 +326,42 @@ origem**. A requisição sairia sem Authorization e o guard responderia 401.
 - [ ] Tratar a expiração no admin: `onError` no `<img>` refaz a busca. Fica
       com a Tarefa 7.
 
-### Tarefa 7 — Admin: exibir
+### Tarefa 7 — Admin: exibir ✅
 
-- [ ] Renderizar `kind === 'image'` em `src/app/admin/conversas/[id]/page.tsx`
-      (o `switch` de bolha por `kind` já existe), com `loading="lazy"` e clique
-      para abrir em tamanho cheio.
-- [ ] O `src` é a **URL assinada** que a Tarefa 6 devolve, buscada via
-      `apiFetch`, e não a rota da API — ver o aviso lá.
-- [ ] **Exibir a legenda junto da imagem** (decisão 6) — ela é conteúdo que o
-      cliente escreveu e precisa aparecer, mesmo não valendo como comando.
-- [ ] Adicionar `'image'` ao tipo `MessageKind` em `src/features/admin/types/admin.ts`.
+- [x] Componente próprio, `MessageImage`, em vez de mais um ramo na tela — que
+      já estava longa, e é o que torna a Tarefa 8 testável isolada.
+- [x] `src` é a URL assinada, buscada via `apiFetch` sob demanda por imagem.
+- [x] Legenda exibida junto, e usada como `alt` (decisão 6).
+- [x] `'image'` no tipo `MessageKind` do frontend.
+- [x] **Expiração tratada:** `onError` refaz a busca **uma vez**. Se a segunda
+      URL também falhar, o problema não é expiração e insistir viraria laço —
+      aí aparece "não foi possível carregar".
 
-### Tarefa 8 — Admin: compartilhar
+### Tarefa 8 — Admin: compartilhar ✅
 
 O admin já é um **PWA instalado no celular** (`start_url: /admin`,
 `display: standalone`), e é aí que o operador trabalha. Isso muda qual é a
 solução certa.
 
-- [ ] **Botão "compartilhar" usando a Web Share API.**
+- [x] **Botão "compartilhar" usando a Web Share API.**
       `navigator.share({ files: [file] })` abre a folha de compartilhamento
       nativa do aparelho — que **já traz Google Drive, WhatsApp, Fotos, e-mail e
       o resto**. Cobre os dois pedidos (salvar no aparelho e mandar pro Drive)
       **sem nenhum OAuth, sem token, sem backend**. Fluxo: buscar a URL assinada
       → `fetch` → `blob` → `new File(...)` → `navigator.share`.
-- [ ] ⚠️ **Depende de CORS no bucket** (Tarefa 10). O `fetch` da URL assinada
+- [x] ⚠️ **Depende de CORS no bucket** (Tarefa 10), ainda não configurado —
+      até lá o botão de compartilhar falha em silêncio e só o de baixar
+      funciona. Implementado assim de propósito.
+- [x] ⚠️ **Depende de CORS no bucket** (Tarefa 10). O `fetch` da URL assinada
       é cross-origin contra o R2; sem CORS ele falha e só o botão "baixar"
       funciona. É o único item do plano que exige isso.
-- [ ] Guardar atrás de `navigator.canShare({ files })`, porque o suporte a
+- [x] Guardar atrás de `navigator.canShare({ files })`, porque o suporte a
       arquivos não é universal — Android Chrome e Safari do iOS sim, desktop
       varia, Firefox não.
-- [ ] **Fallback: botão "baixar"**, um `<a download>` apontando para a rota da
-      Tarefa 6 com `?download=1`. É o caminho no desktop e onde a Web Share não
-      existir.
+- [x] **Botão "baixar"** — um `<a>` criado e clicado, não `location.assign`,
+      que navegaria a SPA para fora. O atributo `download` não entra porque é
+      ignorado em URL de outra origem: quem manda é o `Content-Disposition` da
+      URL assinada.
 
 **Google Drive direto (OAuth no servidor) fica fora por enquanto.** Exigiria
 tela de consentimento do Google, escopo `drive.file`, guardar e renovar refresh
