@@ -1,11 +1,13 @@
 # Recebimento, exibição e compartilhamento de imagens — plano de implementação
 
 > **Status:** em implementação. Escrito em 2026-09-22, decisões incorporadas no
-> mesmo dia, **Tarefas 1 a 3 implementadas em 2026-09-23**. As três estão como
-> alteração pendente, sem commit.
+> mesmo dia, **Tarefas 1 a 3 commitadas em 2026-09-23** (`f284fb7b`). Migration
+> regenerada e **Tarefa 4 (código) implementada em 2026-09-23**.
 >
-> **Parado na Tarefa 4** — bloqueada por pré-requisitos que não são de código
-> (ver "Pré-requisitos" abaixo).
+> **Parado depois da Tarefa 4** — falta só o pré-requisito 3 (bucket e
+> credenciais reais no console da Cloudflare, Tarefa 10) para medir download +
+> upload dentro do webhook de verdade. Sem isso a Tarefa 5 não tem como decidir
+> entre síncrono e fila (ver Tarefa 4).
 
 **Objetivo:** receber a imagem que o cliente manda pelo WhatsApp como mais uma
 mensagem da conversa, guardá-la de forma durável, exibi-la no histórico do
@@ -21,14 +23,16 @@ válido por aqui!"*. A imagem nunca é baixada.
 
 Três coisas precisam existir antes da Tarefa 4, e nenhuma delas é código:
 
-| # | O quê | Comando / onde |
+| # | O quê | Status |
 |---|---|---|
-| 1 | **Postgres de pé** para regenerar a migration única. O `schema.prisma` da Tarefa 1 já está editado e o client gerado, mas a migration não foi refeita. | `docker compose up -d && npx prisma migrate dev` |
-| 2 | **SDK do R2 instalado.** Sem ele não há como assinar requisição (implementar SigV4 à mão seria pior em todos os aspectos). | `npm i @aws-sdk/client-s3 @aws-sdk/s3-request-presigner` |
-| 3 | **Bucket e credenciais** criados no console da Cloudflare — é a Tarefa 10. | Console |
+| 1 | **Postgres de pé** para regenerar a migration única. | ✅ Resolvido em 2026-09-23 — migration `20260923164240_init` regenerada e aplicada, banco local com `image`, `media_key`, `media_mime_type`, `media_size_bytes`. |
+| 2 | **SDK do R2 instalado.** Sem ele não há como assinar requisição (implementar SigV4 à mão seria pior em todos os aspectos). | ✅ Resolvido em 2026-09-23 — `@aws-sdk/client-s3` e `@aws-sdk/s3-request-presigner` instalados. |
+| 3 | **Bucket e credenciais** criados no console da Cloudflare — é a Tarefa 10. | ⚠️ **Ainda pendente.** Ação fora do repositório, no console da Cloudflare — não é algo que dá para fazer por aqui. |
 
 A medição que decide o desenho da Tarefa 4 (download + upload cabem dentro do
-webhook?) depende das três.
+webhook?) depende das três — as duas primeiras já não bloqueiam mais, mas a
+medição de verdade só acontece com bucket real, então segue parada até o
+pré-requisito 3.
 
 ## Decisões já tomadas
 
@@ -140,13 +144,14 @@ debaixo de algumas destas tarefas:
 
 ## Tarefas
 
-### Tarefa 1 — Schema ✅ *(parcial — falta a migration)*
+### Tarefa 1 — Schema ✅
 
 - [x] `image` no enum `MessageKind`.
 - [x] Colunas anuláveis em `Message`: `mediaKey`, `mediaMimeType`,
       `mediaSizeBytes`. Client do Prisma gerado.
-- [ ] ⚠️ **Regenerar a migration única** — depende do pré-requisito 1. Enquanto
-      não rodar, o código compila mas o banco não tem as colunas.
+- [x] **Migration única regenerada** em 2026-09-23
+      (`20260923164240_init`) — banco local resetado e recriado com as
+      colunas, seed rodando limpo.
 
 Sem coluna própria para legenda: `image.caption` do webhook chega e é
 gravado em `body`, o mesmo campo que qualquer mensagem de texto já usa — é
@@ -195,9 +200,27 @@ soluço de rede. É o contrário do que parece defensivo.
 
 ### Tarefa 4 — Armazenamento (⚠️ a decisão de risco)
 
-- [ ] `MediaStorageService` com interface enxuta (`put(key, buffer, mime)` +
-      `signedUrl(key, { download? })`), para trocar de provedor sem mexer no resto.
-- [ ] Chave sem nada adivinhável: `conversations/{conversationId}/{uuid}.jpg`.
+- [x] `MediaStorageService` (`src/media/media-storage.service.ts`) com
+      interface enxuta (`put(key, buffer, mimeType)` +
+      `signedUrl(key, { download? })`), para trocar de provedor sem mexer no
+      resto. Fala com o R2 via `@aws-sdk/client-s3` (protocolo S3) e assina
+      URL com `@aws-sdk/s3-request-presigner`, TTL de 5 minutos. Testado com
+      o `S3Client` e o `getSignedUrl` mockados — nunca fala com R2 de verdade
+      (`media-storage.service.spec.ts`).
+- [x] Chave sem nada adivinhável: `buildMediaKey(conversationId, mimeType)`
+      gera `conversations/{conversationId}/{uuid}.{ext}`, com a extensão
+      derivada do mime (`jpg`/`png`/`webp`, e `bin` como fallback).
+- [x] Variáveis de ambiente novas em `.env.example`: `R2_ACCOUNT_ID`,
+      `R2_BUCKET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` (mecânica da
+      Tarefa 10, adiantada aqui porque o serviço já lê essas variáveis).
+- [ ] ⚠️ **`MediaStorageModule` não está importado em `AppModule`.** De
+      propósito: ninguém consome o serviço ainda — isso é trabalho da Tarefa
+      5. Ligar o módulo antes disso registraria um provider sem consumidor.
+- [ ] ⚠️ **Medição pendente.** Sem bucket real (pré-requisito 3, Tarefa 10) não
+      dá para medir download da Meta + upload no R2 dentro do webhook. A
+      implementação está pronta para a medição assim que o bucket existir —
+      ela não depende de mudança de código, só de rodar contra o R2 de
+      verdade.
 
 **Medir antes de fechar:** baixar da Meta + subir no R2 dentro do webhook, com
 uma foto de ~400 KB. Estimativa de 300 ms a 1,5 s, mas é número para medir, não
@@ -492,18 +515,21 @@ existe aqui, então vale dizer onde cada coisa é verificável sem rede:
 
 ## Ordem sugerida
 
-**Feito:** Tarefas 1 (sem a migration), 2 e 3.
+**Feito:** Tarefas 1, 2, 3 e 4 (código; falta só a medição contra R2 real).
 
-**Próximo passo, e é o único que não depende de pré-requisito:** a **Tarefa 5**.
-Ela é a lógica mais delicada do plano — imagem durante a espera do CEP, a regra
-da legenda, o contrato de falha da Tarefa 3 — e o plano já previa testá-la
-contra storage mockado. Dá para escrevê-la inteira antes de o R2 existir.
+**Próximo passo, e é o único que não depende do pré-requisito 3:** a **Tarefa
+5**. Ela é a lógica mais delicada do plano — imagem durante a espera do CEP, a
+regra da legenda, o contrato de falha da Tarefa 3 — e o plano já previa
+testá-la contra storage mockado (o `MediaStorageService` já existe para isso).
+Dá para escrevê-la inteira antes de o R2 existir; só não dá para fechar a
+decisão síncrono-vs-fila sem a medição real.
 
-Depois que os três pré-requisitos estiverem resolvidos:
+Depois que o pré-requisito 3 (bucket real) estiver resolvido:
 
-1. **Tarefas 4 e 10, e o contador da 11** — a imagem fica guardada e o teto já
-   é respeitado. É aqui que a medição do webhook acontece, e é o momento em que
-   o desenho pode mudar.
+1. **Tarefa 10** (criar o bucket) **e medir a Tarefa 4** dentro do webhook —
+   é aqui que o desenho pode mudar, e é o que destrava ligar
+   `MediaStorageModule` de verdade. **O contador da Tarefa 11** nasce junto
+   com isso, na mesma transação de `persist()`.
 2. **Tarefas 7 e 9** — a imagem aparece no histórico e na notificação. É onde o
    operador sente a mudança.
 3. **Tarefas 6 e 8** — baixar e compartilhar.
