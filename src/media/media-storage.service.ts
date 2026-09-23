@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import * as crypto from 'crypto';
 import {
+  DeleteObjectCommand,
   GetObjectCommand,
   PutObjectCommand,
   S3Client,
@@ -64,6 +65,18 @@ export class MediaStorageService {
         Body: buffer,
         ContentType: mimeType,
       }),
+    );
+  }
+
+  /**
+   * Apaga o arquivo. Idempotente: apagar uma chave que já não existe não é
+   * erro — é o que permite a faxina da Tarefa 11 repetir a exclusão de uma
+   * execução anterior que falhou depois do R2 e antes do banco, sem
+   * tratamento especial.
+   */
+  async delete(key: string): Promise<void> {
+    await this.client.send(
+      new DeleteObjectCommand({ Bucket: this.bucket, Key: key }),
     );
   }
 

@@ -29,6 +29,17 @@ const STALE_HANDOFF_MS = 30 * 24 * 60 * 60 * 1000;
  */
 const MEDIA_STORAGE_CAP_BYTES = 8n * 1024n * 1024n * 1024n;
 
+/**
+ * Teto por conversa (Tarefa 11, item opcional do plano): sem ele, uma única
+ * conversa poderia consumir sozinha o teto global e desligar o recurso para
+ * todos os outros clientes. Janela móvel de 24h, não dia calendário — um
+ * reset à meia-noite seria fácil de burlar. 20 imagens/dia a 5 MB (o teto de
+ * cada uma) são ~100 MB — folgado para uso legítimo (fotos de produto,
+ * comprovante), e ainda assim uma fração pequena dos 8 GB totais.
+ */
+const MAX_IMAGES_PER_CONVERSATION_PER_DAY = 20;
+const CONVERSATION_IMAGE_WINDOW_MS = 24 * 60 * 60 * 1000;
+
 // Typing "menu" is the customer's escape hatch out of any sub-flow, so it's
 // matched before anything else looks at the text.
 const MENU_KEYWORD = 'menu';
@@ -292,6 +303,30 @@ export class BotEngineService {
     // cap, the acervo simply stops growing — no purge, no exception, the
     // same invalid-content path a photo the bot can't read already uses.
     if (settings.mediaBytesUsed >= MEDIA_STORAGE_CAP_BYTES) {
+      await this.handleUnsupportedMessage(
+        conversation,
+        settings,
+        settings.botEnabled,
+        message.id,
+        message.repliedToWamid,
+      );
+      return handled;
+    }
+
+    // Corta o vetor na origem: sem isto, uma única conversa em enxurrada (ou
+    // travada num laço de reenvio) poderia sozinha consumir o teto global e
+    // desligar o recebimento de imagem para todo mundo.
+    const recentImages = await this.prisma.message.count({
+      where: {
+        conversationId: conversation.id,
+        kind: 'image',
+        direction: 'inbound',
+        createdAt: {
+          gte: new Date(Date.now() - CONVERSATION_IMAGE_WINDOW_MS),
+        },
+      },
+    });
+    if (recentImages >= MAX_IMAGES_PER_CONVERSATION_PER_DAY) {
       await this.handleUnsupportedMessage(
         conversation,
         settings,

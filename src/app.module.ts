@@ -9,6 +9,7 @@ import { BotEngineModule } from './bot-engine/bot-engine.module';
 import { ConversationsModule } from './conversations/conversations.module';
 import { PushSubscriptionsModule } from './push-subscriptions/push-subscriptions.module';
 import { CategoriesModule } from './categories/categories.module';
+import { MediaRetentionModule } from './media/media-retention.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { CategoriesModule } from './categories/categories.module';
     ConversationsModule,
     PushSubscriptionsModule,
     CategoriesModule,
+    MediaRetentionModule,
   ],
   controllers: [AppController],
 })

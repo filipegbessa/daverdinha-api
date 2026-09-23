@@ -80,6 +80,20 @@ describe('MediaStorageService', () => {
     ];
     expect(command.input.ResponseContentDisposition).toBe('attachment');
   });
+
+  it('deletes an object by key', async () => {
+    sendMock.mockResolvedValue({});
+    const service = new MediaStorageService();
+
+    await service.delete('conversations/abc/uuid.jpg');
+
+    expect(sendMock).toHaveBeenCalledTimes(1);
+    const command = sendMock.mock.calls[0][0] as { input: unknown };
+    expect(command.input).toEqual({
+      Bucket: 'test-bucket',
+      Key: 'conversations/abc/uuid.jpg',
+    });
+  });
 });
 
 describe('buildMediaKey', () => {

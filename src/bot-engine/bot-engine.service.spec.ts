@@ -158,6 +158,7 @@ describe('BotEngineService', () => {
       message: {
         create: jest.fn().mockResolvedValue({ id: 'msg1' }),
         findFirst: jest.fn().mockResolvedValue(null),
+        count: jest.fn().mockResolvedValue(0),
       },
       order: { create: jest.fn() },
       botSettings: { update: jest.fn() },
@@ -1858,6 +1859,75 @@ describe('BotEngineService', () => {
 
       expect(whatsapp.downloadMedia).toHaveBeenCalled();
       expect(mediaStorage.put).toHaveBeenCalled();
+    });
+
+    it('at the per-conversation daily cap, skips the download and answers with invalid content', async () => {
+      prisma.message.count.mockResolvedValue(20);
+      const conversation = {
+        id: 'c1',
+        phone: '5521999999999',
+        status: 'bot_active',
+        invalidAttempts: 0,
+        awaitingDeliveryReply: false,
+      };
+      prisma.conversation.findFirst.mockResolvedValue(conversation);
+
+      await service.handleIncomingMessage(imageMessagePayload('5521999999999'));
+
+      expect(prisma.message.count).toHaveBeenCalledWith({
+        where: {
+          conversationId: 'c1',
+          kind: 'image',
+          direction: 'inbound',
+          createdAt: { gte: expect.any(Date) },
+        },
+      });
+      expect(whatsapp.downloadMedia).not.toHaveBeenCalled();
+      expect(mediaStorage.put).not.toHaveBeenCalled();
+      expect(prisma.message.create).toHaveBeenCalledWith({
+        data: {
+          conversationId: 'c1',
+          direction: 'inbound',
+          kind: 'invalid_content',
+          body: '[Conteúdo inválido]',
+        },
+      });
+    });
+
+    it('just under the per-conversation cap, still downloads normally', async () => {
+      prisma.message.count.mockResolvedValue(19);
+      const conversation = {
+        id: 'c1',
+        phone: '5521999999999',
+        status: 'bot_active',
+        invalidAttempts: 0,
+        awaitingDeliveryReply: false,
+      };
+      prisma.conversation.findFirst.mockResolvedValue(conversation);
+
+      await service.handleIncomingMessage(imageMessagePayload('5521999999999'));
+
+      expect(whatsapp.downloadMedia).toHaveBeenCalled();
+    });
+
+    it('the per-conversation count does not leak across conversations', async () => {
+      prisma.message.count.mockResolvedValue(0);
+      const conversation = {
+        id: 'c2',
+        phone: '5521988888888',
+        status: 'bot_active',
+        invalidAttempts: 0,
+        awaitingDeliveryReply: false,
+      };
+      prisma.conversation.findFirst.mockResolvedValue(conversation);
+
+      await service.handleIncomingMessage(imageMessagePayload('5521988888888'));
+
+      expect(prisma.message.count).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ conversationId: 'c2' }),
+        }),
+      );
     });
   });
 
