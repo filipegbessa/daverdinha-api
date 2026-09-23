@@ -8,7 +8,7 @@ CREATE TYPE "EntryPoint" AS ENUM ('menu', 'catalog');
 CREATE TYPE "MessageDirection" AS ENUM ('inbound', 'outbound');
 
 -- CreateEnum
-CREATE TYPE "MessageKind" AS ENUM ('text', 'invalid_content', 'order');
+CREATE TYPE "MessageKind" AS ENUM ('text', 'invalid_content', 'order', 'image');
 
 -- CreateTable
 CREATE TABLE "bot_settings" (
@@ -87,6 +87,9 @@ CREATE TABLE "messages" (
     "direction" "MessageDirection" NOT NULL,
     "kind" "MessageKind" NOT NULL DEFAULT 'text',
     "body" TEXT,
+    "media_key" TEXT,
+    "media_mime_type" TEXT,
+    "media_size_bytes" INTEGER,
     "whatsapp_message_id" TEXT,
     "replied_to_wamid" TEXT,
     "replied_to_id" TEXT,
