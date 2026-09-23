@@ -2,7 +2,9 @@
 
 > **Status:** em implementação. Escrito em 2026-09-22, decisões incorporadas no
 > mesmo dia, **Tarefas 1 a 3 commitadas em 2026-09-23** (`f284fb7b`). Migration
-> regenerada, **Tarefa 4 (código) e Tarefa 10 implementadas em 2026-09-23**.
+> regenerada, **Tarefas 4 (código), 5 e 10 implementadas em 2026-09-23**.
+> A imagem já vira mensagem comum de ponta a ponta no bot engine — falta
+> exibi-la no admin (Tarefas 6/7).
 >
 > **Todos os pré-requisitos resolvidos.** O que falta agora é a medição real
 > da Tarefa 4 (download da Meta + upload no R2 dentro do webhook), travada não
@@ -240,15 +242,21 @@ Se a medição reprovar, as saídas são: (a) gravar a mensagem com o `media_id`
 baixar no primeiro acesso do admin — só funciona dentro da janela de 7 dias, ou
 (b) uma fila (QStash/Upstash tem free tier).
 
-### Tarefa 5 — Bot engine: imagem vira mensagem comum
+### Tarefa 5 — Bot engine: imagem vira mensagem comum ✅
 
-- [ ] Tirar `image` de `isUnsupportedContent` (`bot-engine.service.ts`). Áudio,
+- [x] Tirar `image` de `isUnsupportedContent` (`bot-engine.service.ts`). Áudio,
       vídeo, figurinha e documento continuam como conteúdo inválido.
-- [ ] Gravar via `recordInbound(conversationId, caption ?? null, 'image', {...})`
+- [x] `MediaStorageModule` ligado em `BotEngineModule` — passa a ter
+      consumidor, como a Tarefa 4 previa. `processImageMessage` baixa da
+      Meta, sobe pro R2 com `buildMediaKey(conversationId, mimeType)` e só
+      então grava.
+- [x] Gravar via `recordInbound(conversationId, caption ?? null, 'image', {...})`
       — a legenda vai no `body`, e as colunas de mídia entram no mesmo `options`
       que já leva `whatsappMessageId` e `repliedToWamid`. Nada de caminho
       paralelo: `persist()` continua sendo o único lugar que grava mensagem.
-- [ ] Tratar o retorno de `downloadMedia` conforme o contrato da Tarefa 3:
+      `recordInbound`/`persist()` em `ConversationMessengerService` ganharam
+      `mediaKey`/`mediaMimeType`/`mediaSizeBytes` no mesmo `options`.
+- [x] Tratar o retorno de `downloadMedia` conforme o contrato da Tarefa 3:
       `{ ok: false }` vira `invalid_content`; erro **não** é capturado aqui,
       sobe para o webhook devolver a reivindicação do wamid.
 
@@ -258,12 +266,13 @@ imagem nunca vira resposta de CEP. Sem tratamento, ela escorreria até
 `handleMenuSelection` e reexibiria o menu, cancelando o fluxo. O correto é
 desviá-la para o caminho de "CEP não entendido", que já existe:
 
-- [ ] Com `awaitingDeliveryReply` ligado e chegando imagem: gravar a imagem
+- [x] Com `awaitingDeliveryReply` ligado e chegando imagem: gravar a imagem
       (com a legenda) e então rodar `registerUnresolvedAttempt`.
-- [ ] ⚠️ **Não dá para chamar `DeliveryCheckService.handleReply`**: ele grava a
+- [x] ⚠️ **Não dá para chamar `DeliveryCheckService.handleReply`**: ele grava a
       mensagem por conta própria como texto (`delivery-check.service.ts:47`), e
-      aqui a gravação é a da imagem. Precisa de uma entrada pública nova que só
-      registre a tentativa não resolvida, sem gravar nada.
+      aqui a gravação é a da imagem. `registerUnresolvedAttempt` virou público
+      em vez de uma entrada nova — já fazia exatamente "conta e responde, sem
+      gravar nada", então só precisava deixar de ser `private`.
 
 O efeito, sem inventar orçamento novo — é o mesmo de um CEP ilegível hoje, com
 `MAX_DELIVERY_CEP_ATTEMPTS = 2`:
@@ -536,20 +545,17 @@ existe aqui, então vale dizer onde cada coisa é verificável sem rede:
 
 ## Ordem sugerida
 
-**Feito:** Tarefas 1, 2, 3, 4 (código) e 10. Todos os pré-requisitos de
-infraestrutura estão resolvidos.
+**Feito:** Tarefas 1, 2, 3, 4 (código), 5 e 10. A imagem já vira mensagem
+comum — baixada da Meta, guardada no R2, exibida no histórico é o que falta.
+Testada inteira contra storage mockado, como o plano previa; a rota síncrona
+(baixar+subir dentro do próprio webhook) segue sem medição real contra o R2
+(ver nota no fim da Tarefa 10) — o código não depende dessa medição para
+funcionar, só a decisão de manter essa rota ou trocar por fila depende dela.
 
-**Próximo passo:** a **Tarefa 5**. Ela é a lógica mais delicada do plano —
-imagem durante a espera do CEP, a regra da legenda, o contrato de falha da
-Tarefa 3 — e o plano já previa testá-la contra storage mockado (o
-`MediaStorageService` já existe para isso). Dá para escrevê-la inteira sem
-depender da medição da Tarefa 4.
-
-Em paralelo, ou assim que possível: **medir a Tarefa 4** de um lugar que
-alcance `*.r2.cloudflarestorage.com` (esta máquina não alcança agora — ver a
-nota no fim da Tarefa 10). É aqui que o desenho síncrono-vs-fila pode mudar,
-e é o que destrava ligar `MediaStorageModule` de verdade. **O contador da
-Tarefa 11** nasce junto com isso, na mesma transação de `persist()`.
+**Próximo passo:** medir a Tarefa 4 de um lugar que alcance
+`*.r2.cloudflarestorage.com` (esta máquina não alcança agora), e **o
+contador da Tarefa 11**, que nasce na mesma transação de `persist()` e ainda
+não existe — sem ele o volume recebido pela Tarefa 5 não tem teto.
 
 Depois:
 
