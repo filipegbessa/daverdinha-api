@@ -3,6 +3,7 @@ import { BadRequestException } from '@nestjs/common';
 import { ConversationMessengerService } from './conversation-messenger.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { WhatsAppClientService } from '../whatsapp/whatsapp-client.service';
+import { MediaStorageService } from '../media/media-storage.service';
 
 describe('ConversationMessengerService', () => {
   let service: ConversationMessengerService;
@@ -12,7 +13,13 @@ describe('ConversationMessengerService', () => {
     botSettings: { update: jest.Mock };
     $transaction: jest.Mock;
   };
-  let whatsapp: { sendText: jest.Mock; sendInteractiveList: jest.Mock };
+  let mediaStorage: { put: jest.Mock; signedUrl: jest.Mock };
+  let whatsapp: {
+    sendText: jest.Mock;
+    sendInteractiveList: jest.Mock;
+    uploadMedia: jest.Mock;
+    sendImage: jest.Mock;
+  };
 
   const conversation = { id: 'c1', phone: '5521999999999' };
 
@@ -34,15 +41,106 @@ describe('ConversationMessengerService', () => {
       sendInteractiveList: jest
         .fn()
         .mockResolvedValue({ whatsappMessageId: 'wamid.OUT1' }),
+      uploadMedia: jest.fn().mockResolvedValue('media_out_1'),
+      sendImage: jest
+        .fn()
+        .mockResolvedValue({ whatsappMessageId: 'wamid.OUT_IMG' }),
     };
+    mediaStorage = { put: jest.fn(), signedUrl: jest.fn() };
     const moduleRef = await Test.createTestingModule({
       providers: [
         ConversationMessengerService,
         { provide: PrismaService, useValue: prisma },
         { provide: WhatsAppClientService, useValue: whatsapp },
+        { provide: MediaStorageService, useValue: mediaStorage },
       ],
     }).compile();
     service = moduleRef.get(ConversationMessengerService);
+  });
+
+  describe('sendImage()', () => {
+    const conversation = { id: 'c1', phone: '5521999999999' };
+    const file = { buffer: Buffer.from('png-bytes'), mimeType: 'image/png' };
+
+    it('stores in R2 and uploads to Meta — both, on purpose', async () => {
+      await service.sendImage(conversation, file);
+
+      // Os dois destinos: o id da Meta expira em 30 dias, o histórico não.
+      expect(mediaStorage.put).toHaveBeenCalledWith(
+        expect.stringMatching(/^conversations\/c1\/[0-9a-f-]{36}\.png$/),
+        file.buffer,
+        'image/png',
+      );
+      expect(whatsapp.uploadMedia).toHaveBeenCalledWith(
+        file.buffer,
+        'image/png',
+      );
+    });
+
+    it('records the outbound message with the media columns and the wamid', async () => {
+      await service.sendImage(conversation, file, { caption: 'o vaso novo' });
+
+      expect(prisma.message.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          conversationId: 'c1',
+          direction: 'outbound',
+          kind: 'image',
+          body: 'o vaso novo',
+          whatsappMessageId: 'wamid.OUT_IMG',
+          mediaMimeType: 'image/png',
+          mediaSizeBytes: 9,
+        }),
+      });
+    });
+
+    it('counts the bytes against the storage cap, like an inbound photo', async () => {
+      await service.sendImage(conversation, file);
+
+      expect(prisma.botSettings.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: { mediaBytesUsed: { increment: 9 } },
+        }),
+      );
+    });
+
+    it('quotes a message when asked', async () => {
+      prisma.message.findUnique.mockResolvedValue({
+        id: 'm9',
+        conversationId: 'c1',
+        whatsappMessageId: 'wamid.original',
+      });
+
+      await service.sendImage(conversation, file, { replyToMessageId: 'm9' });
+
+      expect(whatsapp.sendImage).toHaveBeenCalledWith(
+        '5521999999999',
+        'media_out_1',
+        undefined,
+        { replyToWamid: 'wamid.original' },
+      );
+    });
+
+    it('refuses to quote a message that has no wamid, same as sendText', async () => {
+      prisma.message.findUnique.mockResolvedValue({
+        id: 'm9',
+        conversationId: 'c1',
+        whatsappMessageId: null,
+      });
+
+      await expect(
+        service.sendImage(conversation, file, { replyToMessageId: 'm9' }),
+      ).rejects.toThrow(BadRequestException);
+      expect(whatsapp.sendImage).not.toHaveBeenCalled();
+    });
+
+    // Subir para a Meta é o passo que pode falhar por cota ou janela de 24h.
+    // Gravar antes deixaria o histórico com uma mensagem que ninguém recebeu.
+    it('does not record anything when the send fails', async () => {
+      whatsapp.sendImage.mockRejectedValue(new Error('fora da janela de 24h'));
+
+      await expect(service.sendImage(conversation, file)).rejects.toThrow();
+      expect(prisma.message.create).not.toHaveBeenCalled();
+    });
   });
 
   describe('sendText()', () => {

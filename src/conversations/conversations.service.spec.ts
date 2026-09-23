@@ -480,6 +480,69 @@ describe('ConversationsService', () => {
     });
   });
 
+  describe('replyImage()', () => {
+    const file = {
+      buffer: Buffer.from('png'),
+      mimetype: 'image/png',
+      size: 3,
+    };
+
+    beforeEach(() => {
+      prisma.conversation.findUniqueOrThrow.mockResolvedValue({
+        id: 'c1',
+        phone: '5521999999999',
+        status: 'paused_human',
+      });
+      jest.spyOn(messenger, 'sendImage').mockResolvedValue({} as never);
+    });
+
+    it('hands the file to the messenger, which sends and records together', async () => {
+      await service.replyImage('c1', file, { caption: 'o vaso' });
+
+      expect(messenger.sendImage).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'c1' }),
+        { buffer: file.buffer, mimeType: 'image/png' },
+        { caption: 'o vaso', replyToMessageId: undefined },
+      );
+    });
+
+    // Mesma regra do reply de texto: o bot não é interrompido no meio.
+    it('refuses while the bot still owns the conversation', async () => {
+      prisma.conversation.findUniqueOrThrow.mockResolvedValue({
+        id: 'c1',
+        phone: '5521999999999',
+        status: 'bot_active',
+      });
+
+      await expect(service.replyImage('c1', file, {})).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(messenger.sendImage).not.toHaveBeenCalled();
+    });
+
+    // Os mesmos limites que valem para a imagem que chega, agora na saída —
+    // e conferidos antes de gastar upload para a Meta.
+    it('rejects a type we would not be able to show back', async () => {
+      await expect(
+        service.replyImage('c1', { ...file, mimetype: 'application/pdf' }, {}),
+      ).rejects.toThrow(BadRequestException);
+      expect(messenger.sendImage).not.toHaveBeenCalled();
+    });
+
+    it('rejects a file past the size ceiling', async () => {
+      await expect(
+        service.replyImage('c1', { ...file, size: 6 * 1024 * 1024 }, {}),
+      ).rejects.toThrow(BadRequestException);
+      expect(messenger.sendImage).not.toHaveBeenCalled();
+    });
+
+    it('rejects an empty upload instead of sending a blank image', async () => {
+      await expect(
+        service.replyImage('c1', { ...file, size: 0 }, {}),
+      ).rejects.toThrow(BadRequestException);
+    });
+  });
+
   describe('reactivate()', () => {
     it('resets status, invalidAttempts, and both awaiting flags when paused_human', async () => {
       prisma.conversation.findUniqueOrThrow.mockResolvedValue({

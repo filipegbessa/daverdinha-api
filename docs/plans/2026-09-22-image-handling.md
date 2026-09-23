@@ -542,7 +542,7 @@ Se um dia a frequência diária apertar, há duas saídas sem custo: o Cron Trig
 de Workers da Cloudflare (conta que já vai existir por causa do R2) ou um
 workflow agendado no GitHub Actions chamando a rota com o secret.
 
-### Tarefa 12 — Enviar imagem ao cliente: API
+### Tarefa 12 — Enviar imagem ao cliente: API ✅
 
 Hoje `POST /conversations/:id/reply` só manda texto, e o
 `ConversationMessengerService` é o único lugar autorizado a mandar e gravar ao
@@ -556,18 +556,25 @@ mesmo tempo — é ele que ganha o caminho novo, não um atalho ao lado.
 > `ConversationMessengerService.sendImage` o mesmo `replyToMessageId?` — assim
 > imagem fica citável desde o primeiro dia, sem desenho novo.
 
-- [ ] `WhatsAppClientService.uploadMedia(buffer, mimeType)`:
+- [x] `WhatsAppClientService.uploadMedia(buffer, mimeType)`:
       `POST /v20.0/{phone-number-id}/media` (multipart), devolve um `media_id`.
-- [ ] `WhatsAppClientService.sendImage(to, mediaId, caption?, options?: { replyToWamid?: string })`:
+- [x] `WhatsAppClientService.sendImage(to, mediaId, caption?, options?: { replyToWamid?: string })`:
       mensagem do tipo `image` referenciando o id, citando quando informado.
-- [ ] `ConversationMessengerService.sendImage(..., replyToMessageId?: string)`: sobe pro R2 **e** pra Meta,
+- [x] `ConversationMessengerService.sendImage(...)`: sobe pro R2 **e** pra Meta,
       manda, e grava a mensagem `outbound` com `kind: 'image'`, o `mediaKey`,
       e `repliedToId`/`repliedToWamid`/`whatsappMessageId` do mesmo jeito que
       `sendText` já faz. Subir nos dois é proposital: o id da Meta expira, o
       nosso histórico não.
-- [ ] Endpoint de envio aceitando o arquivo, com `ClerkAuthGuard`, os mesmos
-      limites de tamanho e mime da Tarefa 3, e a regra de status que o reply de
-      texto já tem (só `paused_human`).
+- [x] `POST /conversations/:id/reply-image`, multipart via `FileInterceptor`,
+      com `ClerkAuthGuard` herdado do controller.
+- [x] Limites conferidos **antes** de gastar upload para a Meta, reusando
+      `ALLOWED_MEDIA_TYPES` e `MAX_MEDIA_BYTES` exportados do cliente — uma
+      fonte de verdade só, nos dois sentidos.
+- [x] A forma do arquivo é declarada no service (`UploadedImage`, três campos)
+      em vez de depender de `@types/multer`, que o projeto não instala.
+- [x] Nada é gravado antes do envio dar certo: subir para a Meta é o passo que
+      falha por cota ou pela janela de 24h, e gravar antes deixaria no
+      histórico uma mensagem que o cliente nunca recebeu.
 - [ ] ⚠️ **Janela de 24 horas.** A Meta só aceita mensagem livre dentro de 24h
       da última mensagem do cliente; fora disso, só template. Isso **já vale
       hoje para o reply de texto** e não é problema novo, mas com imagem o erro

@@ -10,6 +10,7 @@ describe('ConversationsController', () => {
     removeCategory: jest.Mock;
     reply: jest.Mock;
     mediaUrl: jest.Mock;
+    replyImage: jest.Mock;
   };
 
   beforeEach(async () => {
@@ -18,6 +19,7 @@ describe('ConversationsController', () => {
       removeCategory: jest.fn(),
       reply: jest.fn(),
       mediaUrl: jest.fn(),
+      replyImage: jest.fn(),
     };
 
     const moduleRef = await Test.createTestingModule({
@@ -73,4 +75,18 @@ describe('ConversationsController', () => {
       });
     },
   );
+
+  it('replyImage() forwards the file and the text fields separately', () => {
+    const file = { buffer: Buffer.from('png'), mimetype: 'image/png', size: 3 };
+
+    controller.replyImage('conv1', file, {
+      caption: 'o vaso',
+      replyToMessageId: 'msg9',
+    });
+
+    expect(service.replyImage).toHaveBeenCalledWith('conv1', file, {
+      caption: 'o vaso',
+      replyToMessageId: 'msg9',
+    });
+  });
 });

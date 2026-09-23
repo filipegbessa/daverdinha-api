@@ -6,11 +6,12 @@ interface WhatsAppSendResponse {
   messages?: { id: string }[];
 }
 
-/** Só o que sabemos armazenar e exibir. */
-const ALLOWED_MEDIA_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+/** Só o que sabemos armazenar e exibir. Vale nos dois sentidos: o que o
+ * cliente manda e o que o operador envia de volta. */
+export const ALLOWED_MEDIA_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
 /** Teto da própria Meta para imagem; repetido aqui para não depender dela. */
-const MAX_MEDIA_BYTES = 5 * 1024 * 1024;
+export const MAX_MEDIA_BYTES = 5 * 1024 * 1024;
 
 /**
  * Prazos separados porque as duas etapas são muito diferentes: a primeira é um
@@ -175,6 +176,72 @@ export class WhatsAppClientService {
     // O `file_size` dos metadados é o que a Meta diz; este é o que chegou.
     // Guardamos o segundo, porque é ele que ocupa espaço no bucket.
     return { ok: true, buffer, mimeType, sizeBytes: buffer.byteLength };
+  }
+
+  /**
+   * Sobe o arquivo para a Meta e devolve o id que ela atribui — é esse id que
+   * `sendImage` referencia, porque a API não aceita bytes na mensagem.
+   *
+   * O `Content-Type` **não** é definido à mão: com um `FormData` no corpo, o
+   * fetch precisa montar o cabeçalho junto com o `boundary`, e fixá-lo aqui
+   * produziria um corpo que a Meta não consegue separar.
+   *
+   * O id devolvido expira em 30 dias, o que não é problema: ele serve só para
+   * o envio. O histórico aponta para o nosso R2, não para ele.
+   */
+  async uploadMedia(buffer: Buffer, mimeType: string): Promise<string> {
+    const form = new FormData();
+    form.append('messaging_product', 'whatsapp');
+    form.append('type', mimeType);
+    // `Uint8Array` e não o `Buffer` direto: o `Buffer` do Node pode apontar
+    // para um `SharedArrayBuffer`, que não é um `BlobPart` válido.
+    form.append('file', new Blob([new Uint8Array(buffer)], { type: mimeType }));
+
+    const response = await fetch(
+      `https://graph.facebook.com/v20.0/${process.env.WHATSAPP_PHONE_NUMBER_ID}/media`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${process.env.WHATSAPP_CLOUD_API_TOKEN}`,
+        },
+        body: form,
+      },
+    );
+
+    if (!response.ok) {
+      const errorBody = (await response.json()) as {
+        error?: { message?: string };
+      };
+      throw new Error(
+        errorBody?.error?.message ??
+          `WhatsApp media upload failed (${response.status})`,
+      );
+    }
+
+    const { id } = (await response.json()) as { id?: string };
+    if (!id) throw new Error('WhatsApp media upload returned no id');
+    return id;
+  }
+
+  /** Mesma forma de `sendText`, inclusive a citação. */
+  async sendImage(
+    to: string,
+    mediaId: string,
+    caption?: string,
+    options?: { replyToWamid?: string },
+  ): Promise<{ whatsappMessageId: string }> {
+    const payload: Record<string, unknown> = {
+      messaging_product: 'whatsapp',
+      to,
+      type: 'image',
+      image: caption ? { id: mediaId, caption } : { id: mediaId },
+    };
+    if (options?.replyToWamid) {
+      payload.context = { message_id: options.replyToWamid };
+    }
+
+    const response = await this.post(payload);
+    return { whatsappMessageId: response.messages![0].id };
   }
 
   private async post(

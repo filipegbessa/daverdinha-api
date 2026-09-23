@@ -2,6 +2,10 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { MessageKind } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { WhatsAppClientService } from '../whatsapp/whatsapp-client.service';
+import {
+  MediaStorageService,
+  buildMediaKey,
+} from '../media/media-storage.service';
 
 interface Recipient {
   id: string;
@@ -25,7 +29,67 @@ export class ConversationMessengerService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly whatsapp: WhatsAppClientService,
+    private readonly mediaStorage: MediaStorageService,
   ) {}
+
+  /**
+   * Manda uma imagem ao cliente e a registra no histórico.
+   *
+   * O arquivo vai para **dois** destinos de propósito: a Meta, porque a API
+   * não aceita bytes na mensagem e exige um id; e o R2, porque o id da Meta
+   * expira em 30 dias e o histórico do operador não pode expirar junto.
+   *
+   * Nada é gravado antes do envio dar certo. Subir para a Meta é o passo que
+   * falha por cota ou pela janela de 24 horas, e gravar antes deixaria no
+   * histórico uma mensagem que o cliente nunca recebeu.
+   */
+  async sendImage(
+    conversation: Recipient,
+    file: { buffer: Buffer; mimeType: string },
+    options?: { caption?: string; replyToMessageId?: string },
+  ) {
+    // A citação é validada antes de gastar upload: mesma regra do `sendText`.
+    let repliedToWamid: string | undefined;
+    if (options?.replyToMessageId) {
+      const target = await this.prisma.message.findUnique({
+        where: {
+          id: options.replyToMessageId,
+          conversationId: conversation.id,
+        },
+      });
+      if (!target?.whatsappMessageId) {
+        throw new BadRequestException(
+          'Não é possível responder citando esta mensagem.',
+        );
+      }
+      repliedToWamid = target.whatsappMessageId;
+    }
+
+    const mediaKey = buildMediaKey(conversation.id, file.mimeType);
+    const [, mediaId] = await Promise.all([
+      this.mediaStorage.put(mediaKey, file.buffer, file.mimeType),
+      this.whatsapp.uploadMedia(file.buffer, file.mimeType),
+    ]);
+
+    const { whatsappMessageId } = await this.whatsapp.sendImage(
+      conversation.phone,
+      mediaId,
+      options?.caption,
+      repliedToWamid ? { replyToWamid: repliedToWamid } : undefined,
+    );
+
+    return this.persist(conversation.id, {
+      direction: 'outbound',
+      kind: 'image',
+      body: options?.caption ?? null,
+      whatsappMessageId,
+      repliedToId: options?.replyToMessageId,
+      repliedToWamid,
+      mediaKey,
+      mediaMimeType: file.mimeType,
+      mediaSizeBytes: file.buffer.byteLength,
+    });
+  }
 
   /**
    * Sends a plain text reply and records it in the transcript.

@@ -7,6 +7,21 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConversationMessengerService } from '../messaging/conversation-messenger.service';
 import { MediaStorageService } from '../media/media-storage.service';
+import {
+  ALLOWED_MEDIA_TYPES,
+  MAX_MEDIA_BYTES,
+} from '../whatsapp/whatsapp-client.service';
+
+/**
+ * A forma mínima do arquivo que o multer entrega. Declarada aqui em vez de
+ * depender de `@types/multer`, que o projeto não instala — só estes três
+ * campos são usados.
+ */
+export interface UploadedImage {
+  buffer: Buffer;
+  mimetype: string;
+  size: number;
+}
 import { ListConversationsDto } from './dto/list-conversations.dto';
 import { pageBounds, paginated } from '../common/pagination';
 import {
@@ -217,6 +232,49 @@ export class ConversationsService {
     // replyToMessageId (existence, wamid, same conversation) and throws
     // BadRequestException on its own when the citation can't be honored.
     return this.messenger.sendText(conversation, text, { replyToMessageId });
+  }
+
+  /**
+   * Envia uma imagem ao cliente. Os limites são os mesmos que valem para a
+   * imagem que chega — conferidos **antes** de gastar upload para a Meta, e
+   * aqui em vez de no messenger porque são regra de entrada da API.
+   */
+  async replyImage(
+    id: string,
+    file: UploadedImage,
+    options: { caption?: string; replyToMessageId?: string },
+  ) {
+    if (!ALLOWED_MEDIA_TYPES.includes(file.mimetype)) {
+      throw new BadRequestException(
+        'Só é possível enviar imagem JPEG, PNG ou WebP.',
+      );
+    }
+    if (file.size <= 0) {
+      throw new BadRequestException('Arquivo vazio.');
+    }
+    if (file.size > MAX_MEDIA_BYTES) {
+      throw new BadRequestException('A imagem excede o limite de 5 MB.');
+    }
+
+    const conversation = await this.prisma.conversation.findUniqueOrThrow({
+      where: { id },
+    });
+    if (conversation.status !== 'paused_human') {
+      throw new BadRequestException(
+        'Só é possível responder conversas transferidas pra um atendente.',
+      );
+    }
+
+    // O messenger é quem manda e grava na mesma transação, e é ele que
+    // valida a citação — mesma divisão do reply de texto.
+    return this.messenger.sendImage(
+      conversation,
+      { buffer: file.buffer, mimeType: file.mimetype },
+      {
+        caption: options.caption,
+        replyToMessageId: options.replyToMessageId,
+      },
+    );
   }
 
   async reactivate(id: string) {

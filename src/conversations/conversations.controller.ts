@@ -9,11 +9,16 @@ import {
   Patch,
   Post,
   Query,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { ClerkAuthGuard } from '../common/auth/clerk-auth.guard';
 import { ConversationsService } from './conversations.service';
 import { ReplyDto } from './dto/reply.dto';
+import { ReplyImageDto } from './dto/reply-image.dto';
+import type { UploadedImage } from './conversations.service';
 import { UpdateConversationDto } from './dto/update-conversation.dto';
 import { ListConversationsDto } from './dto/list-conversations.dto';
 import { ListMessagesDto } from './dto/list-messages.dto';
@@ -59,6 +64,23 @@ export class ConversationsController {
   @Post(':id/reply')
   reply(@Param('id') id: string, @Body() dto: ReplyDto) {
     return this.service.reply(id, dto.text, dto.replyToMessageId);
+  }
+
+  /**
+   * Multipart: o arquivo no campo `file`, legenda e citação como campos de
+   * texto. Tipo e tamanho são conferidos no service, junto da regra de status.
+   */
+  @Post(':id/reply-image')
+  @UseInterceptors(FileInterceptor('file'))
+  replyImage(
+    @Param('id') id: string,
+    @UploadedFile() file: UploadedImage,
+    @Body() dto: ReplyImageDto,
+  ) {
+    return this.service.replyImage(id, file, {
+      caption: dto.caption,
+      replyToMessageId: dto.replyToMessageId,
+    });
   }
 
   @Post(':id/reactivate')

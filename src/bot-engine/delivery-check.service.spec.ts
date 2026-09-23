@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { WhatsAppClientService } from '../whatsapp/whatsapp-client.service';
 import { MenuItemsService } from '../menu-items/menu-items.service';
 import { ConversationMessengerService } from '../messaging/conversation-messenger.service';
+import { MediaStorageService } from '../media/media-storage.service';
 import { DeliveryLocationsService } from '../delivery-locations/delivery-locations.service';
 import { CepLookupService } from '../cep-lookup/cep-lookup.service';
 
@@ -68,6 +69,9 @@ describe('DeliveryCheckService', () => {
         // The real messenger, wired to the same prisma/whatsapp mocks — the
         // send-and-persist pairing is exactly what these tests assert on.
         ConversationMessengerService,
+        // O messenger passou a saber mandar imagem, então o módulo de teste
+        // precisa do storage — que este fluxo não usa.
+        { provide: MediaStorageService, useValue: { put: jest.fn(), signedUrl: jest.fn() } },
       ],
     }).compile();
 
