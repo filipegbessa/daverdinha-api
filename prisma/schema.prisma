@@ -17,6 +17,11 @@ model BotSettings {
   invalidAttemptsExceededMessage String   @default("Não consegui entender sua opção, vou te chamar um atendente!") @map("invalid_attempts_exceeded_message")
   mediaReceivedMessage           String   @default("Esse tipo de mensagem não é válido por aqui!") @map("media_received_message")
   orderReceivedMessage           String   @default("Aceito! Recebemos seu pedido, já vamos confirmar com você.") @map("order_received_message")
+  /// Bytes de mídia em uso no R2, somado ao vivo na mesma transação que
+  /// grava cada mensagem (ConversationMessengerService.persist). Tem que
+  /// ser BigInt: em bytes, o teto de 8 GB são ~8,6 bilhões — um Int do
+  /// Postgres estoura em ~2,1 bilhões e o teto nunca dispararia.
+  mediaBytesUsed                 BigInt   @default(0) @map("media_bytes_used")
   updatedAt                      DateTime @updatedAt @map("updated_at")
 
   @@map("bot_settings")

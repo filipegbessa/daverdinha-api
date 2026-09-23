@@ -18,6 +18,7 @@ CREATE TABLE "bot_settings" (
     "invalid_attempts_exceeded_message" TEXT NOT NULL DEFAULT 'Não consegui entender sua opção, vou te chamar um atendente!',
     "media_received_message" TEXT NOT NULL DEFAULT 'Esse tipo de mensagem não é válido por aqui!',
     "order_received_message" TEXT NOT NULL DEFAULT 'Aceito! Recebemos seu pedido, já vamos confirmar com você.',
+    "media_bytes_used" BIGINT NOT NULL DEFAULT 0,
     "updated_at" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "bot_settings_pkey" PRIMARY KEY ("id")
