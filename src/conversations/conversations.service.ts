@@ -6,6 +6,7 @@ import {
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConversationMessengerService } from '../messaging/conversation-messenger.service';
+import { MediaStorageService } from '../media/media-storage.service';
 import { ListConversationsDto } from './dto/list-conversations.dto';
 import { pageBounds, paginated } from '../common/pagination';
 import {
@@ -23,7 +24,49 @@ export class ConversationsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly messenger: ConversationMessengerService,
+    private readonly mediaStorage: MediaStorageService,
   ) {}
+
+  /**
+   * Devolve uma URL assinada para a mídia da mensagem — **não** os bytes, e
+   * **não** um redirect.
+   *
+   * Um redirect 302 foi a primeira ideia e não funciona: quem consome isto é
+   * uma tag `<img>`, e `<img>` não manda header nenhum. O admin autentica com
+   * `Authorization: Bearer` contra uma API em outra origem, então a requisição
+   * chegaria anônima e o guard responderia 401. Devolvendo JSON, quem busca é
+   * o `apiFetch` (que leva o token) e a URL assinada — que não precisa de
+   * auth — vai direto no `src`.
+   *
+   * Proxiar os bytes por aqui seria a outra saída, e custaria egress da Vercel
+   * justamente onde o do R2 é grátis.
+   *
+   * A URL vale poucos minutos de propósito: comprovante de pagamento passa por
+   * aqui, e uma URL longeva vazaria em histórico e cache.
+   */
+  async mediaUrl(
+    conversationId: string,
+    messageId: string,
+    options?: { download?: boolean },
+  ): Promise<{ url: string }> {
+    // Escopado à conversa da URL: solto, saber um id de mensagem bastaria
+    // para ler mídia de qualquer conversa.
+    const message = await this.prisma.message.findFirst({
+      where: { id: messageId, conversationId },
+    });
+
+    // Mesma resposta para "não é dessa conversa" e para "não tem arquivo" —
+    // que cobre tanto mensagem de texto quanto imagem já expurgada pela
+    // retenção. Distinguir os casos só contaria ao cliente o que existe.
+    if (!message?.mediaKey) {
+      throw new NotFoundException('Mídia não encontrada');
+    }
+
+    const url = await this.mediaStorage.signedUrl(message.mediaKey, {
+      download: options?.download ?? false,
+    });
+    return { url };
+  }
 
   /**
    * A page of conversations, newest activity first.

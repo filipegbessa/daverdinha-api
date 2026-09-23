@@ -9,6 +9,7 @@ describe('ConversationsController', () => {
     addCategory: jest.Mock;
     removeCategory: jest.Mock;
     reply: jest.Mock;
+    mediaUrl: jest.Mock;
   };
 
   beforeEach(async () => {
@@ -16,6 +17,7 @@ describe('ConversationsController', () => {
       addCategory: jest.fn(),
       removeCategory: jest.fn(),
       reply: jest.fn(),
+      mediaUrl: jest.fn(),
     };
 
     const moduleRef = await Test.createTestingModule({
@@ -51,4 +53,24 @@ describe('ConversationsController', () => {
 
     expect(service.reply).toHaveBeenCalledWith('conv1', 'Oi!', undefined);
   });
+
+  // `?download=1` é a única forma de pedir o anexo; qualquer outra coisa é
+  // visualização. Traduzir a string aqui evita que o service conheça query
+  // param.
+  it('mediaUrl() treats ?download=1 as the only request for an attachment', () => {
+    controller.mediaUrl('conv1', 'msg1', '1');
+    expect(service.mediaUrl).toHaveBeenCalledWith('conv1', 'msg1', {
+      download: true,
+    });
+  });
+
+  it.each([undefined, '0', 'true'])(
+    'mediaUrl() treats %p as a plain view',
+    (value) => {
+      controller.mediaUrl('conv1', 'msg1', value);
+      expect(service.mediaUrl).toHaveBeenCalledWith('conv1', 'msg1', {
+        download: false,
+      });
+    },
+  );
 });

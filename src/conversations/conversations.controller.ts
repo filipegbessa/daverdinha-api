@@ -38,6 +38,19 @@ export class ConversationsController {
     return this.service.listMessages(id, query);
   }
 
+  /**
+   * Devolve `{ url }`, não os bytes nem um redirect — ver `mediaUrl` no
+   * service para o porquê (resumo: `<img>` não manda header de auth).
+   */
+  @Get(':id/messages/:messageId/media')
+  mediaUrl(
+    @Param('id') id: string,
+    @Param('messageId') messageId: string,
+    @Query('download') download?: string,
+  ) {
+    return this.service.mediaUrl(id, messageId, { download: download === '1' });
+  }
+
   @Patch(':id')
   updateName(@Param('id') id: string, @Body() dto: UpdateConversationDto) {
     return this.service.updateName(id, dto.name);

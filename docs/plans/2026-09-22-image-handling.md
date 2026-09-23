@@ -302,7 +302,7 @@ para um humano na terceira. É o desfecho desejável: cliente que manda foto atr
 de foto quer falar com uma pessoa, e o operador recebe a conversa com as fotos
 já no histórico.
 
-### Tarefa 6 — API de leitura
+### Tarefa 6 — API de leitura ✅
 
 ⚠️ **Corrigido em 2026-09-23: o desenho anterior (302) não funcionava.** O
 plano dizia "rota com `ClerkAuthGuard` devolvendo redirect 302", com o `<img>`
@@ -311,17 +311,20 @@ nenhum** — e o admin autentica com `Authorization: Bearer <token do Clerk>`
 montado pelo `apiFetch` (`api-client.ts:12`), contra uma API em **outra
 origem**. A requisição sairia sem Authorization e o guard responderia 401.
 
-- [ ] `GET /conversations/:id/messages/:messageId/media` com `ClerkAuthGuard`,
-      devolvendo **`{ url }` em JSON** — não um 302. Quem busca é o `apiFetch`,
-      que leva o token; a URL assinada devolvida não precisa de auth e vai
-      direto no `src` da imagem.
-- [ ] Parâmetro `?download=1` que gera a URL com
-      `response-content-disposition=attachment`, que é o que faz o navegador
-      salvar em vez de abrir.
-- [ ] A URL continua **fora do payload da thread**: ela expira em 5 minutos e a
-      thread fica em cache no cliente. Busca sob demanda, por imagem.
-- [ ] Tratar a expiração: `onError` no `<img>` refaz a busca. Cinco minutos
-      passam fácil com a aba aberta.
+- [x] `GET /conversations/:id/messages/:messageId/media` com `ClerkAuthGuard`
+      (herdado do controller), devolvendo **`{ url }` em JSON**.
+- [x] `?download=1` — e só essa string — pede o anexo. A tradução fica no
+      controller, para o service não conhecer query param.
+- [x] A busca é **escopada à conversa da URL** (`findFirst` por
+      `{ id, conversationId }`). Solta, saber um id de mensagem bastaria para
+      ler mídia de qualquer conversa.
+- [x] Mesmo 404 para "não é dessa conversa" e para "não tem arquivo" — que
+      cobre mensagem de texto e imagem já expurgada pela retenção. Distinguir
+      só contaria ao cliente o que existe.
+- [x] A URL continua **fora do payload da thread**: expira em 5 min e a thread
+      fica em cache no cliente.
+- [ ] Tratar a expiração no admin: `onError` no `<img>` refaz a busca. Fica
+      com a Tarefa 7.
 
 ### Tarefa 7 — Admin: exibir
 

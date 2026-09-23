@@ -4,6 +4,7 @@ import { ConversationsService } from './conversations.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { WhatsAppClientService } from '../whatsapp/whatsapp-client.service';
 import { ConversationMessengerService } from '../messaging/conversation-messenger.service';
+import { MediaStorageService } from '../media/media-storage.service';
 
 describe('ConversationsService', () => {
   let service: ConversationsService;
@@ -15,6 +16,7 @@ describe('ConversationsService', () => {
     $transaction: jest.Mock;
   };
   let whatsapp: { sendText: jest.Mock };
+  let mediaStorage: { signedUrl: jest.Mock };
 
   beforeEach(async () => {
     prisma = {
@@ -25,18 +27,26 @@ describe('ConversationsService', () => {
         update: jest.fn(),
         count: jest.fn().mockResolvedValue(0),
       },
-      message: { create: jest.fn(), findMany: jest.fn(), findUnique: jest.fn() },
+      message: {
+        create: jest.fn(),
+        findMany: jest.fn(),
+        findUnique: jest.fn(),
+      },
       conversationCategory: { upsert: jest.fn(), deleteMany: jest.fn() },
       $transaction: jest.fn((ops: any[]) => Promise.all(ops)),
     };
     whatsapp = {
       sendText: jest.fn().mockResolvedValue({ whatsappMessageId: 'wamid.out' }),
     };
+    mediaStorage = {
+      signedUrl: jest.fn().mockResolvedValue('https://r2.example/signed'),
+    };
     const moduleRef = await Test.createTestingModule({
       providers: [
         ConversationsService,
         { provide: PrismaService, useValue: prisma },
         { provide: WhatsAppClientService, useValue: whatsapp },
+        { provide: MediaStorageService, useValue: mediaStorage },
         // The real messenger over the same prisma/whatsapp mocks: replying
         // has to both reach WhatsApp and land in the transcript, and that
         // pairing is what these assertions check.
@@ -378,11 +388,9 @@ describe('ConversationsService', () => {
       );
       // Confirms the quote actually made it through the messenger, not just
       // that the third argument was forwarded.
-      expect(whatsapp.sendText).toHaveBeenCalledWith(
-        '5521999999999',
-        'Oi!',
-        { replyToWamid: 'wamid.target' },
-      );
+      expect(whatsapp.sendText).toHaveBeenCalledWith('5521999999999', 'Oi!', {
+        replyToWamid: 'wamid.target',
+      });
     });
 
     it('without replyToMessageId, still calls messenger.sendText (third argument omitted/undefined)', async () => {
@@ -403,6 +411,72 @@ describe('ConversationsService', () => {
         { replyToMessageId: undefined },
       );
       expect(prisma.message.findUnique).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('mediaUrl()', () => {
+    const imageMessage = {
+      id: 'm1',
+      conversationId: 'c1',
+      kind: 'image',
+      mediaKey: 'conversations/c1/abc.jpg',
+    };
+
+    it('hands back a signed url instead of the bytes', async () => {
+      prisma.message.findFirst = jest.fn().mockResolvedValue(imageMessage);
+
+      const result = await service.mediaUrl('c1', 'm1');
+
+      expect(result).toEqual({ url: 'https://r2.example/signed' });
+      expect(mediaStorage.signedUrl).toHaveBeenCalledWith(
+        'conversations/c1/abc.jpg',
+        { download: false },
+      );
+    });
+
+    it('asks for an attachment disposition when the operator is downloading', async () => {
+      prisma.message.findFirst = jest.fn().mockResolvedValue(imageMessage);
+
+      await service.mediaUrl('c1', 'm1', { download: true });
+
+      expect(mediaStorage.signedUrl).toHaveBeenCalledWith(
+        'conversations/c1/abc.jpg',
+        { download: true },
+      );
+    });
+
+    // A mensagem é procurada dentro da conversa da URL, não solta: sem isso,
+    // saber um id de mensagem bastaria para ler mídia de qualquer conversa.
+    it('scopes the lookup to the conversation in the path', async () => {
+      prisma.message.findFirst = jest.fn().mockResolvedValue(imageMessage);
+
+      await service.mediaUrl('c1', 'm1');
+
+      expect(prisma.message.findFirst).toHaveBeenCalledWith({
+        where: { id: 'm1', conversationId: 'c1' },
+      });
+    });
+
+    it('404s when the message is not in that conversation', async () => {
+      prisma.message.findFirst = jest.fn().mockResolvedValue(null);
+
+      await expect(service.mediaUrl('c1', 'm1')).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(mediaStorage.signedUrl).not.toHaveBeenCalled();
+    });
+
+    // Vale para mensagem de texto e para imagem cuja mídia a retenção já
+    // expurgou — nos dois casos não há arquivo para assinar.
+    it('404s when the message carries no media', async () => {
+      prisma.message.findFirst = jest
+        .fn()
+        .mockResolvedValue({ ...imageMessage, mediaKey: null });
+
+      await expect(service.mediaUrl('c1', 'm1')).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(mediaStorage.signedUrl).not.toHaveBeenCalled();
     });
   });
 
