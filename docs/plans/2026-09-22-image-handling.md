@@ -581,14 +581,19 @@ mesmo tempo — é ele que ganha o caminho novo, não um atalho ao lado.
       fica mais visível. Decidir se o admin passa a mostrar quando a janela
       fechou, em vez de deixar o envio falhar.
 
-### Tarefa 13 — Enviar imagem ao cliente: admin
+### Tarefa 13 — Enviar imagem ao cliente: admin ✅
 
-- [ ] Anexo no campo de resposta em `src/app/admin/conversas/[id]/page.tsx`,
-      com pré-visualização antes de enviar.
-- [ ] Validar tamanho e tipo no navegador antes de subir, para o operador não
-      descobrir o limite depois do upload.
-- [ ] A mensagem enviada aparece na thread como as outras `outbound`, usando o
-      mesmo componente de imagem da Tarefa 7.
+- [x] Anexo no campo de resposta, com o nome do arquivo e botão de remover
+      antes de enviar.
+- [x] Tipo e tamanho validados no navegador, espelhando os limites do backend
+      — que continua sendo quem decide.
+- [x] Com anexo, o texto vira **legenda**: uma mensagem só, não uma foto
+      seguida de um texto à parte. Sem anexo, o caminho de texto fica intacto.
+- [x] O gatilho é o próprio `<label>`, não um botão chamando `click()` num
+      input escondido: abre o seletor nativamente e evita dois controles
+      anunciando "Anexar imagem" para leitor de tela.
+- [x] O input é limpo a cada escolha, senão reescolher o mesmo arquivo depois
+      de um erro não dispara `change` nenhum.
 
 ---
 
