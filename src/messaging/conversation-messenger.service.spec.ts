@@ -312,7 +312,7 @@ describe('ConversationMessengerService', () => {
       });
       expect(prisma.conversation.update).toHaveBeenCalledWith({
         where: { id: 'c1' },
-        data: { unread: true },
+        data: { unread: true, lastInboundAt: expect.any(Date) },
       });
       expect(result).toBe(created);
     });

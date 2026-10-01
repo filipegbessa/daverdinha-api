@@ -252,7 +252,12 @@ export class ConversationMessengerService {
       this.prisma.message.create({ data: { conversationId, ...message } }),
       this.prisma.conversation.update({
         where: { id: conversationId },
-        data: { unread: message.direction === 'inbound' },
+        data: {
+          unread: message.direction === 'inbound',
+          ...(message.direction === 'inbound'
+            ? { lastInboundAt: new Date() }
+            : {}),
+        },
       }),
       ...(message.mediaSizeBytes
         ? [
