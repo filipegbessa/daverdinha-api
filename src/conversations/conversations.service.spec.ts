@@ -15,7 +15,7 @@ describe('ConversationsService', () => {
     conversationCategory: any;
     $transaction: jest.Mock;
   };
-  let whatsapp: { sendText: jest.Mock };
+  let whatsapp: { sendText: jest.Mock; sendTemplate: jest.Mock };
   let mediaStorage: { signedUrl: jest.Mock };
 
   beforeEach(async () => {
@@ -37,6 +37,9 @@ describe('ConversationsService', () => {
     };
     whatsapp = {
       sendText: jest.fn().mockResolvedValue({ whatsappMessageId: 'wamid.out' }),
+      sendTemplate: jest
+        .fn()
+        .mockResolvedValue({ whatsappMessageId: 'wamid.template' }),
     };
     mediaStorage = {
       signedUrl: jest.fn().mockResolvedValue('https://r2.example/signed'),
@@ -691,6 +694,45 @@ describe('ConversationsService', () => {
 
       await expect(service.pause('c1')).rejects.toThrow(BadRequestException);
       expect(prisma.conversation.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('resume()', () => {
+    it('sends the resume template and sets status to paused_human from bot_active', async () => {
+      prisma.conversation.findUniqueOrThrow.mockResolvedValue({
+        id: 'c1',
+        phone: '5521999999999',
+        status: 'bot_active',
+      });
+      prisma.message.create.mockResolvedValue({ id: 'm1' });
+      prisma.conversation.update
+        .mockResolvedValueOnce({ id: 'c1' }) // messenger's internal update
+        .mockResolvedValueOnce({ id: 'c1', status: 'paused_human' });
+
+      const result = await service.resume('c1');
+
+      expect(whatsapp.sendTemplate).toHaveBeenCalledWith(
+        '5521999999999',
+        'retomar_conversa',
+        'pt_BR',
+      );
+      expect(prisma.conversation.update).toHaveBeenLastCalledWith({
+        where: { id: 'c1' },
+        data: { status: 'paused_human' },
+      });
+      expect(result).toEqual({ id: 'c1', status: 'paused_human' });
+    });
+
+    it('also works from an already-paused_human conversation', async () => {
+      prisma.conversation.findUniqueOrThrow.mockResolvedValue({
+        id: 'c1',
+        phone: '5521999999999',
+        status: 'paused_human',
+      });
+      prisma.message.create.mockResolvedValue({ id: 'm1' });
+      prisma.conversation.update.mockResolvedValue({ id: 'c1' });
+
+      await expect(service.resume('c1')).resolves.toBeDefined();
     });
   });
 

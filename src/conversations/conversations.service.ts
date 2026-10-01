@@ -30,6 +30,11 @@ import {
   DEFAULT_MESSAGES_LIMIT,
 } from './dto/list-messages.dto';
 
+const RESUME_TEMPLATE_NAME = 'retomar_conversa';
+const RESUME_TEMPLATE_LANGUAGE = 'pt_BR';
+const RESUME_TEMPLATE_BODY =
+  'Olá! Seu atendimento com a Da Verdinha está em aberto. Podemos continuar de onde paramos?';
+
 const MESSAGE_INCLUDE = {
   order: { include: { items: true } },
   repliedTo: { select: { id: true, kind: true, body: true, direction: true } },
@@ -316,6 +321,29 @@ export class ConversationsService {
         'Só é possível pausar conversas com o bot ativo.',
       );
     }
+    return this.prisma.conversation.update({
+      where: { id },
+      data: { status: 'paused_human' },
+    });
+  }
+
+  /**
+   * Sends the "Retomar conversa" template to reopen WhatsApp's 24h
+   * session window, and hands the conversation to the operator
+   * unconditionally — clicking this button always counts as taking
+   * ownership, whether the conversation was bot_active or already
+   * paused_human.
+   */
+  async resume(id: string) {
+    const conversation = await this.prisma.conversation.findUniqueOrThrow({
+      where: { id },
+    });
+    await this.messenger.sendTemplate(
+      conversation,
+      RESUME_TEMPLATE_NAME,
+      RESUME_TEMPLATE_LANGUAGE,
+      RESUME_TEMPLATE_BODY,
+    );
     return this.prisma.conversation.update({
       where: { id },
       data: { status: 'paused_human' },

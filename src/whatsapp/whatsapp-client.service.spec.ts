@@ -101,6 +101,23 @@ describe('WhatsAppClientService', () => {
     expect(result).toEqual({ whatsappMessageId: 'wamid.HHBHYjkTest' });
   });
 
+  it('sendTemplate() posts a template message with no components', async () => {
+    const result = await service.sendTemplate(
+      '5521999999999',
+      'retomar_conversa',
+      'pt_BR',
+    );
+
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body).toEqual({
+      messaging_product: 'whatsapp',
+      to: '5521999999999',
+      type: 'template',
+      template: { name: 'retomar_conversa', language: { code: 'pt_BR' } },
+    });
+    expect(result).toEqual({ whatsappMessageId: 'wamid.HHBHYjkTest' });
+  });
+
   it('throws when the Graph API responds with an error', async () => {
     fetchMock.mockResolvedValue({
       ok: false,
