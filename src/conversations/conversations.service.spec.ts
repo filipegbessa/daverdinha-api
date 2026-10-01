@@ -320,6 +320,7 @@ describe('ConversationsService', () => {
         id: 'c1',
         phone: '5521999999999',
         status: 'paused_human',
+        lastInboundAt: new Date(),
       });
       const created = {
         id: 'm1',
@@ -369,6 +370,7 @@ describe('ConversationsService', () => {
         id: 'c1',
         phone: '5521999999999',
         status: 'paused_human',
+        lastInboundAt: new Date(),
       });
       prisma.message.findUnique.mockResolvedValue({
         id: 'm-target',
@@ -398,6 +400,7 @@ describe('ConversationsService', () => {
         id: 'c1',
         phone: '5521999999999',
         status: 'paused_human',
+        lastInboundAt: new Date(),
       });
       prisma.message.create.mockResolvedValue({ id: 'm1' });
       prisma.conversation.update.mockResolvedValue({ id: 'c1' });
@@ -411,6 +414,47 @@ describe('ConversationsService', () => {
         { replyToMessageId: undefined },
       );
       expect(prisma.message.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('rejects with BadRequestException when the 24h window has expired, even when paused_human', async () => {
+      prisma.conversation.findUniqueOrThrow.mockResolvedValue({
+        id: 'c1',
+        phone: '5521999999999',
+        status: 'paused_human',
+        lastInboundAt: new Date(Date.now() - 25 * 60 * 60 * 1000),
+      });
+
+      await expect(service.reply('c1', 'Oi!')).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(whatsapp.sendText).not.toHaveBeenCalled();
+    });
+
+    it('rejects with BadRequestException when lastInboundAt is null', async () => {
+      prisma.conversation.findUniqueOrThrow.mockResolvedValue({
+        id: 'c1',
+        phone: '5521999999999',
+        status: 'paused_human',
+        lastInboundAt: null,
+      });
+
+      await expect(service.reply('c1', 'Oi!')).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('allows reply when lastInboundAt is within the last 24h', async () => {
+      prisma.conversation.findUniqueOrThrow.mockResolvedValue({
+        id: 'c1',
+        phone: '5521999999999',
+        status: 'paused_human',
+        lastInboundAt: new Date(Date.now() - 60 * 60 * 1000),
+      });
+      prisma.message.create.mockResolvedValue({ id: 'm1' });
+      prisma.conversation.update.mockResolvedValue({ id: 'c1' });
+
+      await expect(service.reply('c1', 'Oi!')).resolves.toBeDefined();
+      expect(whatsapp.sendText).toHaveBeenCalled();
     });
   });
 
@@ -492,6 +536,7 @@ describe('ConversationsService', () => {
         id: 'c1',
         phone: '5521999999999',
         status: 'paused_human',
+        lastInboundAt: new Date(),
       });
       jest.spyOn(messenger, 'sendImage').mockResolvedValue({} as never);
     });
@@ -540,6 +585,46 @@ describe('ConversationsService', () => {
       await expect(
         service.replyImage('c1', { ...file, size: 0 }, {}),
       ).rejects.toThrow(BadRequestException);
+    });
+
+    it('rejects with BadRequestException when the 24h window has expired, even when paused_human', async () => {
+      prisma.conversation.findUniqueOrThrow.mockResolvedValue({
+        id: 'c1',
+        phone: '5521999999999',
+        status: 'paused_human',
+        lastInboundAt: new Date(Date.now() - 25 * 60 * 60 * 1000),
+      });
+
+      await expect(service.replyImage('c1', file, {})).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(messenger.sendImage).not.toHaveBeenCalled();
+    });
+
+    it('rejects with BadRequestException when lastInboundAt is null', async () => {
+      prisma.conversation.findUniqueOrThrow.mockResolvedValue({
+        id: 'c1',
+        phone: '5521999999999',
+        status: 'paused_human',
+        lastInboundAt: null,
+      });
+
+      await expect(service.replyImage('c1', file, {})).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(messenger.sendImage).not.toHaveBeenCalled();
+    });
+
+    it('allows replyImage when lastInboundAt is within the last 24h', async () => {
+      prisma.conversation.findUniqueOrThrow.mockResolvedValue({
+        id: 'c1',
+        phone: '5521999999999',
+        status: 'paused_human',
+        lastInboundAt: new Date(Date.now() - 60 * 60 * 1000),
+      });
+
+      await expect(service.replyImage('c1', file, {})).resolves.toBeDefined();
+      expect(messenger.sendImage).toHaveBeenCalled();
     });
   });
 

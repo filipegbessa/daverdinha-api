@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { isWindowExpired } from '../common/whatsapp-window';
 import { ConversationMessengerService } from '../messaging/conversation-messenger.service';
 import { MediaStorageService } from '../media/media-storage.service';
 import {
@@ -227,6 +228,11 @@ export class ConversationsService {
         'Só é possível responder conversas transferidas pra um atendente.',
       );
     }
+    if (isWindowExpired(conversation.lastInboundAt)) {
+      throw new BadRequestException(
+        'A janela de 24 horas do WhatsApp expirou — use "Retomar conversa" antes de responder.',
+      );
+    }
     // The messenger marks the conversation read and bumps updatedAt as part
     // of the same transaction as the message itself. It also validates
     // replyToMessageId (existence, wamid, same conversation) and throws
@@ -262,6 +268,11 @@ export class ConversationsService {
     if (conversation.status !== 'paused_human') {
       throw new BadRequestException(
         'Só é possível responder conversas transferidas pra um atendente.',
+      );
+    }
+    if (isWindowExpired(conversation.lastInboundAt)) {
+      throw new BadRequestException(
+        'A janela de 24 horas do WhatsApp expirou — use "Retomar conversa" antes de responder.',
       );
     }
 
