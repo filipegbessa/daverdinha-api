@@ -177,6 +177,31 @@ export class ConversationMessengerService {
   }
 
   /**
+   * Sends a pre-approved WhatsApp template (the only kind of message
+   * allowed once the 24h session window has expired) and records it.
+   * `bodyText` is the template's own rendered copy, stored so the
+   * operator's transcript reads naturally instead of showing a bare
+   * template name.
+   */
+  async sendTemplate(
+    conversation: Recipient,
+    templateName: string,
+    languageCode: string,
+    bodyText: string,
+  ) {
+    const { whatsappMessageId } = await this.whatsapp.sendTemplate(
+      conversation.phone,
+      templateName,
+      languageCode,
+    );
+    return this.persist(conversation.id, {
+      direction: 'outbound',
+      body: bodyText,
+      whatsappMessageId,
+    });
+  }
+
+  /**
    * Records something the customer sent. Nothing is sent to WhatsApp.
    *
    * When `options.repliedToWamid` is present, this resolves it to our own
@@ -252,7 +277,12 @@ export class ConversationMessengerService {
       this.prisma.message.create({ data: { conversationId, ...message } }),
       this.prisma.conversation.update({
         where: { id: conversationId },
-        data: { unread: message.direction === 'inbound' },
+        data: {
+          unread: message.direction === 'inbound',
+          ...(message.direction === 'inbound'
+            ? { lastInboundAt: new Date() }
+            : {}),
+        },
       }),
       ...(message.mediaSizeBytes
         ? [

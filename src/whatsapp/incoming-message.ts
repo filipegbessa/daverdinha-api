@@ -48,6 +48,13 @@ export interface IncomingMessage {
     sha256?: string;
     caption?: string;
   };
+  /**
+   * Set when the customer tapped a quick-reply button on a template
+   * message — e.g. the "Sim, continuar" button on the 24h-window resume
+   * template. `text` is the button's own label, which is what gets
+   * recorded in the transcript, same as plain text.
+   */
+  button?: { text?: string; payload?: string };
 }
 
 /**
@@ -87,5 +94,6 @@ export function parseIncomingMessage(payload: unknown): IncomingMessage | null {
     referredProductId: raw.context?.referred_product?.product_retailer_id,
     repliedToWamid: raw.context?.id,
     image: raw.image,
+    button: raw.button,
   };
 }

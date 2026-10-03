@@ -15,7 +15,7 @@ describe('ConversationsService', () => {
     conversationCategory: any;
     $transaction: jest.Mock;
   };
-  let whatsapp: { sendText: jest.Mock };
+  let whatsapp: { sendText: jest.Mock; sendTemplate: jest.Mock };
   let mediaStorage: { signedUrl: jest.Mock };
 
   beforeEach(async () => {
@@ -37,6 +37,9 @@ describe('ConversationsService', () => {
     };
     whatsapp = {
       sendText: jest.fn().mockResolvedValue({ whatsappMessageId: 'wamid.out' }),
+      sendTemplate: jest
+        .fn()
+        .mockResolvedValue({ whatsappMessageId: 'wamid.template' }),
     };
     mediaStorage = {
       signedUrl: jest.fn().mockResolvedValue('https://r2.example/signed'),
@@ -320,6 +323,7 @@ describe('ConversationsService', () => {
         id: 'c1',
         phone: '5521999999999',
         status: 'paused_human',
+        lastInboundAt: new Date(),
       });
       const created = {
         id: 'm1',
@@ -369,6 +373,7 @@ describe('ConversationsService', () => {
         id: 'c1',
         phone: '5521999999999',
         status: 'paused_human',
+        lastInboundAt: new Date(),
       });
       prisma.message.findUnique.mockResolvedValue({
         id: 'm-target',
@@ -398,6 +403,7 @@ describe('ConversationsService', () => {
         id: 'c1',
         phone: '5521999999999',
         status: 'paused_human',
+        lastInboundAt: new Date(),
       });
       prisma.message.create.mockResolvedValue({ id: 'm1' });
       prisma.conversation.update.mockResolvedValue({ id: 'c1' });
@@ -411,6 +417,47 @@ describe('ConversationsService', () => {
         { replyToMessageId: undefined },
       );
       expect(prisma.message.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('rejects with BadRequestException when the 24h window has expired, even when paused_human', async () => {
+      prisma.conversation.findUniqueOrThrow.mockResolvedValue({
+        id: 'c1',
+        phone: '5521999999999',
+        status: 'paused_human',
+        lastInboundAt: new Date(Date.now() - 25 * 60 * 60 * 1000),
+      });
+
+      await expect(service.reply('c1', 'Oi!')).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(whatsapp.sendText).not.toHaveBeenCalled();
+    });
+
+    it('rejects with BadRequestException when lastInboundAt is null', async () => {
+      prisma.conversation.findUniqueOrThrow.mockResolvedValue({
+        id: 'c1',
+        phone: '5521999999999',
+        status: 'paused_human',
+        lastInboundAt: null,
+      });
+
+      await expect(service.reply('c1', 'Oi!')).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('allows reply when lastInboundAt is within the last 24h', async () => {
+      prisma.conversation.findUniqueOrThrow.mockResolvedValue({
+        id: 'c1',
+        phone: '5521999999999',
+        status: 'paused_human',
+        lastInboundAt: new Date(Date.now() - 60 * 60 * 1000),
+      });
+      prisma.message.create.mockResolvedValue({ id: 'm1' });
+      prisma.conversation.update.mockResolvedValue({ id: 'c1' });
+
+      await expect(service.reply('c1', 'Oi!')).resolves.toBeDefined();
+      expect(whatsapp.sendText).toHaveBeenCalled();
     });
   });
 
@@ -492,6 +539,7 @@ describe('ConversationsService', () => {
         id: 'c1',
         phone: '5521999999999',
         status: 'paused_human',
+        lastInboundAt: new Date(),
       });
       jest.spyOn(messenger, 'sendImage').mockResolvedValue({} as never);
     });
@@ -540,6 +588,46 @@ describe('ConversationsService', () => {
       await expect(
         service.replyImage('c1', { ...file, size: 0 }, {}),
       ).rejects.toThrow(BadRequestException);
+    });
+
+    it('rejects with BadRequestException when the 24h window has expired, even when paused_human', async () => {
+      prisma.conversation.findUniqueOrThrow.mockResolvedValue({
+        id: 'c1',
+        phone: '5521999999999',
+        status: 'paused_human',
+        lastInboundAt: new Date(Date.now() - 25 * 60 * 60 * 1000),
+      });
+
+      await expect(service.replyImage('c1', file, {})).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(messenger.sendImage).not.toHaveBeenCalled();
+    });
+
+    it('rejects with BadRequestException when lastInboundAt is null', async () => {
+      prisma.conversation.findUniqueOrThrow.mockResolvedValue({
+        id: 'c1',
+        phone: '5521999999999',
+        status: 'paused_human',
+        lastInboundAt: null,
+      });
+
+      await expect(service.replyImage('c1', file, {})).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(messenger.sendImage).not.toHaveBeenCalled();
+    });
+
+    it('allows replyImage when lastInboundAt is within the last 24h', async () => {
+      prisma.conversation.findUniqueOrThrow.mockResolvedValue({
+        id: 'c1',
+        phone: '5521999999999',
+        status: 'paused_human',
+        lastInboundAt: new Date(Date.now() - 60 * 60 * 1000),
+      });
+
+      await expect(service.replyImage('c1', file, {})).resolves.toBeDefined();
+      expect(messenger.sendImage).toHaveBeenCalled();
     });
   });
 
@@ -606,6 +694,45 @@ describe('ConversationsService', () => {
 
       await expect(service.pause('c1')).rejects.toThrow(BadRequestException);
       expect(prisma.conversation.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('resume()', () => {
+    it('sends the resume template and sets status to paused_human from bot_active', async () => {
+      prisma.conversation.findUniqueOrThrow.mockResolvedValue({
+        id: 'c1',
+        phone: '5521999999999',
+        status: 'bot_active',
+      });
+      prisma.message.create.mockResolvedValue({ id: 'm1' });
+      prisma.conversation.update
+        .mockResolvedValueOnce({ id: 'c1' }) // messenger's internal update
+        .mockResolvedValueOnce({ id: 'c1', status: 'paused_human' });
+
+      const result = await service.resume('c1');
+
+      expect(whatsapp.sendTemplate).toHaveBeenCalledWith(
+        '5521999999999',
+        'retomar_conversa',
+        'pt_BR',
+      );
+      expect(prisma.conversation.update).toHaveBeenLastCalledWith({
+        where: { id: 'c1' },
+        data: { status: 'paused_human' },
+      });
+      expect(result).toEqual({ id: 'c1', status: 'paused_human' });
+    });
+
+    it('also works from an already-paused_human conversation', async () => {
+      prisma.conversation.findUniqueOrThrow.mockResolvedValue({
+        id: 'c1',
+        phone: '5521999999999',
+        status: 'paused_human',
+      });
+      prisma.message.create.mockResolvedValue({ id: 'm1' });
+      prisma.conversation.update.mockResolvedValue({ id: 'c1' });
+
+      await expect(service.resume('c1')).resolves.toBeDefined();
     });
   });
 
