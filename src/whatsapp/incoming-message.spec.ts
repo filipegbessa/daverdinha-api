@@ -227,32 +227,4 @@ describe('parseIncomingMessage', () => {
 
     expect(result?.image).toBeUndefined();
   });
-
-  it('extracts the button text from a template quick-reply tap', () => {
-    const payload = {
-      entry: [
-        {
-          changes: [
-            {
-              value: {
-                messages: [
-                  {
-                    id: 'wamid.btn1',
-                    from: '5521999999999',
-                    type: 'button',
-                    button: { text: 'Sim, continuar', payload: 'RESUME' },
-                  },
-                ],
-              },
-            },
-          ],
-        },
-      ],
-    };
-
-    const result = parseIncomingMessage(payload);
-
-    expect(result?.type).toBe('button');
-    expect(result?.button?.text).toBe('Sim, continuar');
-  });
 });

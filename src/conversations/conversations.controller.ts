@@ -100,11 +100,6 @@ export class ConversationsController {
     return this.service.pause(id);
   }
 
-  @Post(':id/resume')
-  resume(@Param('id') id: string) {
-    return this.service.resume(id);
-  }
-
   @Post(':id/categories/:categoryId')
   @HttpCode(HttpStatus.NO_CONTENT)
   addCategory(

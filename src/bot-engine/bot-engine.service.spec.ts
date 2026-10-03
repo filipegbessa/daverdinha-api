@@ -92,28 +92,6 @@ function interactivePayload(from: string, listReplyId: string) {
   };
 }
 
-function buttonMessagePayload(
-  from: string,
-  text: string,
-  options?: { wamid?: string },
-) {
-  return {
-    entry: [
-      {
-        changes: [
-          {
-            value: {
-              messages: [
-                { id: options?.wamid, from, type: 'button', button: { text } },
-              ],
-            },
-          },
-        ],
-      },
-    ],
-  };
-}
-
 function orderMessagePayload(
   from: string,
   productItems: {
@@ -812,64 +790,6 @@ describe('BotEngineService', () => {
         data: expect.objectContaining({ status: expect.anything() }),
       }),
     );
-  });
-
-  it('records a template button tap as a normal message and stays silent when paused_human (post-resume)', async () => {
-    const conversation = {
-      id: 'c1',
-      phone: '5521999999999',
-      status: 'paused_human',
-      invalidAttempts: 0,
-      awaitingDeliveryReply: false,
-      updatedAt: new Date(),
-    };
-    prisma.conversation.findFirst.mockResolvedValue(conversation);
-
-    await service.handleIncomingMessage(
-      buttonMessagePayload('5521999999999', 'Sim, continuar'),
-    );
-
-    expect(prisma.message.create).toHaveBeenCalledWith({
-      data: {
-        conversationId: 'c1',
-        direction: 'inbound',
-        kind: 'text',
-        body: 'Sim, continuar',
-        whatsappMessageId: undefined,
-        repliedToWamid: undefined,
-        repliedToId: undefined,
-      },
-    });
-    // The fallback must NOT fire — this is the regression this test exists
-    // to prevent.
-    expect(whatsapp.sendText).not.toHaveBeenCalledWith(
-      '5521999999999',
-      'Esse tipo de mensagem não é válido por aqui!',
-    );
-  });
-
-  it('a button tap carries its wamid and repliedToWamid into recordInbound, same as plain text', async () => {
-    const conversation = {
-      id: 'c1',
-      phone: '5521999999999',
-      status: 'bot_active',
-      invalidAttempts: 0,
-      awaitingDeliveryReply: false,
-    };
-    prisma.conversation.findFirst.mockResolvedValue(conversation);
-
-    await service.handleIncomingMessage(
-      buttonMessagePayload('5521999999999', 'Sim, continuar', {
-        wamid: 'wamid.btn1',
-      }),
-    );
-
-    expect(prisma.message.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        whatsappMessageId: 'wamid.btn1',
-        body: 'Sim, continuar',
-      }),
-    });
   });
 
   it('reactivates a stale paused_human conversation (30+ days) instead of staying silent', async () => {

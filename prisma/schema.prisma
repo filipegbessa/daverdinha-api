@@ -95,12 +95,6 @@ model Conversation {
   /// admin list and the unread badge never have to fetch each conversation's
   /// last message just to colour a dot.
   unread                Boolean                @default(false)
-  /// Timestamp of the customer's last inbound message, maintained by
-  /// ConversationMessengerService.persist() on every inbound write. Backs
-  /// isWindowExpired() — WhatsApp only allows free-form replies within 24h
-  /// of this timestamp. null means no inbound message has ever arrived,
-  /// which is also outside the window (there was never a session).
-  lastInboundAt         DateTime?              @map("last_inbound_at")
   createdAt             DateTime               @default(now()) @map("created_at")
   updatedAt             DateTime               @updatedAt @map("updated_at")
   messages              Message[]

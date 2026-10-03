@@ -19,7 +19,6 @@ describe('ConversationMessengerService', () => {
     sendInteractiveList: jest.Mock;
     uploadMedia: jest.Mock;
     sendImage: jest.Mock;
-    sendTemplate: jest.Mock;
   };
 
   const conversation = { id: 'c1', phone: '5521999999999' };
@@ -46,9 +45,6 @@ describe('ConversationMessengerService', () => {
       sendImage: jest
         .fn()
         .mockResolvedValue({ whatsappMessageId: 'wamid.OUT_IMG' }),
-      sendTemplate: jest
-        .fn()
-        .mockResolvedValue({ whatsappMessageId: 'wamid.TEMPLATE1' }),
     };
     mediaStorage = { put: jest.fn(), signedUrl: jest.fn() };
     const moduleRef = await Test.createTestingModule({
@@ -294,34 +290,6 @@ describe('ConversationMessengerService', () => {
     });
   });
 
-  describe('sendTemplate()', () => {
-    it('sends via WhatsApp and persists the rendered body as an outbound message', async () => {
-      prisma.message.create.mockResolvedValue({ id: 'm9' });
-      prisma.conversation.update.mockResolvedValue({ id: 'c1' });
-
-      await service.sendTemplate(
-        conversation,
-        'retomar_conversa',
-        'pt_BR',
-        'Olá! Seu atendimento com a Da Verdinha está em aberto. Podemos continuar de onde paramos?',
-      );
-
-      expect(whatsapp.sendTemplate).toHaveBeenCalledWith(
-        '5521999999999',
-        'retomar_conversa',
-        'pt_BR',
-      );
-      expect(prisma.message.create).toHaveBeenCalledWith({
-        data: {
-          conversationId: 'c1',
-          direction: 'outbound',
-          body: 'Olá! Seu atendimento com a Da Verdinha está em aberto. Podemos continuar de onde paramos?',
-          whatsappMessageId: 'wamid.TEMPLATE1',
-        },
-      });
-    });
-  });
-
   describe('recordInbound()', () => {
     it('without options: behaves exactly like before (backward compatible)', async () => {
       const created = { id: 'm4', conversationId: 'c1', body: 'Oi' };
@@ -344,7 +312,7 @@ describe('ConversationMessengerService', () => {
       });
       expect(prisma.conversation.update).toHaveBeenCalledWith({
         where: { id: 'c1' },
-        data: { unread: true, lastInboundAt: expect.any(Date) },
+        data: { unread: true },
       });
       expect(result).toBe(created);
     });

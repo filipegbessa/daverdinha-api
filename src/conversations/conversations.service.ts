@@ -5,7 +5,6 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { isWindowExpired } from '../common/whatsapp-window';
 import { ConversationMessengerService } from '../messaging/conversation-messenger.service';
 import { MediaStorageService } from '../media/media-storage.service';
 import {
@@ -29,11 +28,6 @@ import {
   ListMessagesDto,
   DEFAULT_MESSAGES_LIMIT,
 } from './dto/list-messages.dto';
-
-const RESUME_TEMPLATE_NAME = 'retomar_conversa';
-const RESUME_TEMPLATE_LANGUAGE = 'pt_BR';
-const RESUME_TEMPLATE_BODY =
-  'Olá! Seu atendimento com a Da Verdinha está em aberto. Podemos continuar de onde paramos?';
 
 const MESSAGE_INCLUDE = {
   order: { include: { items: true } },
@@ -233,11 +227,6 @@ export class ConversationsService {
         'Só é possível responder conversas transferidas pra um atendente.',
       );
     }
-    if (isWindowExpired(conversation.lastInboundAt)) {
-      throw new BadRequestException(
-        'A janela de 24 horas do WhatsApp expirou — use "Retomar conversa" antes de responder.',
-      );
-    }
     // The messenger marks the conversation read and bumps updatedAt as part
     // of the same transaction as the message itself. It also validates
     // replyToMessageId (existence, wamid, same conversation) and throws
@@ -273,11 +262,6 @@ export class ConversationsService {
     if (conversation.status !== 'paused_human') {
       throw new BadRequestException(
         'Só é possível responder conversas transferidas pra um atendente.',
-      );
-    }
-    if (isWindowExpired(conversation.lastInboundAt)) {
-      throw new BadRequestException(
-        'A janela de 24 horas do WhatsApp expirou — use "Retomar conversa" antes de responder.',
       );
     }
 
@@ -321,29 +305,6 @@ export class ConversationsService {
         'Só é possível pausar conversas com o bot ativo.',
       );
     }
-    return this.prisma.conversation.update({
-      where: { id },
-      data: { status: 'paused_human' },
-    });
-  }
-
-  /**
-   * Sends the "Retomar conversa" template to reopen WhatsApp's 24h
-   * session window, and hands the conversation to the operator
-   * unconditionally — clicking this button always counts as taking
-   * ownership, whether the conversation was bot_active or already
-   * paused_human.
-   */
-  async resume(id: string) {
-    const conversation = await this.prisma.conversation.findUniqueOrThrow({
-      where: { id },
-    });
-    await this.messenger.sendTemplate(
-      conversation,
-      RESUME_TEMPLATE_NAME,
-      RESUME_TEMPLATE_LANGUAGE,
-      RESUME_TEMPLATE_BODY,
-    );
     return this.prisma.conversation.update({
       where: { id },
       data: { status: 'paused_human' },

@@ -69,20 +69,6 @@ export class WhatsAppClientService {
     return { whatsappMessageId: response.messages![0].id };
   }
 
-  async sendTemplate(
-    to: string,
-    templateName: string,
-    languageCode: string,
-  ): Promise<{ whatsappMessageId: string }> {
-    const response = await this.post({
-      messaging_product: 'whatsapp',
-      to,
-      type: 'template',
-      template: { name: templateName, language: { code: languageCode } },
-    });
-    return { whatsappMessageId: response.messages![0].id };
-  }
-
   async getProductNames(
     catalogId: string,
     retailerIds: string[],
