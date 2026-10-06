@@ -67,6 +67,19 @@ Migração futura pra Railway (fase de produção): ver `SPEC.md` → "Stack (de
 - `src/messaging/` — `ConversationMessengerService`, o único lugar que manda mensagem pro WhatsApp e grava no histórico. Os dois andam sempre juntos; fazer isso à mão em cada branch era como o histórico ficava com buracos.
 - `api/index.ts` — entry point serverless usado pelo deploy na Vercel (envolve o `AppModule` num handler Express com instância cacheada entre invocações).
 - `src/main.ts` — entry point usado localmente via `npm run start:dev`.
+- `src/openapi/` — `GET /openapi.json`, o documento OpenAPI da API. Ver "Documentação da API" abaixo.
+
+## Documentação da API (OpenAPI)
+
+A doc navegável fica no admin, em **`/admin/docs`** (repo `daverdinha`): é uma página atrás do login do Clerk que renderiza o spec com o Scalar e injeta um token novo do Clerk em cada chamada do "Try it" — o token de sessão expira em 60s, então colar um à mão não funcionaria.
+
+A API só serve o JSON, em `GET /openapi.json`, **protegido pelo `ClerkAuthGuard`** como as demais rotas do admin. Não há tela de Swagger na API. O documento é montado na primeira chamada de cada instância e fica em cache; o cold start do webhook não paga esse custo.
+
+- **De onde vêm os schemas:** o plugin do `@nestjs/swagger` infere tipos, regras do `class-validator` e JSDoc dos DTOs e controllers. Como a Vercel compila `api/index.ts` sem passar pelo `nest build`, o plugin não roda no deploy — por isso o resultado dele fica em `src/metadata.ts`, **gerado e commitado**.
+- **Mexeu em DTO ou controller?** Rode `npm run openapi:metadata` e commite o `src/metadata.ts`. O CI regenera o arquivo e falha se ele estiver desatualizado.
+- **O que fica de fora:** o webhook do WhatsApp e o cron de retenção (`@ApiExcludeController`) — ninguém os chama à mão.
+- **DTOs de update** usam o `PartialType` de `@nestjs/swagger`, não o de `@nestjs/mapped-types`; o segundo não copia os metadados e o schema sai vazio.
+- **Upload (`reply-image`)** é descrito à mão com `@ApiConsumes`/`@ApiBody`, porque o plugin não enxerga o `FileInterceptor`.
 
 ## Menu Items e Configurações
 

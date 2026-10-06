@@ -1,8 +1,11 @@
 import { Body, Controller, Get, Param, Patch, UseGuards } from '@nestjs/common';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { ClerkAuthGuard } from '../common/auth/clerk-auth.guard';
 import { DeliveryLocationsService } from './delivery-locations.service';
 import { UpdateDeliveryLocationDto } from './dto/update-delivery-location.dto';
 
+@ApiTags('delivery-locations')
+@ApiBearerAuth()
 @Controller('delivery-locations')
 @UseGuards(ClerkAuthGuard)
 export class DeliveryLocationsController {

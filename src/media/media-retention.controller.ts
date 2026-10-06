@@ -1,4 +1,5 @@
 import { Controller, Get, UseGuards } from '@nestjs/common';
+import { ApiExcludeController } from '@nestjs/swagger';
 import { CronSecretGuard } from '../common/auth/cron-secret.guard';
 import { MediaRetentionService } from './media-retention.service';
 
@@ -6,6 +7,7 @@ import { MediaRetentionService } from './media-retention.service';
  * A Vercel chama cron com `GET`, não `POST` — não é convenção REST, é o que
  * a plataforma manda.
  */
+@ApiExcludeController()
 @Controller('cron/media-retention')
 @UseGuards(CronSecretGuard)
 export class MediaRetentionController {

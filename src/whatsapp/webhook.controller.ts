@@ -9,11 +9,13 @@ import {
   Query,
   Req,
 } from '@nestjs/common';
+import { ApiExcludeController } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { verifySignature } from './verify-signature';
 import { BotEngineService } from '../bot-engine/bot-engine.service';
 import { ConversationNotifierService } from '../push-notifications/conversation-notifier.service';
 
+@ApiExcludeController()
 @Controller('webhook/whatsapp')
 export class WebhookController {
   private readonly logger = new Logger(WebhookController.name);

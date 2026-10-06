@@ -10,12 +10,15 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { ClerkAuthGuard } from '../common/auth/clerk-auth.guard';
 import { MenuItemsService } from './menu-items.service';
 import { CreateMenuItemDto } from './dto/create-menu-item.dto';
 import { UpdateMenuItemDto } from './dto/update-menu-item.dto';
 import { ReorderMenuItemsDto } from './dto/reorder-menu-items.dto';
 
+@ApiTags('menu-items')
+@ApiBearerAuth()
 @Controller('menu-items')
 @UseGuards(ClerkAuthGuard)
 export class MenuItemsController {

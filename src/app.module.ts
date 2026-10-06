@@ -10,6 +10,7 @@ import { ConversationsModule } from './conversations/conversations.module';
 import { PushSubscriptionsModule } from './push-subscriptions/push-subscriptions.module';
 import { CategoriesModule } from './categories/categories.module';
 import { MediaRetentionModule } from './media/media-retention.module';
+import { OpenApiModule } from './openapi/openapi.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { MediaRetentionModule } from './media/media-retention.module';
     PushSubscriptionsModule,
     CategoriesModule,
     MediaRetentionModule,
+    OpenApiModule,
   ],
   controllers: [AppController],
 })

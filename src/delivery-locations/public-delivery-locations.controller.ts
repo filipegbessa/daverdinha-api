@@ -1,4 +1,5 @@
 import { Controller, Get } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { DeliveryLocationsService } from './delivery-locations.service';
 
 /**
@@ -7,6 +8,7 @@ import { DeliveryLocationsService } from './delivery-locations.service';
  * has to notice. Nothing here may expose anything beyond the delivery areas
  * already printed on the public site.
  */
+@ApiTags('delivery-locations')
 @Controller('delivery-locations')
 export class PublicDeliveryLocationsController {
   constructor(private readonly service: DeliveryLocationsService) {}

@@ -13,6 +13,7 @@ import {
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
+import { ApiBearerAuth, ApiBody, ApiConsumes, ApiTags } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ClerkAuthGuard } from '../common/auth/clerk-auth.guard';
 import { MAX_MEDIA_BYTES } from '../whatsapp/whatsapp-client.service';
@@ -24,6 +25,8 @@ import { UpdateConversationDto } from './dto/update-conversation.dto';
 import { ListConversationsDto } from './dto/list-conversations.dto';
 import { ListMessagesDto } from './dto/list-messages.dto';
 
+@ApiTags('conversations')
+@ApiBearerAuth()
 @Controller('conversations')
 @UseGuards(ClerkAuthGuard)
 export class ConversationsController {
@@ -76,6 +79,20 @@ export class ConversationsController {
    * da função. O Multer corta a leitura ao cruzar o teto.
    */
   @Post(':id/reply-image')
+  // O plugin do Swagger não enxerga o `FileInterceptor`: sem isto a doc
+  // mostraria um body JSON e o "Try it" não teria onde anexar o arquivo.
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['file'],
+      properties: {
+        file: { type: 'string', format: 'binary' },
+        caption: { type: 'string' },
+        replyToMessageId: { type: 'string' },
+      },
+    },
+  })
   @UseInterceptors(
     FileInterceptor('file', { limits: { fileSize: MAX_MEDIA_BYTES } }),
   )

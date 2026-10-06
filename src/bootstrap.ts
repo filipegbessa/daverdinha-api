@@ -2,6 +2,7 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { json } from 'express';
 import type { NextFunction, Request, Response } from 'express';
 import { createCorsOriginHandler } from './cors-origin';
+import { OpenApiService } from './openapi/openapi.service';
 
 // The WhatsApp webhook verifies Meta's HMAC signature against the exact
 // bytes Meta sent, so it must NOT go through the JSON body parser (which
@@ -25,4 +26,5 @@ export function configureApp(app: INestApplication): void {
 
   app.enableCors({ origin: createCorsOriginHandler(process.env.FRONTEND_URL) });
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
+  app.get(OpenApiService).attach(app);
 }

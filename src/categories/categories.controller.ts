@@ -11,12 +11,15 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { ClerkAuthGuard } from '../common/auth/clerk-auth.guard';
 import { CategoriesService } from './categories.service';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
 import { PaginationQueryDto } from '../common/pagination';
 
+@ApiTags('categories')
+@ApiBearerAuth()
 @Controller('categories')
 @UseGuards(ClerkAuthGuard)
 export class CategoriesController {

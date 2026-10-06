@@ -30,6 +30,10 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      # `src/metadata.ts` é gerado (ver scripts/generate-openapi-metadata.ts) e
+      # vai commitado, porque a Vercel não roda o plugin do Swagger. Se alguém
+      # mexer num DTO e esquecer de regenerar, a doc mente — isto pega.
+      - run: npm run openapi:metadata && git diff --exit-code src/metadata.ts
       - run: npm test
       # Suíte separada, fora do `npm test`, porque roda fora do contexto do Nest.
       - run: npm run test:scripts
