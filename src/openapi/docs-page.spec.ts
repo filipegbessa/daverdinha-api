@@ -47,21 +47,21 @@ describe('renderDocsPage', () => {
 });
 
 describe('DocsPageController', () => {
-  const original = process.env.CLERK_PUBLISHABLE_KEY;
+  const original = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
   afterEach(() => {
-    process.env.CLERK_PUBLISHABLE_KEY = original;
+    process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY = original;
   });
 
-  it('serves the page built from CLERK_PUBLISHABLE_KEY', () => {
-    process.env.CLERK_PUBLISHABLE_KEY = keyFor('clerk.example.com', 'live');
+  it('serves the page built from NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY', () => {
+    process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY = keyFor('clerk.example.com', 'live');
 
     expect(new DocsPageController().page()).toContain('clerk.example.com/npm/@clerk/clerk-js');
   });
 
   it('answers 503 with the reason when the key is not configured', () => {
-    delete process.env.CLERK_PUBLISHABLE_KEY;
+    delete process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
 
-    expect(() => new DocsPageController().page()).toThrow('CLERK_PUBLISHABLE_KEY não configurada.');
+    expect(() => new DocsPageController().page()).toThrow('NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY não configurada.');
   });
 });
 

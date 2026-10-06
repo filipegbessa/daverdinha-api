@@ -15,9 +15,9 @@ export class DocsPageController {
   @Header('X-Robots-Tag', 'noindex, nofollow')
   @Header('Cache-Control', 'no-store')
   page(): string {
-    const publishableKey = process.env.CLERK_PUBLISHABLE_KEY;
+    const publishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
     if (!publishableKey) {
-      throw new ServiceUnavailableException('CLERK_PUBLISHABLE_KEY não configurada.');
+      throw new ServiceUnavailableException('NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY não configurada.');
     }
     return renderDocsPage(publishableKey);
   }

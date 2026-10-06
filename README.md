@@ -78,7 +78,7 @@ A doc fica na própria API, em **`GET /docs`**: uma página HTML independente �
 - **O spec** vem de `GET /openapi.json`, **protegido pelo `ClerkAuthGuard`** como as demais rotas do admin. É montado na primeira chamada de cada instância e fica em cache; o cold start do webhook não paga esse custo.
 - **Nada vai para os servidores do Scalar:** o proxy hospedado, a barra de compartilhamento, a telemetria e o agente de IA estão desligados (ver `docs-page.ts`). O script do Scalar é fixado por versão e hash SRI.
 - **Fora do Google:** `X-Robots-Tag: noindex, nofollow` no header e na meta tag.
-- **Variável de ambiente:** `CLERK_PUBLISHABLE_KEY` — a mesma `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` do frontend. Sem ela, `/docs` responde 503.
+- **Variável de ambiente:** `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, já configurada no projeto da API na Vercel (o prefixo é herança do frontend; aqui ela só é lida pelo `/docs`). Sem ela, `/docs` responde 503.
 - **Domínio:** a instância de produção do Clerk só roda em subdomínios do domínio dela. A API precisa estar num subdomínio do site (ex.: `api.daverdinha.com.br`); num `*.vercel.app`, o login não carrega.
 
 ### Schemas

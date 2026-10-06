@@ -28,7 +28,7 @@ export function clerkFrontendApi(publishableKey: string): string {
   const match = /^pk_(test|live)_(.+)$/.exec(publishableKey);
   const host = match ? Buffer.from(match[2], 'base64').toString('utf8') : '';
   if (!host.endsWith('$') || !/^[a-z0-9.-]+\$$/i.test(host)) {
-    throw new Error('CLERK_PUBLISHABLE_KEY não é uma publishable key válida do Clerk.');
+    throw new Error('NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY não é uma publishable key válida do Clerk.');
   }
   return host.slice(0, -1);
 }
