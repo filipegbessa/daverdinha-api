@@ -67,13 +67,21 @@ Migração futura pra Railway (fase de produção): ver `SPEC.md` → "Stack (de
 - `src/messaging/` — `ConversationMessengerService`, o único lugar que manda mensagem pro WhatsApp e grava no histórico. Os dois andam sempre juntos; fazer isso à mão em cada branch era como o histórico ficava com buracos.
 - `api/index.ts` — entry point serverless usado pelo deploy na Vercel (envolve o `AppModule` num handler Express com instância cacheada entre invocações).
 - `src/main.ts` — entry point usado localmente via `npm run start:dev`.
-- `src/openapi/` — `GET /openapi.json`, o documento OpenAPI da API. Ver "Documentação da API" abaixo.
+- `src/openapi/` — a página de docs (`GET /docs`) e o documento OpenAPI que ela mostra (`GET /openapi.json`). Ver "Documentação da API" abaixo.
 
 ## Documentação da API (OpenAPI)
 
-A doc navegável fica no admin, em **`/admin/docs`** (repo `daverdinha`): é uma página atrás do login do Clerk que renderiza o spec com o Scalar e injeta um token novo do Clerk em cada chamada do "Try it" — o token de sessão expira em 60s, então colar um à mão não funcionaria.
+A doc fica na própria API, em **`GET /docs`**: uma página HTML independente — nada do admin, nem bundle nem estilo — com login próprio e o Scalar renderizando o spec.
 
-A API só serve o JSON, em `GET /openapi.json`, **protegido pelo `ClerkAuthGuard`** como as demais rotas do admin. Não há tela de Swagger na API. O documento é montado na primeira chamada de cada instância e fica em cache; o cold start do webhook não paga esse custo.
+- **Login:** o componente de sign-in do Clerk, carregado da própria instância. São os mesmos usuários do admin; a API continua aceitando só o token do Clerk, então a doc não abre nenhum caminho novo de acesso.
+- **"Try it":** pega um token novo do Clerk antes de cada chamada (o token de sessão expira em 60s). As chamadas vão para a mesma origem da página, sem CORS.
+- **O spec** vem de `GET /openapi.json`, **protegido pelo `ClerkAuthGuard`** como as demais rotas do admin. É montado na primeira chamada de cada instância e fica em cache; o cold start do webhook não paga esse custo.
+- **Nada vai para os servidores do Scalar:** o proxy hospedado, a barra de compartilhamento, a telemetria e o agente de IA estão desligados (ver `docs-page.ts`). O script do Scalar é fixado por versão e hash SRI.
+- **Fora do Google:** `X-Robots-Tag: noindex, nofollow` no header e na meta tag.
+- **Variável de ambiente:** `CLERK_PUBLISHABLE_KEY` — a mesma `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` do frontend. Sem ela, `/docs` responde 503.
+- **Domínio:** a instância de produção do Clerk só roda em subdomínios do domínio dela. A API precisa estar num subdomínio do site (ex.: `api.daverdinha.com.br`); num `*.vercel.app`, o login não carrega.
+
+### Schemas
 
 - **De onde vêm os schemas:** o plugin do `@nestjs/swagger` infere tipos, regras do `class-validator` e JSDoc dos DTOs e controllers. Como a Vercel compila `api/index.ts` sem passar pelo `nest build`, o plugin não roda no deploy — por isso o resultado dele fica em `src/metadata.ts`, **gerado e commitado**.
 - **Mexeu em DTO ou controller?** Rode `npm run openapi:metadata` e commite o `src/metadata.ts`. O CI regenera o arquivo e falha se ele estiver desatualizado.

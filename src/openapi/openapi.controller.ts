@@ -4,9 +4,9 @@ import { ClerkAuthGuard } from '../common/auth/clerk-auth.guard';
 import { OpenApiService } from './openapi.service';
 
 /**
- * Só o JSON, sem tela: quem renderiza é a página `/admin/docs` do frontend,
- * que já está atrás do login do Clerk. Por isso este endpoint usa o mesmo
- * guard das rotas do admin — o mapa da API não fica público.
+ * Só o JSON. Quem renderiza é a página `GET /docs` (ver docs-page.ts), que
+ * busca este endpoint depois do login do Clerk. Ele usa o mesmo guard das
+ * rotas do admin — o mapa da API não fica público.
  */
 @ApiExcludeController()
 @Controller('openapi.json')

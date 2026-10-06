@@ -25,7 +25,8 @@ import * as m21 from './push-subscriptions/push-subscriptions.controller';
 import * as m22 from './conversations/conversations.controller';
 import * as m23 from './categories/categories.controller';
 import * as m24 from './media/media-retention.controller';
-import * as m25 from './openapi/openapi.controller';
+import * as m25 from './openapi/docs-page.controller';
+import * as m26 from './openapi/openapi.controller';
 
 export default async () => {
   const t = {};
@@ -285,7 +286,8 @@ export default async () => {
             },
           },
         ],
-        [m25, { OpenApiController: { get: { type: Object } } }],
+        [m25, { DocsPageController: { page: { type: String } } }],
+        [m26, { OpenApiController: { get: { type: Object } } }],
       ],
     },
   };

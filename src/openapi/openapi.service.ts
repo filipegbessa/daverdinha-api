@@ -3,7 +3,7 @@ import { DocumentBuilder, OpenAPIObject, SwaggerModule } from '@nestjs/swagger';
 import metadata from '../metadata';
 
 /**
- * Monta o documento OpenAPI que o admin renderiza em `/admin/docs`.
+ * Monta o documento OpenAPI que a página `GET /docs` renderiza.
  *
  * É preguiçoso de propósito: varrer todos os controllers custa tempo, e na
  * Vercel isso entraria em todo cold start — inclusive nos do webhook do
