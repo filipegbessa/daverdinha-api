@@ -1,6 +1,7 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { json } from 'express';
 import type { NextFunction, Request, Response } from 'express';
+import { clerkProxyMiddleware } from './common/auth/clerk-proxy.middleware';
 import { createCorsOriginHandler } from './cors-origin';
 import { OpenApiService } from './openapi/openapi.service';
 
@@ -17,6 +18,8 @@ const RAW_BODY_ROUTES = ['/webhook/whatsapp'];
  * production from silently drifting apart when one of them gets a tweak.
  */
 export function configureApp(app: INestApplication): void {
+  // Ahead of the JSON parser: the Clerk proxy forwards the raw body.
+  app.use(clerkProxyMiddleware());
   app.use((req: Request, res: Response, next: NextFunction) => {
     if (RAW_BODY_ROUTES.includes(req.path)) {
       return next();
