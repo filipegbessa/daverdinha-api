@@ -97,9 +97,10 @@ describe('docs page script', () => {
 
     const html = renderDocsPage(keyFor('clerk.example.com', 'live'));
     const inline = /<script>([\s\S]*?)<\/script>/.exec(html)![1];
-    vm.runInNewContext(inline, { window, document, fetch: fetchMock, Scalar });
+    const console = { error: jest.fn() };
+    vm.runInNewContext(inline, { window, document, fetch: fetchMock, Scalar, console });
 
-    return { clerk, Scalar, fetchMock, el, loadClerk: () => clerkScript.onload(), clerkScript };
+    return { clerk, Scalar, fetchMock, el, console, loadClerk: () => clerkScript.onload(), clerkScript };
   }
 
   const flush = () => new Promise((resolve) => setImmediate(resolve));
@@ -153,5 +154,23 @@ describe('docs page script', () => {
 
     expect(el('status').textContent).toMatch(/erro 401/);
     expect(Scalar.createApiReference).not.toHaveBeenCalled();
+  });
+
+  // Scalar runs after the docs area replaced the gate; a failure there must
+  // not leave a blank page.
+  it('brings the gate back with the message, and logs the cause, when rendering fails', async () => {
+    const { Scalar, el, console, loadClerk } = boot({ user: true });
+    const cause = new Error('Scalar is not defined');
+    Scalar.createApiReference.mockImplementation(() => {
+      throw cause;
+    });
+
+    await loadClerk();
+    await flush();
+
+    expect(el('gate').hidden).toBe(false);
+    expect(el('docs').hidden).toBe(true);
+    expect(el('status').textContent).toBe('Erro ao carregar a documentação.');
+    expect(console.error).toHaveBeenCalledWith(cause);
   });
 });

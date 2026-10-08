@@ -90,7 +90,12 @@ export function renderDocsPage(publishableKey: string): string {
       var status = document.getElementById('status');
       var rendered = false;
 
-      function fail(message) {
+      // The error can come after the docs area took over the screen, so the
+      // gate is brought back; the cause goes to the console.
+      function fail(message, error) {
+        if (error) console.error(error);
+        gate.hidden = false;
+        docs.hidden = true;
         status.textContent = message;
         status.className = 'status error';
         status.hidden = false;
@@ -150,14 +155,14 @@ export function renderDocsPage(publishableKey: string): string {
           clerk.addListener(function (state) {
             if (state.user) {
               clerk.unmountSignIn(document.getElementById('sign-in'));
-              showDocs(clerk).catch(function () { rendered = false; fail('Erro ao carregar a documentação.'); });
+              showDocs(clerk).catch(function (error) { rendered = false; fail('Erro ao carregar a documentação.', error); });
             } else if (rendered) {
               window.location.reload();
             }
           });
           if (!clerk.user) showSignIn(clerk);
         } catch (error) {
-          fail('Não foi possível iniciar o login.');
+          fail('Não foi possível iniciar o login.', error);
         }
       };
       document.head.appendChild(script);
