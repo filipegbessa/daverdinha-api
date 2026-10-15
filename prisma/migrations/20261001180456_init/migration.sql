@@ -75,6 +75,7 @@ CREATE TABLE "conversations" (
     "invalid_attempts" INTEGER NOT NULL DEFAULT 0,
     "awaiting_delivery_reply" BOOLEAN NOT NULL DEFAULT false,
     "unread" BOOLEAN NOT NULL DEFAULT false,
+    "last_inbound_at" TIMESTAMP(3),
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
 

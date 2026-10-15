@@ -11,6 +11,7 @@ describe('ConversationsController', () => {
     reply: jest.Mock;
     mediaUrl: jest.Mock;
     replyImage: jest.Mock;
+    resume: jest.Mock;
   };
 
   beforeEach(async () => {
@@ -20,6 +21,7 @@ describe('ConversationsController', () => {
       reply: jest.fn(),
       mediaUrl: jest.fn(),
       replyImage: jest.fn(),
+      resume: jest.fn(),
     };
 
     const moduleRef = await Test.createTestingModule({
@@ -88,5 +90,10 @@ describe('ConversationsController', () => {
       caption: 'o vaso',
       replyToMessageId: 'msg9',
     });
+  });
+
+  it('resume() forwards the conversation id', () => {
+    controller.resume('conv1');
+    expect(service.resume).toHaveBeenCalledWith('conv1');
   });
 });

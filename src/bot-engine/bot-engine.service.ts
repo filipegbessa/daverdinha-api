@@ -57,7 +57,11 @@ const INVALID_CONTENT_LABEL = '[Conteúdo inválido]';
  */
 function isUnsupportedContent(type: string | undefined): boolean {
   return (
-    !!type && type !== 'text' && type !== 'interactive' && type !== 'image'
+    !!type &&
+    type !== 'text' &&
+    type !== 'interactive' &&
+    type !== 'image' &&
+    type !== 'button'
   );
 }
 
@@ -145,7 +149,7 @@ export class BotEngineService {
       return this.processImageMessage(conversation, isNew, message, handled);
     }
 
-    const text = message.text?.body;
+    const text = message.text?.body ?? message.button?.text;
     const isMenuKeyword = !!text && normalizeText(text) === MENU_KEYWORD;
 
     // A reply to the delivery-location sub-flow is persisted by
