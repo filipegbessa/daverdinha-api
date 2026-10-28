@@ -5,6 +5,7 @@ import { WhatsAppClientService } from '../whatsapp/whatsapp-client.service';
 import { MenuItemsService } from '../menu-items/menu-items.service';
 import { ConversationMessengerService } from '../messaging/conversation-messenger.service';
 import { MediaStorageService } from '../media/media-storage.service';
+import { AudioTranscodeService } from '../media/audio-transcode.service';
 import { DeliveryLocationsService } from '../delivery-locations/delivery-locations.service';
 import { CepLookupService } from '../cep-lookup/cep-lookup.service';
 
@@ -72,6 +73,7 @@ describe('DeliveryCheckService', () => {
         // O messenger passou a saber mandar imagem, então o módulo de teste
         // precisa do storage — que este fluxo não usa.
         { provide: MediaStorageService, useValue: { put: jest.fn(), signedUrl: jest.fn() } },
+        AudioTranscodeService,
       ],
     }).compile();
 

@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { WhatsAppClientService } from '../whatsapp/whatsapp-client.service';
 import { ConversationMessengerService } from '../messaging/conversation-messenger.service';
 import { MediaStorageService } from '../media/media-storage.service';
+import { AudioTranscodeService } from '../media/audio-transcode.service';
 
 describe('ConversationsService', () => {
   let service: ConversationsService;
@@ -51,6 +52,7 @@ describe('ConversationsService', () => {
         // has to both reach WhatsApp and land in the transcript, and that
         // pairing is what these assertions check.
         ConversationMessengerService,
+        AudioTranscodeService,
       ],
     }).compile();
     service = moduleRef.get(ConversationsService);

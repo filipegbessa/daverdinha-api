@@ -4,6 +4,7 @@ import { ConversationMessengerService } from './conversation-messenger.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { WhatsAppClientService } from '../whatsapp/whatsapp-client.service';
 import { MediaStorageService } from '../media/media-storage.service';
+import { AudioTranscodeService } from '../media/audio-transcode.service';
 
 describe('ConversationMessengerService', () => {
   let service: ConversationMessengerService;
@@ -14,6 +15,7 @@ describe('ConversationMessengerService', () => {
     $transaction: jest.Mock;
   };
   let mediaStorage: { put: jest.Mock; signedUrl: jest.Mock };
+  let audioTranscode: { normalizeIfNeeded: jest.Mock };
   let whatsapp: {
     sendText: jest.Mock;
     sendInteractiveList: jest.Mock;
@@ -51,12 +53,16 @@ describe('ConversationMessengerService', () => {
         .mockResolvedValue({ whatsappMessageId: 'wamid.OUT_AUD' }),
     };
     mediaStorage = { put: jest.fn(), signedUrl: jest.fn() };
+    audioTranscode = {
+      normalizeIfNeeded: jest.fn((buffer: Buffer) => Promise.resolve(buffer)),
+    };
     const moduleRef = await Test.createTestingModule({
       providers: [
         ConversationMessengerService,
         { provide: PrismaService, useValue: prisma },
         { provide: WhatsAppClientService, useValue: whatsapp },
         { provide: MediaStorageService, useValue: mediaStorage },
+        { provide: AudioTranscodeService, useValue: audioTranscode },
       ],
     }).compile();
     service = moduleRef.get(ConversationMessengerService);
@@ -94,6 +100,36 @@ describe('ConversationMessengerService', () => {
           mediaSizeBytes: file.buffer.byteLength,
         }),
       });
+    });
+
+    it('sends the normalized buffer, not the original, when it is MP4', async () => {
+      const mp4File = { buffer: Buffer.from('raw-mp4-bytes'), mimeType: 'audio/mp4' };
+      const normalized = Buffer.from('normalized-mp4-bytes');
+      audioTranscode.normalizeIfNeeded.mockResolvedValue(normalized);
+
+      await service.sendAudio(conversation, mp4File);
+
+      expect(audioTranscode.normalizeIfNeeded).toHaveBeenCalledWith(
+        mp4File.buffer,
+        'audio/mp4',
+      );
+      expect(whatsapp.uploadMedia).toHaveBeenCalledWith(normalized, 'audio/mp4');
+      expect(mediaStorage.put).toHaveBeenCalledWith(
+        expect.any(String),
+        normalized,
+        'audio/mp4',
+      );
+      expect(prisma.message.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ mediaSizeBytes: normalized.byteLength }),
+      });
+    });
+
+    it('does not run audio normalization for an image send', async () => {
+      const imageFile = { buffer: Buffer.from('png-bytes'), mimeType: 'image/png' };
+
+      await service.sendImage(conversation, imageFile);
+
+      expect(audioTranscode.normalizeIfNeeded).not.toHaveBeenCalled();
     });
 
     it('writes nothing to R2 when the send fails', async () => {

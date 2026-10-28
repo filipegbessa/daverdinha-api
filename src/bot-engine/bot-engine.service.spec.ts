@@ -8,6 +8,7 @@ import { MenuItemsService } from '../menu-items/menu-items.service';
 import { ConversationMessengerService } from '../messaging/conversation-messenger.service';
 import { DeliveryCheckService } from './delivery-check.service';
 import { MediaStorageService } from '../media/media-storage.service';
+import { AudioTranscodeService } from '../media/audio-transcode.service';
 
 function imageMessagePayload(
   from: string,
@@ -242,6 +243,7 @@ describe('BotEngineService', () => {
         { provide: DeliveryCheckService, useValue: deliveryCheck },
         { provide: MediaStorageService, useValue: mediaStorage },
         ConversationMessengerService,
+        AudioTranscodeService,
       ],
     }).compile();
 

@@ -9,6 +9,7 @@ import {
   MediaStorageService,
   buildMediaKey,
 } from '../media/media-storage.service';
+import { AudioTranscodeService } from '../media/audio-transcode.service';
 
 interface Recipient {
   id: string;
@@ -33,6 +34,7 @@ export class ConversationMessengerService {
     private readonly prisma: PrismaService,
     private readonly whatsapp: WhatsAppClientService,
     private readonly mediaStorage: MediaStorageService,
+    private readonly audioTranscode: AudioTranscodeService,
   ) {}
 
   /**
@@ -91,7 +93,12 @@ export class ConversationMessengerService {
       repliedToWamid = target.whatsappMessageId;
     }
 
-    const mediaId = await this.whatsapp.uploadMedia(file.buffer, file.mimeType);
+    const buffer =
+      kind === 'audio'
+        ? await this.audioTranscode.normalizeIfNeeded(file.buffer, file.mimeType)
+        : file.buffer;
+
+    const mediaId = await this.whatsapp.uploadMedia(buffer, file.mimeType);
 
     const sendOptions = repliedToWamid
       ? { replyToWamid: repliedToWamid }
@@ -111,7 +118,7 @@ export class ConversationMessengerService {
           );
 
     const mediaKey = buildMediaKey(conversation.id, file.mimeType);
-    await this.mediaStorage.put(mediaKey, file.buffer, file.mimeType);
+    await this.mediaStorage.put(mediaKey, buffer, file.mimeType);
 
     return this.persist(conversation.id, {
       direction: 'outbound',
@@ -122,7 +129,7 @@ export class ConversationMessengerService {
       repliedToWamid,
       mediaKey,
       mediaMimeType: file.mimeType,
-      mediaSizeBytes: file.buffer.byteLength,
+      mediaSizeBytes: buffer.byteLength,
     });
   }
 
