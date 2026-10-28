@@ -12,6 +12,7 @@ import {
 import { ApiExcludeController } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { verifySignature } from './verify-signature';
+import { parseMessageStatuses } from './incoming-message';
 import { BotEngineService } from '../bot-engine/bot-engine.service';
 import { ConversationNotifierService } from '../push-notifications/conversation-notifier.service';
 
@@ -50,6 +51,16 @@ export class WebhookController {
       !verifySignature(rawBody, signature, process.env.WHATSAPP_APP_SECRET!)
     ) {
       throw new ForbiddenException('Invalid signature');
+    }
+
+    for (const update of parseMessageStatuses(body)) {
+      if (update.status === 'failed') {
+        this.logger.warn(
+          `Message ${update.wamid} failed: ${JSON.stringify(update.errors)}`,
+        );
+      } else {
+        this.logger.log(`Message ${update.wamid} status: ${update.status}`);
+      }
     }
 
     const result = await this.botEngine.handleIncomingMessage(body);

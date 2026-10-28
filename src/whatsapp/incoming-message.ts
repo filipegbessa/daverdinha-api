@@ -62,6 +62,17 @@ export interface IncomingMessage {
 }
 
 /**
+ * Meta's delivery receipt for a message we sent — `sent`/`delivered`/`read`,
+ * or `failed` with why. The API accepting a send only means Meta queued it;
+ * this is the only way to find out it never actually reached the customer.
+ */
+export interface MessageStatusUpdate {
+  wamid: string;
+  status: string;
+  errors?: { code?: number; title?: string; message?: string; details?: string }[];
+}
+
+/**
  * O envelope da Meta, só até onde a gente lê. Descrever esta forma é o que
  * permite desembrulhar a mensagem sem espalhar acesso não verificado: tudo é
  * opcional de propósito, porque nada aqui é garantido pelo webhook.
@@ -78,6 +89,16 @@ interface RawWebhookPayload {
             referred_product?: { product_retailer_id?: string };
           };
         })[];
+        statuses?: {
+          id?: string;
+          status?: string;
+          errors?: {
+            code?: number;
+            title?: string;
+            message?: string;
+            error_data?: { details?: string };
+          }[];
+        }[];
       };
     }[];
   }[];
@@ -100,4 +121,25 @@ export function parseIncomingMessage(payload: unknown): IncomingMessage | null {
     image: raw.image,
     audio: raw.audio,
   };
+}
+
+export function parseMessageStatuses(payload: unknown): MessageStatusUpdate[] {
+  const raw = (payload as RawWebhookPayload)?.entry?.[0]?.changes?.[0]?.value
+    ?.statuses;
+  if (!raw) return [];
+
+  return raw
+    .filter((s): s is typeof s & { id: string; status: string } =>
+      typeof s.id === 'string' && typeof s.status === 'string',
+    )
+    .map((s) => ({
+      wamid: s.id,
+      status: s.status,
+      errors: s.errors?.map((e) => ({
+        code: e.code,
+        title: e.title,
+        message: e.message,
+        details: e.error_data?.details,
+      })),
+    }));
 }

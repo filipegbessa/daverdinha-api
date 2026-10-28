@@ -1,4 +1,4 @@
-import { parseIncomingMessage } from './incoming-message';
+import { parseIncomingMessage, parseMessageStatuses } from './incoming-message';
 
 describe('parseIncomingMessage', () => {
   it('parses a payload with context.id and extracts repliedToWamid', () => {
@@ -260,5 +260,94 @@ describe('parseIncomingMessage', () => {
     });
 
     expect(result?.image).toBeUndefined();
+  });
+});
+
+describe('parseMessageStatuses', () => {
+  it('returns an empty array when the payload has no statuses', () => {
+    expect(parseMessageStatuses({ entry: [{ changes: [{ value: {} }] }] })).toEqual([]);
+    expect(parseMessageStatuses({ some: 'random' })).toEqual([]);
+  });
+
+  it('parses a delivered status', () => {
+    const payload = {
+      entry: [
+        {
+          changes: [
+            {
+              value: {
+                statuses: [{ id: 'wamid_out_1', status: 'delivered' }],
+              },
+            },
+          ],
+        },
+      ],
+    };
+
+    expect(parseMessageStatuses(payload)).toEqual([
+      { wamid: 'wamid_out_1', status: 'delivered', errors: undefined },
+    ]);
+  });
+
+  it('parses a failed status with its error details', () => {
+    const payload = {
+      entry: [
+        {
+          changes: [
+            {
+              value: {
+                statuses: [
+                  {
+                    id: 'wamid_out_2',
+                    status: 'failed',
+                    errors: [
+                      {
+                        code: 131053,
+                        title: 'Media upload error',
+                        message: 'Media upload error',
+                        error_data: { details: 'Unsupported media type' },
+                      },
+                    ],
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    };
+
+    expect(parseMessageStatuses(payload)).toEqual([
+      {
+        wamid: 'wamid_out_2',
+        status: 'failed',
+        errors: [
+          {
+            code: 131053,
+            title: 'Media upload error',
+            message: 'Media upload error',
+            details: 'Unsupported media type',
+          },
+        ],
+      },
+    ]);
+  });
+
+  it('skips entries missing an id or a status', () => {
+    const payload = {
+      entry: [
+        {
+          changes: [
+            {
+              value: {
+                statuses: [{ status: 'sent' }, { id: 'wamid_out_3' }],
+              },
+            },
+          ],
+        },
+      ],
+    };
+
+    expect(parseMessageStatuses(payload)).toEqual([]);
   });
 });

@@ -115,5 +115,55 @@ describe('WebhookController', () => {
       expect(result).toEqual({ status: 'ok' });
       expect(warn).toHaveBeenCalled();
     });
+
+    it('logs a failed delivery status, since the WhatsApp API accepting a send does not mean it reached the customer', async () => {
+      const warn = jest
+        .spyOn(Logger.prototype, 'warn')
+        .mockImplementation(() => {});
+      const statusPayload = {
+        entry: [
+          {
+            changes: [
+              {
+                value: {
+                  statuses: [
+                    {
+                      id: 'wamid_out_1',
+                      status: 'failed',
+                      errors: [{ code: 131053, title: 'Media upload error' }],
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      };
+      botEngine.handleIncomingMessage.mockResolvedValue(null);
+
+      const result = await controller.receive(fakeRequest(), statusPayload);
+
+      expect(result).toEqual({ status: 'ok' });
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('wamid_out_1'));
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('131053'));
+    });
+
+    it('logs a delivered status without a warning', async () => {
+      const log = jest.spyOn(Logger.prototype, 'log').mockImplementation(() => {});
+      const statusPayload = {
+        entry: [
+          {
+            changes: [
+              { value: { statuses: [{ id: 'wamid_out_2', status: 'delivered' }] } },
+            ],
+          },
+        ],
+      };
+      botEngine.handleIncomingMessage.mockResolvedValue(null);
+
+      await controller.receive(fakeRequest(), statusPayload);
+
+      expect(log).toHaveBeenCalledWith(expect.stringContaining('delivered'));
+    });
   });
 });
