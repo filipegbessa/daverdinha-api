@@ -172,6 +172,39 @@ describe('WhatsAppClientService', () => {
       }
     });
 
+    it('accepts a voice note, dropping the codecs parameter from the type', async () => {
+      mockTwoStep({
+        url: 'https://x/y',
+        mime_type: 'audio/ogg; codecs=opus',
+        file_size: 9,
+      });
+
+      const result = await service.downloadMedia('media_123', 'audio');
+
+      expect(result).toMatchObject({ ok: true, mimeType: 'audio/ogg' });
+    });
+
+    it('applies the audio ceiling (16 MB), not the image one, to audio', async () => {
+      mockTwoStep({
+        url: 'https://x/y',
+        mime_type: 'audio/mpeg',
+        file_size: 17 * 1024 * 1024,
+      });
+
+      const result = await service.downloadMedia('media_123', 'audio');
+
+      expect(result).toEqual({ ok: false, reason: 'too-large' });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not accept an audio type when an image was expected', async () => {
+      mockTwoStep({ url: 'https://x/y', mime_type: 'audio/ogg', file_size: 9 });
+
+      const result = await service.downloadMedia('media_123', 'image');
+
+      expect(result).toEqual({ ok: false, reason: 'unsupported-type' });
+    });
+
     it('rejects an unsupported type from the metadata, without downloading it', async () => {
       mockTwoStep({
         url: 'https://x/y',
@@ -215,7 +248,10 @@ describe('WhatsAppClientService', () => {
           ok: true,
           headers: { get: () => null },
           arrayBuffer: async () =>
-            huge.buffer.slice(huge.byteOffset, huge.byteOffset + huge.byteLength),
+            huge.buffer.slice(
+              huge.byteOffset,
+              huge.byteOffset + huge.byteLength,
+            ),
         });
 
       const result = await service.downloadMedia('media_123');
@@ -278,7 +314,10 @@ describe('WhatsAppClientService', () => {
   describe('uploadMedia()', () => {
     it('posts the file as multipart and returns the id Meta assigns', async () => {
       fetchMock.mockReset();
-      fetchMock.mockResolvedValue({ ok: true, json: async () => ({ id: 'media_out_1' }) });
+      fetchMock.mockResolvedValue({
+        ok: true,
+        json: async () => ({ id: 'media_out_1' }),
+      });
 
       const id = await service.uploadMedia(Buffer.from('bytes'), 'image/png');
 
@@ -337,6 +376,32 @@ describe('WhatsAppClientService', () => {
 
     it('quotes a message when asked, the same way sendText does', async () => {
       await service.sendImage('5521999999999', 'media_out_1', undefined, {
+        replyToWamid: 'wamid.original',
+      });
+
+      const [, init] = fetchMock.mock.calls[0];
+      expect(JSON.parse(init.body).context).toEqual({
+        message_id: 'wamid.original',
+      });
+    });
+  });
+
+  describe('sendAudio()', () => {
+    it('sends the audio by id, with no caption, and returns its wamid', async () => {
+      const result = await service.sendAudio('5521999999999', 'media_out_2');
+
+      const [, init] = fetchMock.mock.calls[0];
+      expect(JSON.parse(init.body)).toEqual({
+        messaging_product: 'whatsapp',
+        to: '5521999999999',
+        type: 'audio',
+        audio: { id: 'media_out_2' },
+      });
+      expect(result).toEqual({ whatsappMessageId: 'wamid.HHBHYjkTest' });
+    });
+
+    it('quotes a message when asked', async () => {
+      await service.sendAudio('5521999999999', 'media_out_2', {
         replyToWamid: 'wamid.original',
       });
 

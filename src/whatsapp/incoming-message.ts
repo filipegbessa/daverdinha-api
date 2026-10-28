@@ -48,6 +48,17 @@ export interface IncomingMessage {
     sha256?: string;
     caption?: string;
   };
+  /**
+   * Mesmo esquema da imagem: só um id a trocar pelo arquivo. Áudio não tem
+   * legenda. `voice` marca a mensagem de voz gravada no app (`audio/ogg;
+   * codecs=opus`), em oposição a um arquivo de áudio encaminhado.
+   */
+  audio?: {
+    id: string;
+    mime_type?: string;
+    sha256?: string;
+    voice?: boolean;
+  };
 }
 
 /**
@@ -87,5 +98,6 @@ export function parseIncomingMessage(payload: unknown): IncomingMessage | null {
     referredProductId: raw.context?.referred_product?.product_retailer_id,
     repliedToWamid: raw.context?.id,
     image: raw.image,
+    audio: raw.audio,
   };
 }

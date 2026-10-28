@@ -21,6 +21,7 @@ function buildPreview(
   if (message.kind === 'image') {
     return message.body ? `📷 ${message.body}` : '📷 Foto';
   }
+  if (message.kind === 'audio') return '🎤 Áudio';
   return message.body ?? 'Nova mensagem';
 }
 

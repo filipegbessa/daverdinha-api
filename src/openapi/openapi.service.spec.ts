@@ -61,6 +61,14 @@ describe('OpenApiService', () => {
     expect(body.content['multipart/form-data'].schema.properties.file).toEqual({ type: 'string', format: 'binary' });
   });
 
+  it('describes reply-audio as a multipart upload with a binary file field', async () => {
+    service.attach(app);
+    const { paths } = await service.getDocument();
+    const body = paths['/conversations/{id}/reply-audio'].post!.requestBody as any;
+
+    expect(body.content['multipart/form-data'].schema.properties.file).toEqual({ type: 'string', format: 'binary' });
+  });
+
   it('leaves out the WhatsApp webhook and the spec endpoint itself', async () => {
     service.attach(app);
     const { paths } = await service.getDocument();

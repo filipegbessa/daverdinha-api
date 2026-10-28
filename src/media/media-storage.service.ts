@@ -17,11 +17,16 @@ const MIME_EXTENSIONS: Record<string, string> = {
   'image/jpeg': 'jpg',
   'image/png': 'png',
   'image/webp': 'webp',
+  'audio/ogg': 'ogg',
+  'audio/mpeg': 'mp3',
+  'audio/mp4': 'm4a',
+  'audio/aac': 'aac',
+  'audio/amr': 'amr',
 };
 
 /**
  * Vida curta de propósito: o bucket é privado (comprovante de pagamento
- * passa por aqui) e a URL só existe para o admin abrir a imagem na hora,
+ * passa por aqui) e a URL só existe para o admin abrir a mídia na hora,
  * nunca para ficar guardada em cache do cliente.
  */
 const SIGNED_URL_TTL_SECONDS = 300;
@@ -41,7 +46,7 @@ export function buildMediaKey(
 
 /**
  * Fala com o R2 pelo protocolo do S3 (`@aws-sdk/client-s3`), o que é o que
- * torna egress grátis — ler a imagem repetidas vezes no admin não custa nada.
+ * torna egress grátis — ler a mídia repetidas vezes no admin não custa nada.
  * Interface enxuta de propósito: trocar de provedor de storage não deveria
  * mexer em mais nada além deste arquivo.
  */

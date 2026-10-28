@@ -1290,7 +1290,7 @@ describe('BotEngineService', () => {
       prisma.conversation.findFirst.mockResolvedValue(conversation);
 
       await service.handleIncomingMessage(
-        mediaMessagePayload('5521999999999', 'audio'),
+        mediaMessagePayload('5521999999999', 'video'),
       );
 
       expect(prisma.message.create).toHaveBeenCalledWith({
@@ -1328,7 +1328,7 @@ describe('BotEngineService', () => {
       prisma.conversation.findFirst.mockResolvedValue(conversation);
 
       await service.handleIncomingMessage(
-        mediaMessagePayload('5521999999999', 'audio'),
+        mediaMessagePayload('5521999999999', 'video'),
       );
 
       // Recorded, because losing it leaves a hole in the operator's transcript.
@@ -1344,7 +1344,7 @@ describe('BotEngineService', () => {
       expect(whatsapp.sendText).not.toHaveBeenCalled();
     });
 
-    it('an audio message is persisted with a unified invalid-content label, replies, and stays with the bot (no handoff)', async () => {
+    it('a video message is persisted with a unified invalid-content label, replies, and stays with the bot (no handoff)', async () => {
       const conversation = {
         id: 'c1',
         phone: '5521999999999',
@@ -1355,7 +1355,7 @@ describe('BotEngineService', () => {
       prisma.conversation.findFirst.mockResolvedValue(conversation);
 
       await service.handleIncomingMessage(
-        mediaMessagePayload('5521999999999', 'audio'),
+        mediaMessagePayload('5521999999999', 'video'),
       );
 
       expect(prisma.message.create).toHaveBeenCalledWith({
@@ -1472,7 +1472,7 @@ describe('BotEngineService', () => {
       );
     });
 
-    it('an audio message during an in-progress delivery-CEP wait replies with the invalid-content message, instead of being treated as the CEP reply, and does not hand off', async () => {
+    it('a video message during an in-progress delivery-CEP wait replies with the invalid-content message, instead of being treated as the CEP reply, and does not hand off', async () => {
       const conversation = {
         id: 'c1',
         phone: '5521999999999',
@@ -1483,7 +1483,7 @@ describe('BotEngineService', () => {
       prisma.conversation.findFirst.mockResolvedValue(conversation);
 
       await service.handleIncomingMessage(
-        mediaMessagePayload('5521999999999', 'audio'),
+        mediaMessagePayload('5521999999999', 'video'),
       );
 
       expect(deliveryCheck.handleReply).not.toHaveBeenCalled();
@@ -1715,6 +1715,70 @@ describe('BotEngineService', () => {
     });
   });
 
+  describe('audio messages', () => {
+    const conversation = {
+      id: 'c1',
+      phone: '5521999999999',
+      status: 'paused_human',
+      invalidAttempts: 0,
+      awaitingDeliveryReply: false,
+      updatedAt: new Date(),
+    };
+
+    it('downloads the voice note with the audio rules, stores it in R2, and records it as kind audio', async () => {
+      prisma.conversation.findFirst.mockResolvedValue(conversation);
+      whatsapp.downloadMedia.mockResolvedValue({
+        ok: true,
+        buffer: Buffer.from('fake-voice'),
+        mimeType: 'audio/ogg',
+        sizeBytes: 10,
+      });
+
+      await service.handleIncomingMessage(
+        mediaMessagePayload('5521999999999', 'audio'),
+      );
+
+      expect(whatsapp.downloadMedia).toHaveBeenCalledWith('media123', 'audio');
+      expect(mediaStorage.put).toHaveBeenCalledWith(
+        expect.stringMatching(/^conversations\/c1\/[0-9a-f-]{36}\.ogg$/),
+        Buffer.from('fake-voice'),
+        'audio/ogg',
+      );
+      expect(prisma.message.create).toHaveBeenCalledWith({
+        data: {
+          conversationId: 'c1',
+          direction: 'inbound',
+          kind: 'audio',
+          body: null,
+          mediaKey: expect.stringMatching(
+            /^conversations\/c1\/[0-9a-f-]{36}\.ogg$/,
+          ),
+          mediaMimeType: 'audio/ogg',
+          mediaSizeBytes: 10,
+        },
+      });
+      // Content, not something the bot can't read: no invalid-content reply.
+      expect(whatsapp.sendText).not.toHaveBeenCalled();
+    });
+
+    it('falls back to invalid content when the download rejects the audio', async () => {
+      prisma.conversation.findFirst.mockResolvedValue(conversation);
+      whatsapp.downloadMedia.mockResolvedValue({
+        ok: false,
+        reason: 'unsupported-type',
+      });
+
+      await service.handleIncomingMessage(
+        mediaMessagePayload('5521999999999', 'audio'),
+      );
+
+      expect(mediaStorage.put).not.toHaveBeenCalled();
+      expect(prisma.message.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ kind: 'invalid_content' }),
+      });
+    });
+  });
+
   describe('image messages', () => {
     it('downloads from Meta, uploads to R2, and records the message as kind image with the media columns', async () => {
       const conversation = {
@@ -1728,7 +1792,7 @@ describe('BotEngineService', () => {
 
       await service.handleIncomingMessage(imageMessagePayload('5521999999999'));
 
-      expect(whatsapp.downloadMedia).toHaveBeenCalledWith('media123');
+      expect(whatsapp.downloadMedia).toHaveBeenCalledWith('media123', 'image');
       expect(mediaStorage.put).toHaveBeenCalledWith(
         expect.stringMatching(/^conversations\/c1\/[0-9a-f-]{36}\.jpg$/),
         Buffer.from('fake-image-bytes'),
@@ -1996,7 +2060,7 @@ describe('BotEngineService', () => {
       expect(prisma.message.count).toHaveBeenCalledWith({
         where: {
           conversationId: 'c1',
-          kind: 'image',
+          kind: { in: ['image', 'audio'] },
           direction: 'inbound',
           createdAt: { gte: expect.any(Date) },
         },
@@ -2144,8 +2208,8 @@ describe('BotEngineService', () => {
                     {
                       id: 'wamid.777',
                       from: '5521999999999',
-                      type: 'audio',
-                      audio: { id: 'media123' },
+                      type: 'video',
+                      video: { id: 'media123' },
                       context: { id: 'wamid.parent3' },
                     },
                   ],

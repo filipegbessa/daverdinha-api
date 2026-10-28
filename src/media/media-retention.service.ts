@@ -36,9 +36,9 @@ export class MediaRetentionService {
   ) {}
 
   /**
-   * Apaga o arquivo de toda imagem com mais de 3 anos — a mensagem
+   * Apaga o arquivo de toda imagem ou áudio com mais de 3 anos — a mensagem
    * permanece, marcada como expirada (`mediaKey: null`, mas `kind` continua
-   * `'image'`, o que já é o que o frontend precisa para distinguir de uma
+   * `'image'`/`'audio'`, o que já é o que o frontend precisa para distinguir de uma
    * mensagem que nunca teve mídia).
    *
    * Ordem por arquivo: **R2 primeiro, banco depois.** Se o R2 falhar, a
@@ -60,7 +60,7 @@ export class MediaRetentionService {
     while (Date.now() - startedAt < PURGE_TIME_BUDGET_MS) {
       const candidates = await this.prisma.message.findMany({
         where: {
-          kind: 'image',
+          kind: { in: ['image', 'audio'] },
           mediaKey: { not: null },
           createdAt: { lt: cutoff },
         },
@@ -82,7 +82,9 @@ export class MediaRetentionService {
       }
     }
 
-    this.logger.log(`media retention: purged=${purged} images past 3 years`);
+    this.logger.log(
+      `media retention: purged=${purged} media files past 3 years`,
+    );
     return { purged };
   }
 

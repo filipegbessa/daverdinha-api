@@ -120,6 +120,7 @@ enum MessageKind {
   invalid_content
   order
   image
+  audio
 }
 
 model Message {

@@ -19,6 +19,7 @@ describe('ConversationMessengerService', () => {
     sendInteractiveList: jest.Mock;
     uploadMedia: jest.Mock;
     sendImage: jest.Mock;
+    sendAudio: jest.Mock;
   };
 
   const conversation = { id: 'c1', phone: '5521999999999' };
@@ -45,6 +46,9 @@ describe('ConversationMessengerService', () => {
       sendImage: jest
         .fn()
         .mockResolvedValue({ whatsappMessageId: 'wamid.OUT_IMG' }),
+      sendAudio: jest
+        .fn()
+        .mockResolvedValue({ whatsappMessageId: 'wamid.OUT_AUD' }),
     };
     mediaStorage = { put: jest.fn(), signedUrl: jest.fn() };
     const moduleRef = await Test.createTestingModule({
@@ -56,6 +60,50 @@ describe('ConversationMessengerService', () => {
       ],
     }).compile();
     service = moduleRef.get(ConversationMessengerService);
+  });
+
+  describe('sendAudio()', () => {
+    const conversation = { id: 'c1', phone: '5521999999999' };
+    const file = { buffer: Buffer.from('ogg-bytes'), mimeType: 'audio/ogg' };
+
+    it('uploads to Meta, sends as audio, then stores in R2 and records kind audio', async () => {
+      await service.sendAudio(conversation, file);
+
+      expect(whatsapp.uploadMedia).toHaveBeenCalledWith(
+        file.buffer,
+        'audio/ogg',
+      );
+      expect(whatsapp.sendAudio).toHaveBeenCalledWith(
+        '5521999999999',
+        'media_out_1',
+        undefined,
+      );
+      expect(whatsapp.sendImage).not.toHaveBeenCalled();
+      expect(mediaStorage.put).toHaveBeenCalledWith(
+        expect.stringMatching(/^conversations\/c1\/[0-9a-f-]{36}\.ogg$/),
+        file.buffer,
+        'audio/ogg',
+      );
+      expect(prisma.message.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          direction: 'outbound',
+          kind: 'audio',
+          body: null,
+          whatsappMessageId: 'wamid.OUT_AUD',
+          mediaMimeType: 'audio/ogg',
+          mediaSizeBytes: file.buffer.byteLength,
+        }),
+      });
+    });
+
+    it('writes nothing to R2 when the send fails', async () => {
+      whatsapp.sendAudio.mockRejectedValue(new Error('fora da janela de 24h'));
+
+      await expect(service.sendAudio(conversation, file)).rejects.toThrow();
+
+      expect(mediaStorage.put).not.toHaveBeenCalled();
+      expect(prisma.message.create).not.toHaveBeenCalled();
+    });
   });
 
   describe('sendImage()', () => {

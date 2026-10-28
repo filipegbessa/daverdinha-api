@@ -543,6 +543,65 @@ describe('ConversationsService', () => {
     });
   });
 
+  describe('replyAudio()', () => {
+    const file = {
+      buffer: Buffer.from('ogg'),
+      mimetype: 'audio/ogg; codecs=opus',
+      size: 3,
+    };
+
+    beforeEach(() => {
+      prisma.conversation.findUniqueOrThrow.mockResolvedValue({
+        id: 'c1',
+        phone: '5521999999999',
+        status: 'paused_human',
+      });
+      jest.spyOn(messenger, 'sendAudio').mockResolvedValue({} as never);
+    });
+
+    it('hands the audio to the messenger with the codecs parameter dropped', async () => {
+      await service.replyAudio('c1', file, { replyToMessageId: 'm9' });
+
+      expect(messenger.sendAudio).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'c1' }),
+        { buffer: file.buffer, mimeType: 'audio/ogg' },
+        { replyToMessageId: 'm9' },
+      );
+    });
+
+    it('refuses while the bot still owns the conversation', async () => {
+      prisma.conversation.findUniqueOrThrow.mockResolvedValue({
+        id: 'c1',
+        status: 'bot_active',
+      });
+
+      await expect(service.replyAudio('c1', file, {})).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(messenger.sendAudio).not.toHaveBeenCalled();
+    });
+
+    // O Chrome grava em webm por padrão, e a Meta não aceita webm.
+    it('rejects audio/webm, which WhatsApp would refuse', async () => {
+      await expect(
+        service.replyAudio('c1', { ...file, mimetype: 'audio/webm' }, {}),
+      ).rejects.toThrow(BadRequestException);
+      expect(messenger.sendAudio).not.toHaveBeenCalled();
+    });
+
+    it('accepts up to 16 MB, past the image ceiling', async () => {
+      await service.replyAudio('c1', { ...file, size: 10 * 1024 * 1024 }, {});
+      expect(messenger.sendAudio).toHaveBeenCalled();
+    });
+
+    it('rejects a file past the audio ceiling', async () => {
+      await expect(
+        service.replyAudio('c1', { ...file, size: 17 * 1024 * 1024 }, {}),
+      ).rejects.toThrow(BadRequestException);
+      expect(messenger.sendAudio).not.toHaveBeenCalled();
+    });
+  });
+
   describe('reactivate()', () => {
     it('resets status, invalidAttempts, and both awaiting flags when paused_human', async () => {
       prisma.conversation.findUniqueOrThrow.mockResolvedValue({

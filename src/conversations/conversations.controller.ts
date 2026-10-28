@@ -16,10 +16,11 @@ import {
 import { ApiBearerAuth, ApiBody, ApiConsumes, ApiTags } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ClerkAuthGuard } from '../common/auth/clerk-auth.guard';
-import { MAX_MEDIA_BYTES } from '../whatsapp/whatsapp-client.service';
+import { MEDIA_RULES } from '../whatsapp/whatsapp-client.service';
 import { ConversationsService } from './conversations.service';
 import { ReplyDto } from './dto/reply.dto';
 import { ReplyImageDto } from './dto/reply-image.dto';
+import { ReplyAudioDto } from './dto/reply-audio.dto';
 import type { UploadedImage } from './conversations.service';
 import { UpdateConversationDto } from './dto/update-conversation.dto';
 import { ListConversationsDto } from './dto/list-conversations.dto';
@@ -94,7 +95,9 @@ export class ConversationsController {
     },
   })
   @UseInterceptors(
-    FileInterceptor('file', { limits: { fileSize: MAX_MEDIA_BYTES } }),
+    FileInterceptor('file', {
+      limits: { fileSize: MEDIA_RULES.image.maxBytes },
+    }),
   )
   replyImage(
     @Param('id') id: string,
@@ -103,6 +106,37 @@ export class ConversationsController {
   ) {
     return this.service.replyImage(id, file, {
       caption: dto.caption,
+      replyToMessageId: dto.replyToMessageId,
+    });
+  }
+
+  /**
+   * Mesmo formato de `reply-image`, sem legenda. O teto do Multer é o de
+   * áudio (16 MB), pelo mesmo motivo de lá.
+   */
+  @Post(':id/reply-audio')
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['file'],
+      properties: {
+        file: { type: 'string', format: 'binary' },
+        replyToMessageId: { type: 'string' },
+      },
+    },
+  })
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { fileSize: MEDIA_RULES.audio.maxBytes },
+    }),
+  )
+  replyAudio(
+    @Param('id') id: string,
+    @UploadedFile() file: UploadedImage,
+    @Body() dto: ReplyAudioDto,
+  ) {
+    return this.service.replyAudio(id, file, {
       replyToMessageId: dto.replyToMessageId,
     });
   }

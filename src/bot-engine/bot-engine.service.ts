@@ -1,6 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { WhatsAppClientService } from '../whatsapp/whatsapp-client.service';
+import {
+  WhatsAppClientService,
+  type MediaKind,
+} from '../whatsapp/whatsapp-client.service';
 import { ConversationMessengerService } from '../messaging/conversation-messenger.service';
 import { BotSettingsService } from '../bot-settings/bot-settings.service';
 import { MenuItemsService } from '../menu-items/menu-items.service';
@@ -33,32 +36,55 @@ const MEDIA_STORAGE_CAP_BYTES = 8n * 1024n * 1024n * 1024n;
  * Teto por conversa (Tarefa 11, item opcional do plano): sem ele, uma única
  * conversa poderia consumir sozinha o teto global e desligar o recurso para
  * todos os outros clientes. Janela móvel de 24h, não dia calendário — um
- * reset à meia-noite seria fácil de burlar. 20 imagens/dia a 5 MB (o teto de
- * cada uma) são ~100 MB — folgado para uso legítimo (fotos de produto,
- * comprovante), e ainda assim uma fração pequena dos 8 GB totais.
+ * reset à meia-noite seria fácil de burlar. Conta imagem e áudio juntos: 20
+ * mídias/dia são folgadas para uso legítimo (fotos de produto, comprovante,
+ * mensagens de voz — que têm poucas centenas de KB) e, mesmo no pior caso de
+ * 16 MB cada, ficam numa fração pequena dos 8 GB totais.
  */
-const MAX_IMAGES_PER_CONVERSATION_PER_DAY = 20;
-const CONVERSATION_IMAGE_WINDOW_MS = 24 * 60 * 60 * 1000;
+const MAX_MEDIA_PER_CONVERSATION_PER_DAY = 20;
+const CONVERSATION_MEDIA_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 // Typing "menu" is the customer's escape hatch out of any sub-flow, so it's
 // matched before anything else looks at the text.
 const MENU_KEYWORD = 'menu';
 
 // Persisted as a stand-in for the actual content on any message type the bot
-// can't interpret (audio/sticker/video/document/etc — we never download or
-// store that media). Image is handled separately — see processImageMessage —
-// but a photo the download rejects (bad type, too large) lands here too.
+// can't interpret (sticker/video/document/etc — we never download or store
+// that media). Image and audio are handled separately — see
+// processMediaMessage — but a file the download rejects (bad type, too
+// large) lands here too.
 const INVALID_CONTENT_LABEL = '[Conteúdo inválido]';
 
 /**
- * Anything that is neither plain text, a tap on the menu, nor an image
- * (which has its own download-and-record path). A catalog `order` never
- * reaches this check — it returns earlier, through its own flow.
+ * Anything that is neither plain text, a tap on the menu, nor an image or
+ * audio (which have their own download-and-record path). A catalog `order`
+ * never reaches this check — it returns earlier, through its own flow.
  */
 function isUnsupportedContent(type: string | undefined): boolean {
   return (
-    !!type && type !== 'text' && type !== 'interactive' && type !== 'image'
+    !!type &&
+    type !== 'text' &&
+    type !== 'interactive' &&
+    type !== 'image' &&
+    type !== 'audio'
   );
+}
+
+/** The media id Meta sent, when the message is a kind we download and keep. */
+function storableMedia(
+  message: IncomingMessage,
+): { kind: MediaKind; id: string; caption?: string } | null {
+  if (message.type === 'image' && message.image) {
+    return {
+      kind: 'image',
+      id: message.image.id,
+      caption: message.image.caption,
+    };
+  }
+  if (message.type === 'audio' && message.audio) {
+    return { kind: 'audio', id: message.audio.id };
+  }
+  return null;
 }
 
 /** The state a conversation is reset to whenever it returns to the bot. */
@@ -138,11 +164,19 @@ export class BotEngineService {
       return handled;
     }
 
-    // Image is content, not something the bot can't read — it gets its own
-    // download-and-record path (including the CEP-wait special case) rather
-    // than falling into the generic text/unsupported-content branches below.
-    if (message.type === 'image' && message.image) {
-      return this.processImageMessage(conversation, isNew, message, handled);
+    // Image and audio are content, not something the bot can't read — they
+    // get their own download-and-record path (including the CEP-wait special
+    // case) rather than falling into the generic text/unsupported-content
+    // branches below.
+    const media = storableMedia(message);
+    if (media) {
+      return this.processMediaMessage(
+        conversation,
+        isNew,
+        message,
+        media,
+        handled,
+      );
     }
 
     const text = message.text?.body;
@@ -239,7 +273,7 @@ export class BotEngineService {
    * checks, then either start the delivery sub-flow, greet a new customer,
    * or treat whatever's left as a menu selection. Text/interactive messages
    * reach this after `processMessage` records them; a successfully
-   * downloaded image reaches it from `processImageMessage`, already
+   * downloaded image or audio reaches it from `processMediaMessage`, already
    * recorded the same way — from here on the two are indistinguishable.
    */
   private async continueBotFlow(
@@ -292,17 +326,17 @@ export class BotEngineService {
   }
 
   /**
-   * Downloads the photo from Meta, uploads it to R2, and records it as a
-   * normal inbound message with the media columns filled in. A definitive
-   * download failure (bad type, too large) is content the bot can't read,
-   * same as any other unsupported media — it gets the same invalid-content
-   * treatment `isUnsupportedContent` gives audio/video/etc. A transient
-   * failure (network, 5xx, timeout) is not caught here: it propagates to
-   * `handleIncomingMessage`, which releases the wamid claim so Meta's
-   * redelivery is a fresh attempt at the same photo — swallowing it would
-   * lose the photo over a network blip instead.
+   * Downloads the photo or audio from Meta, uploads it to R2, and records it
+   * as a normal inbound message with the media columns filled in. A
+   * definitive download failure (bad type, too large) is content the bot
+   * can't read, same as any other unsupported media — it gets the same
+   * invalid-content treatment `isUnsupportedContent` gives video/sticker/etc.
+   * A transient failure (network, 5xx, timeout) is not caught here: it
+   * propagates to `handleIncomingMessage`, which releases the wamid claim so
+   * Meta's redelivery is a fresh attempt at the same file — swallowing it
+   * would lose it over a network blip instead.
    */
-  private async processImageMessage(
+  private async processMediaMessage(
     conversation: {
       id: string;
       phone: string;
@@ -313,9 +347,9 @@ export class BotEngineService {
     },
     isNew: boolean,
     message: IncomingMessage,
+    media: { kind: MediaKind; id: string; caption?: string },
     handled: HandledMessage,
   ): Promise<HandledMessage> {
-    const image = message.image!;
     const settings = await this.botSettings.get();
 
     // Checked before spending anything on the Meta round trip: past the
@@ -334,18 +368,18 @@ export class BotEngineService {
 
     // Corta o vetor na origem: sem isto, uma única conversa em enxurrada (ou
     // travada num laço de reenvio) poderia sozinha consumir o teto global e
-    // desligar o recebimento de imagem para todo mundo.
-    const recentImages = await this.prisma.message.count({
+    // desligar o recebimento de mídia para todo mundo.
+    const recentMedia = await this.prisma.message.count({
       where: {
         conversationId: conversation.id,
-        kind: 'image',
+        kind: { in: ['image', 'audio'] },
         direction: 'inbound',
         createdAt: {
-          gte: new Date(Date.now() - CONVERSATION_IMAGE_WINDOW_MS),
+          gte: new Date(Date.now() - CONVERSATION_MEDIA_WINDOW_MS),
         },
       },
     });
-    if (recentImages >= MAX_IMAGES_PER_CONVERSATION_PER_DAY) {
+    if (recentMedia >= MAX_MEDIA_PER_CONVERSATION_PER_DAY) {
       await this.handleUnsupportedMessage(
         conversation,
         settings,
@@ -361,7 +395,7 @@ export class BotEngineService {
     // qual dos dois lados é o gargalo. Sem isto, uma foto real chega,
     // funciona e não deixa medição nenhuma para trás.
     const startedAt = Date.now();
-    const download = await this.whatsapp.downloadMedia(image.id);
+    const download = await this.whatsapp.downloadMedia(media.id, media.kind);
     const downloadMs = Date.now() - startedAt;
 
     if (!download.ok) {
@@ -382,7 +416,7 @@ export class BotEngineService {
     // Só números e o tipo. Nada de telefone, legenda ou chave do arquivo:
     // log de plataforma é lido por quem não precisa ver conteúdo de cliente.
     this.logger.log(
-      `inbound image stored: download=${downloadMs}ms ` +
+      `inbound ${media.kind} stored: download=${downloadMs}ms ` +
         `upload=${Date.now() - uploadStartedAt}ms ` +
         `bytes=${download.sizeBytes} type=${download.mimeType}`,
     );
@@ -391,10 +425,11 @@ export class BotEngineService {
     // operator to read, but it plays no part in any decision below. Keeping
     // it out of the CEP-wait check (which looks at `text`, not the caption)
     // is what stops a captioned "menu" from restarting the conversation.
+    // Audio never has one.
     await this.messenger.recordInbound(
       conversation.id,
-      image.caption ?? null,
-      'image',
+      media.caption ?? null,
+      media.kind,
       {
         whatsappMessageId: message.id,
         repliedToWamid: message.repliedToWamid,
@@ -406,7 +441,7 @@ export class BotEngineService {
 
     // Same effect as an unreadable CEP today: retry once, then hand off.
     // DeliveryCheckService.handleReply can't be reused here — it records
-    // the reply itself, as text, and the image is already recorded above.
+    // the reply itself, as text, and the media is already recorded above.
     if (conversation.awaitingDeliveryReply) {
       await this.deliveryCheck.registerUnresolvedAttempt(conversation);
       return handled;

@@ -105,6 +105,22 @@ describe('ConversationNotifierService', () => {
     );
   });
 
+  it('labels an audio, which has no body to show', async () => {
+    prisma.conversation.findUnique.mockResolvedValue({
+      id: 'c1',
+      name: 'Maria',
+      phone: '5521999999999',
+      status: 'paused_human',
+      messages: [{ kind: 'audio', body: null }],
+    });
+
+    await service.notifyNewInboundMessage('c1');
+
+    expect(pushNotifications.notifyNewMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ messagePreview: '🎤 Áudio' }),
+    );
+  });
+
   it('labels a catalog order instead of showing its empty body', async () => {
     prisma.conversation.findUnique.mockResolvedValue({
       id: 'c1',

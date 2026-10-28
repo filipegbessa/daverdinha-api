@@ -38,13 +38,13 @@ describe('MediaRetentionService', () => {
   });
 
   describe('purgeExpired()', () => {
-    it('queries only images past 3 years with a file still attached', async () => {
+    it('queries only images and audio past 3 years with a file still attached', async () => {
       await service.purgeExpired();
 
       expect(prisma.message.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: {
-            kind: 'image',
+            kind: { in: ['image', 'audio'] },
             mediaKey: { not: null },
             createdAt: { lt: expect.any(Date) },
           },

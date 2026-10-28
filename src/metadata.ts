@@ -12,21 +12,22 @@ import * as m8 from './conversations/dto/list-conversations.dto';
 import * as m9 from './conversations/dto/list-messages.dto';
 import * as m10 from './conversations/dto/reply.dto';
 import * as m11 from './conversations/dto/reply-image.dto';
-import * as m12 from './conversations/dto/update-conversation.dto';
-import * as m13 from './categories/dto/create-category.dto';
-import * as m14 from './categories/dto/update-category.dto';
-import * as m15 from './app.controller';
-import * as m16 from './bot-settings/bot-settings.controller';
-import * as m17 from './menu-items/menu-items.controller';
-import * as m18 from './delivery-locations/delivery-locations.controller';
-import * as m19 from './delivery-locations/public-delivery-locations.controller';
-import * as m20 from './whatsapp/webhook.controller';
-import * as m21 from './push-subscriptions/push-subscriptions.controller';
-import * as m22 from './conversations/conversations.controller';
-import * as m23 from './categories/categories.controller';
-import * as m24 from './media/media-retention.controller';
-import * as m25 from './openapi/docs-page.controller';
-import * as m26 from './openapi/openapi.controller';
+import * as m12 from './conversations/dto/reply-audio.dto';
+import * as m13 from './conversations/dto/update-conversation.dto';
+import * as m14 from './categories/dto/create-category.dto';
+import * as m15 from './categories/dto/update-category.dto';
+import * as m16 from './app.controller';
+import * as m17 from './bot-settings/bot-settings.controller';
+import * as m18 from './menu-items/menu-items.controller';
+import * as m19 from './delivery-locations/delivery-locations.controller';
+import * as m20 from './delivery-locations/public-delivery-locations.controller';
+import * as m21 from './whatsapp/webhook.controller';
+import * as m22 from './push-subscriptions/push-subscriptions.controller';
+import * as m23 from './conversations/conversations.controller';
+import * as m24 from './categories/categories.controller';
+import * as m25 from './media/media-retention.controller';
+import * as m26 from './openapi/docs-page.controller';
+import * as m27 from './openapi/openapi.controller';
 
 export default async () => {
   const t = {};
@@ -184,13 +185,21 @@ export default async () => {
         [
           m12,
           {
+            ReplyAudioDto: {
+              replyToMessageId: { required: false, type: () => String },
+            },
+          },
+        ],
+        [
+          m13,
+          {
             UpdateConversationDto: {
               name: { required: true, type: () => String },
             },
           },
         ],
         [
-          m13,
+          m14,
           {
             CreateCategoryDto: {
               name: { required: true, type: () => String },
@@ -198,12 +207,12 @@ export default async () => {
             },
           },
         ],
-        [m14, { UpdateCategoryDto: {} }],
+        [m15, { UpdateCategoryDto: {} }],
       ],
       controllers: [
-        [m15, { AppController: { health: {} } }],
+        [m16, { AppController: { health: {} } }],
         [
-          m16,
+          m17,
           {
             BotSettingsController: {
               get: { type: Object },
@@ -212,7 +221,7 @@ export default async () => {
           },
         ],
         [
-          m17,
+          m18,
           {
             MenuItemsController: {
               list: { type: Object },
@@ -225,23 +234,23 @@ export default async () => {
           },
         ],
         [
-          m18,
+          m19,
           {
             DeliveryLocationsController: { list: { type: Object }, update: {} },
           },
         ],
         [
-          m19,
+          m20,
           {
             PublicDeliveryLocationsController: {
               listCovered: { type: [Object] },
             },
           },
         ],
-        [m20, { WebhookController: { verify: { type: String }, receive: {} } }],
-        [m21, { PushSubscriptionsController: { save: {}, remove: {} } }],
+        [m21, { WebhookController: { verify: { type: String }, receive: {} } }],
+        [m22, { PushSubscriptionsController: { save: {}, remove: {} } }],
         [
-          m22,
+          m23,
           {
             ConversationsController: {
               list: {},
@@ -257,6 +266,10 @@ export default async () => {
                 summary:
                   'Multipart: o arquivo no campo `file`, legenda e cita\u00E7\u00E3o como campos de\ntexto. Tipo e tamanho s\u00E3o conferidos no service, junto da regra de status\n\u2014 mas o teto de tamanho tamb\u00E9m tem que estar aqui: sem `limits.fileSize`,\no Multer bufferiza o arquivo inteiro em mem\u00F3ria antes do service ter\nchance de rejeitar, e um upload de centenas de MB pode esgotar a mem\u00F3ria\nda fun\u00E7\u00E3o. O Multer corta a leitura ao cruzar o teto.',
               },
+              replyAudio: {
+                summary:
+                  'Mesmo formato de `reply-image`, sem legenda. O teto do Multer \u00E9 o de\n\u00E1udio (16 MB), pelo mesmo motivo de l\u00E1.',
+              },
               reactivate: {},
               pause: {},
               addCategory: {},
@@ -265,7 +278,7 @@ export default async () => {
           },
         ],
         [
-          m23,
+          m24,
           {
             CategoriesController: {
               list: {},
@@ -276,7 +289,7 @@ export default async () => {
           },
         ],
         [
-          m24,
+          m25,
           {
             MediaRetentionController: {
               run: {
@@ -286,8 +299,8 @@ export default async () => {
             },
           },
         ],
-        [m25, { DocsPageController: { page: { type: String } } }],
-        [m26, { OpenApiController: { get: { type: Object } } }],
+        [m26, { DocsPageController: { page: { type: String } } }],
+        [m27, { OpenApiController: { get: { type: Object } } }],
       ],
     },
   };

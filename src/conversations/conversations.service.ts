@@ -8,12 +8,13 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ConversationMessengerService } from '../messaging/conversation-messenger.service';
 import { MediaStorageService } from '../media/media-storage.service';
 import {
-  ALLOWED_MEDIA_TYPES,
-  MAX_MEDIA_BYTES,
+  MEDIA_RULES,
+  baseMimeType,
+  type MediaKind,
 } from '../whatsapp/whatsapp-client.service';
 
 /**
- * A forma mínima do arquivo que o multer entrega. Declarada aqui em vez de
+ * A forma mínima do arquivo que o multer entrega (imagem ou áudio). Declarada aqui em vez de
  * depender de `@types/multer`, que o projeto não instala — só estes três
  * campos são usados.
  */
@@ -244,18 +245,76 @@ export class ConversationsService {
     file: UploadedImage,
     options: { caption?: string; replyToMessageId?: string },
   ) {
-    if (!ALLOWED_MEDIA_TYPES.includes(file.mimetype)) {
-      throw new BadRequestException(
-        'Só é possível enviar imagem JPEG, PNG ou WebP.',
-      );
+    const mimeType = this.assertUploadable(
+      file,
+      'image',
+      'Só é possível enviar imagem JPEG, PNG ou WebP.',
+      'A imagem excede o limite de 5 MB.',
+    );
+    const conversation = await this.findRepliable(id);
+
+    // O messenger é quem manda e grava na mesma transação, e é ele que
+    // valida a citação — mesma divisão do reply de texto.
+    return this.messenger.sendImage(
+      conversation,
+      { buffer: file.buffer, mimeType },
+      {
+        caption: options.caption,
+        replyToMessageId: options.replyToMessageId,
+      },
+    );
+  }
+
+  /**
+   * Envia um áudio ao cliente — mesmas regras de `replyImage`, com os tipos e
+   * o teto de áudio. Um `audio/ogg` (opus) chega como mensagem de voz.
+   */
+  async replyAudio(
+    id: string,
+    file: UploadedImage,
+    options: { replyToMessageId?: string },
+  ) {
+    const mimeType = this.assertUploadable(
+      file,
+      'audio',
+      'Só é possível enviar áudio OGG (opus), MP3, M4A, AAC ou AMR.',
+      'O áudio excede o limite de 16 MB.',
+    );
+    const conversation = await this.findRepliable(id);
+
+    return this.messenger.sendAudio(
+      conversation,
+      { buffer: file.buffer, mimeType },
+      { replyToMessageId: options.replyToMessageId },
+    );
+  }
+
+  /**
+   * Confere tipo e tamanho e devolve o tipo sem parâmetros — o navegador pode
+   * mandar `audio/ogg; codecs=opus`, e é a forma curta que a Meta e o R2
+   * recebem.
+   */
+  private assertUploadable(
+    file: UploadedImage,
+    kind: MediaKind,
+    unsupportedMessage: string,
+    tooLargeMessage: string,
+  ): string {
+    const rules = MEDIA_RULES[kind];
+    const mimeType = baseMimeType(file.mimetype);
+    if (!rules.mimeTypes.includes(mimeType)) {
+      throw new BadRequestException(unsupportedMessage);
     }
     if (file.size <= 0) {
       throw new BadRequestException('Arquivo vazio.');
     }
-    if (file.size > MAX_MEDIA_BYTES) {
-      throw new BadRequestException('A imagem excede o limite de 5 MB.');
+    if (file.size > rules.maxBytes) {
+      throw new BadRequestException(tooLargeMessage);
     }
+    return mimeType;
+  }
 
+  private async findRepliable(id: string) {
     const conversation = await this.prisma.conversation.findUniqueOrThrow({
       where: { id },
     });
@@ -264,17 +323,7 @@ export class ConversationsService {
         'Só é possível responder conversas transferidas pra um atendente.',
       );
     }
-
-    // O messenger é quem manda e grava na mesma transação, e é ele que
-    // valida a citação — mesma divisão do reply de texto.
-    return this.messenger.sendImage(
-      conversation,
-      { buffer: file.buffer, mimeType: file.mimetype },
-      {
-        caption: options.caption,
-        replyToMessageId: options.replyToMessageId,
-      },
-    );
+    return conversation;
   }
 
   async reactivate(id: string) {

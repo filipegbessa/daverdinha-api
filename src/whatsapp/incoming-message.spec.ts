@@ -153,6 +153,40 @@ describe('parseIncomingMessage', () => {
     expect(result).toBeNull();
   });
 
+  it('extracts the audio id and the voice flag', () => {
+    const result = parseIncomingMessage({
+      entry: [
+        {
+          changes: [
+            {
+              value: {
+                messages: [
+                  {
+                    id: 'wamid_audio',
+                    from: '5521999999999',
+                    type: 'audio',
+                    audio: {
+                      id: 'media_456',
+                      mime_type: 'audio/ogg; codecs=opus',
+                      voice: true,
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(result?.type).toBe('audio');
+    expect(result?.audio).toEqual({
+      id: 'media_456',
+      mime_type: 'audio/ogg; codecs=opus',
+      voice: true,
+    });
+  });
+
   function imagePayload(image: Record<string, unknown>) {
     return {
       entry: [

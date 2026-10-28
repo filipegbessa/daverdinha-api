@@ -6,16 +6,50 @@ interface WhatsAppSendResponse {
   messages?: { id: string }[];
 }
 
-/** Só o que sabemos armazenar e exibir. Vale nos dois sentidos: o que o
- * cliente manda e o que o operador envia de volta. */
-export const ALLOWED_MEDIA_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+export type MediaKind = 'image' | 'audio';
 
-/** Teto da própria Meta para imagem; repetido aqui para não depender dela. */
-export const MAX_MEDIA_BYTES = 5 * 1024 * 1024;
+/**
+ * Só o que sabemos armazenar e exibir, por tipo de mídia. Vale nos dois
+ * sentidos: o que o cliente manda e o que o operador envia de volta.
+ *
+ * Os tetos são os da própria Meta (5 MB imagem, 16 MB áudio), repetidos aqui
+ * para não depender dela. Os tipos de áudio são exatamente os que a Cloud API
+ * aceita no envio — `audio/webm`, que é o que o Chrome grava por padrão,
+ * **não** está entre eles, e a Meta recusaria o upload.
+ */
+export const MEDIA_RULES: Record<
+  MediaKind,
+  { mimeTypes: string[]; maxBytes: number }
+> = {
+  image: {
+    mimeTypes: ['image/jpeg', 'image/png', 'image/webp'],
+    maxBytes: 5 * 1024 * 1024,
+  },
+  audio: {
+    mimeTypes: [
+      'audio/ogg',
+      'audio/mpeg',
+      'audio/mp4',
+      'audio/aac',
+      'audio/amr',
+    ],
+    maxBytes: 16 * 1024 * 1024,
+  },
+};
+
+/**
+ * Tira os parâmetros do tipo: o áudio de voz do WhatsApp chega como
+ * `audio/ogg; codecs=opus`, e é a parte antes do `;` que diz se sabemos
+ * lidar com ele.
+ */
+export function baseMimeType(mimeType: string): string {
+  return mimeType.split(';')[0].trim().toLowerCase();
+}
 
 /**
  * Prazos separados porque as duas etapas são muito diferentes: a primeira é um
- * JSON pequeno, a segunda pode trazer 5 MB. Somados ficam em 14s, dentro do
+ * JSON pequeno, a segunda pode trazer 5 MB (ou até 16 MB de áudio — na
+ * prática uma mensagem de voz tem poucas centenas de KB). Somados ficam em 14s, dentro do
  * `maxDuration` de 30s da Vercel e com folga para o resto do webhook. Sem
  * prazo, uma Meta pendurada seguraria a requisição até o teto — o mesmo
  * problema que o `CepLookupService` já teve.
@@ -113,7 +147,12 @@ export class WhatsAppClientService {
    * O tamanho e o tipo são conferidos nos metadados, antes de baixar — não há
    * por que trazer 5 MB para descartar em seguida.
    */
-  async downloadMedia(mediaId: string): Promise<DownloadedMedia> {
+  async downloadMedia(
+    mediaId: string,
+    kind: MediaKind = 'image',
+  ): Promise<DownloadedMedia> {
+    const rules = MEDIA_RULES[kind];
+
     const metadataResponse = await fetch(
       `https://graph.facebook.com/v20.0/${mediaId}`,
       {
@@ -138,11 +177,11 @@ export class WhatsAppClientService {
       throw new Error('WhatsApp media metadata carried no url');
     }
 
-    const mimeType = metadata.mime_type ?? '';
-    if (!ALLOWED_MEDIA_TYPES.includes(mimeType)) {
+    const mimeType = baseMimeType(metadata.mime_type ?? '');
+    if (!rules.mimeTypes.includes(mimeType)) {
       return { ok: false, reason: 'unsupported-type' };
     }
-    if ((metadata.file_size ?? 0) > MAX_MEDIA_BYTES) {
+    if ((metadata.file_size ?? 0) > rules.maxBytes) {
       return { ok: false, reason: 'too-large' };
     }
 
@@ -163,13 +202,13 @@ export class WhatsAppClientService {
     // (`0 > MAX` é falso). Sem esta segunda e terceira conferência, uma
     // resposta grande entrava inteira em memória, dentro do webhook.
     const declaredLength = Number(fileResponse.headers?.get('content-length'));
-    if (declaredLength > MAX_MEDIA_BYTES) {
+    if (declaredLength > rules.maxBytes) {
       return { ok: false, reason: 'too-large' };
     }
 
     const buffer = Buffer.from(await fileResponse.arrayBuffer());
     // Último guarda: `content-length` some em resposta com chunked encoding.
-    if (buffer.byteLength > MAX_MEDIA_BYTES) {
+    if (buffer.byteLength > rules.maxBytes) {
       return { ok: false, reason: 'too-large' };
     }
 
@@ -180,7 +219,7 @@ export class WhatsAppClientService {
 
   /**
    * Sobe o arquivo para a Meta e devolve o id que ela atribui — é esse id que
-   * `sendImage` referencia, porque a API não aceita bytes na mensagem.
+   * `sendImage`/`sendAudio` referenciam, porque a API não aceita bytes na mensagem.
    *
    * O `Content-Type` **não** é definido à mão: com um `FormData` no corpo, o
    * fetch precisa montar o cabeçalho junto com o `boundary`, e fixá-lo aqui
@@ -235,6 +274,29 @@ export class WhatsAppClientService {
       to,
       type: 'image',
       image: caption ? { id: mediaId, caption } : { id: mediaId },
+    };
+    if (options?.replyToWamid) {
+      payload.context = { message_id: options.replyToWamid };
+    }
+
+    const response = await this.post(payload);
+    return { whatsappMessageId: response.messages![0].id };
+  }
+
+  /**
+   * Mesma forma de `sendImage`, sem legenda — a Cloud API não aceita legenda
+   * em áudio. Um `audio/ogg` (opus) chega ao cliente como mensagem de voz.
+   */
+  async sendAudio(
+    to: string,
+    mediaId: string,
+    options?: { replyToWamid?: string },
+  ): Promise<{ whatsappMessageId: string }> {
+    const payload: Record<string, unknown> = {
+      messaging_product: 'whatsapp',
+      to,
+      type: 'audio',
+      audio: { id: mediaId },
     };
     if (options?.replyToWamid) {
       payload.context = { message_id: options.replyToWamid };

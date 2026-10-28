@@ -1,7 +1,10 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { MessageKind } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { WhatsAppClientService } from '../whatsapp/whatsapp-client.service';
+import {
+  WhatsAppClientService,
+  type MediaKind,
+} from '../whatsapp/whatsapp-client.service';
 import {
   MediaStorageService,
   buildMediaKey,
@@ -48,8 +51,26 @@ export class ConversationMessengerService {
    * `persist()`. Nada é gravado — nem no R2, nem no banco — antes do envio
    * dar certo.
    */
-  async sendImage(
+  sendImage(
     conversation: Recipient,
+    file: { buffer: Buffer; mimeType: string },
+    options?: { caption?: string; replyToMessageId?: string },
+  ) {
+    return this.sendMedia(conversation, 'image', file, options);
+  }
+
+  /** Mesmo caminho de `sendImage`; áudio só não tem legenda. */
+  sendAudio(
+    conversation: Recipient,
+    file: { buffer: Buffer; mimeType: string },
+    options?: { replyToMessageId?: string },
+  ) {
+    return this.sendMedia(conversation, 'audio', file, options);
+  }
+
+  private async sendMedia(
+    conversation: Recipient,
+    kind: MediaKind,
     file: { buffer: Buffer; mimeType: string },
     options?: { caption?: string; replyToMessageId?: string },
   ) {
@@ -72,19 +93,29 @@ export class ConversationMessengerService {
 
     const mediaId = await this.whatsapp.uploadMedia(file.buffer, file.mimeType);
 
-    const { whatsappMessageId } = await this.whatsapp.sendImage(
-      conversation.phone,
-      mediaId,
-      options?.caption,
-      repliedToWamid ? { replyToWamid: repliedToWamid } : undefined,
-    );
+    const sendOptions = repliedToWamid
+      ? { replyToWamid: repliedToWamid }
+      : undefined;
+    const { whatsappMessageId } =
+      kind === 'audio'
+        ? await this.whatsapp.sendAudio(
+            conversation.phone,
+            mediaId,
+            sendOptions,
+          )
+        : await this.whatsapp.sendImage(
+            conversation.phone,
+            mediaId,
+            options?.caption,
+            sendOptions,
+          );
 
     const mediaKey = buildMediaKey(conversation.id, file.mimeType);
     await this.mediaStorage.put(mediaKey, file.buffer, file.mimeType);
 
     return this.persist(conversation.id, {
       direction: 'outbound',
-      kind: 'image',
+      kind,
       body: options?.caption ?? null,
       whatsappMessageId,
       repliedToId: options?.replyToMessageId,

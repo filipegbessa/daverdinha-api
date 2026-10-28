@@ -11,6 +11,7 @@ describe('ConversationsController', () => {
     reply: jest.Mock;
     mediaUrl: jest.Mock;
     replyImage: jest.Mock;
+    replyAudio: jest.Mock;
   };
 
   beforeEach(async () => {
@@ -20,6 +21,7 @@ describe('ConversationsController', () => {
       reply: jest.fn(),
       mediaUrl: jest.fn(),
       replyImage: jest.fn(),
+      replyAudio: jest.fn(),
     };
 
     const moduleRef = await Test.createTestingModule({
@@ -86,6 +88,16 @@ describe('ConversationsController', () => {
 
     expect(service.replyImage).toHaveBeenCalledWith('conv1', file, {
       caption: 'o vaso',
+      replyToMessageId: 'msg9',
+    });
+  });
+
+  it('replyAudio() forwards the file and the citation', () => {
+    const file = { buffer: Buffer.from('ogg'), mimetype: 'audio/ogg', size: 3 };
+
+    controller.replyAudio('conv1', file, { replyToMessageId: 'msg9' });
+
+    expect(service.replyAudio).toHaveBeenCalledWith('conv1', file, {
       replyToMessageId: 'msg9',
     });
   });

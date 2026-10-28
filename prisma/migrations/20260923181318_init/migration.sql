@@ -8,7 +8,7 @@ CREATE TYPE "EntryPoint" AS ENUM ('menu', 'catalog');
 CREATE TYPE "MessageDirection" AS ENUM ('inbound', 'outbound');
 
 -- CreateEnum
-CREATE TYPE "MessageKind" AS ENUM ('text', 'invalid_content', 'order', 'image');
+CREATE TYPE "MessageKind" AS ENUM ('text', 'invalid_content', 'order', 'image', 'audio');
 
 -- CreateTable
 CREATE TABLE "bot_settings" (
