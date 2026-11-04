@@ -163,6 +163,38 @@ CREATE TABLE "conversation_categories" (
     CONSTRAINT "conversation_categories_pkey" PRIMARY KEY ("conversation_id","category_id")
 );
 
+-- CreateTable
+CREATE TABLE "product_categories" (
+    "id" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "slug" TEXT NOT NULL,
+    "description" TEXT NOT NULL DEFAULT '',
+    "active" BOOLEAN NOT NULL DEFAULT true,
+    "order" INTEGER NOT NULL DEFAULT 0,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "product_categories_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "products" (
+    "id" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "slug" TEXT NOT NULL,
+    "description" TEXT NOT NULL,
+    "price" DECIMAL(10,2) NOT NULL,
+    "images" TEXT[],
+    "category_id" TEXT NOT NULL,
+    "active" BOOLEAN NOT NULL DEFAULT true,
+    "featured" BOOLEAN NOT NULL DEFAULT false,
+    "order" INTEGER NOT NULL DEFAULT 0,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "products_pkey" PRIMARY KEY ("id")
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "delivery_locations_region_name_key" ON "delivery_locations"("region_name");
 
@@ -193,6 +225,21 @@ CREATE UNIQUE INDEX "push_subscriptions_endpoint_key" ON "push_subscriptions"("e
 -- CreateIndex
 CREATE UNIQUE INDEX "categories_name_key" ON "categories"("name");
 
+-- CreateIndex
+CREATE UNIQUE INDEX "product_categories_name_key" ON "product_categories"("name");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "product_categories_slug_key" ON "product_categories"("slug");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "products_slug_key" ON "products"("slug");
+
+-- CreateIndex
+CREATE INDEX "products_active_order_idx" ON "products"("active", "order");
+
+-- CreateIndex
+CREATE INDEX "products_category_id_idx" ON "products"("category_id");
+
 -- AddForeignKey
 ALTER TABLE "cep_ranges" ADD CONSTRAINT "cep_ranges_delivery_location_id_fkey" FOREIGN KEY ("delivery_location_id") REFERENCES "delivery_locations"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
@@ -216,3 +263,7 @@ ALTER TABLE "conversation_categories" ADD CONSTRAINT "conversation_categories_co
 
 -- AddForeignKey
 ALTER TABLE "conversation_categories" ADD CONSTRAINT "conversation_categories_category_id_fkey" FOREIGN KEY ("category_id") REFERENCES "categories"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "products" ADD CONSTRAINT "products_category_id_fkey" FOREIGN KEY ("category_id") REFERENCES "product_categories"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+

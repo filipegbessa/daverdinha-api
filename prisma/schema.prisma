@@ -124,28 +124,28 @@ enum MessageKind {
 }
 
 model Message {
-  id                 String           @id @default(uuid())
-  conversationId     String           @map("conversation_id")
-  conversation       Conversation     @relation(fields: [conversationId], references: [id])
-  direction          MessageDirection
-  kind               MessageKind      @default(text)
-  body               String?
-  order              Order?
+  id                String           @id @default(uuid())
+  conversationId    String           @map("conversation_id")
+  conversation      Conversation     @relation(fields: [conversationId], references: [id])
+  direction         MessageDirection
+  kind              MessageKind      @default(text)
+  body              String?
+  order             Order?
   /// Chave do arquivo no bucket. Nulo em mensagem sem mídia, e também na que
   /// já teve a mídia expurgada pela retenção — o registro de que o cliente
   /// mandou algo continua, o arquivo não.
-  mediaKey           String?          @map("media_key")
-  mediaMimeType      String?          @map("media_mime_type")
+  mediaKey          String?          @map("media_key")
+  mediaMimeType     String?          @map("media_mime_type")
   /// Alimenta o total em uso, que é somado na mesma transação que grava a
   /// mensagem. É esse número que faz o teto de armazenamento ser imediato em
   /// vez de depender do cron diário.
-  mediaSizeBytes     Int?             @map("media_size_bytes")
-  whatsappMessageId  String?          @unique @map("whatsapp_message_id")
-  repliedToWamid     String?          @map("replied_to_wamid")
-  repliedToId        String?          @map("replied_to_id")
-  repliedTo          Message?         @relation("MessageReplies", fields: [repliedToId], references: [id], onDelete: SetNull)
-  replies            Message[]        @relation("MessageReplies")
-  createdAt          DateTime         @default(now()) @map("created_at")
+  mediaSizeBytes    Int?             @map("media_size_bytes")
+  whatsappMessageId String?          @unique @map("whatsapp_message_id")
+  repliedToWamid    String?          @map("replied_to_wamid")
+  repliedToId       String?          @map("replied_to_id")
+  repliedTo         Message?         @relation("MessageReplies", fields: [repliedToId], references: [id], onDelete: SetNull)
+  replies           Message[]        @relation("MessageReplies")
+  createdAt         DateTime         @default(now()) @map("created_at")
 
   // Every read of a thread is "this conversation, in time order" — as a page,
   // as a delta poll, or as older history.
@@ -224,4 +224,49 @@ model ConversationCategory {
 
   @@id([conversationId, categoryId])
   @@map("conversation_categories")
+}
+
+/// Categoria do catálogo do site ("Vasos", "Mudas"…). Não confundir com
+/// `Category`, que etiqueta conversas no admin.
+model ProductCategory {
+  id          String    @id @default(uuid())
+  name        String    @unique
+  /// Gerado do nome na criação e nunca recalculado: é a URL `/produtos/[slug]`
+  /// do site, e mudar depois de indexada quebra link.
+  slug        String    @unique
+  /// Texto de abertura da página da categoria no site.
+  description String    @default("")
+  active      Boolean   @default(true)
+  order       Int       @default(0)
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  products    Product[]
+
+  @@map("product_categories")
+}
+
+model Product {
+  id          String          @id @default(uuid())
+  name        String
+  /// Único no catálogo inteiro, não por categoria: o site acha o produto só
+  /// pelo slug e redireciona se a categoria da URL estiver desatualizada.
+  slug        String          @unique
+  description String
+  price       Decimal         @db.Decimal(10, 2)
+  /// URLs públicas no Vercel Blob; a primeira é a capa.
+  images      String[]
+  categoryId  String          @map("category_id")
+  // Sem onDelete: RESTRICT, então apagar uma categoria com produto falha
+  // (P2003) em vez de levar os produtos junto.
+  category    ProductCategory @relation(fields: [categoryId], references: [id])
+  active      Boolean         @default(true)
+  /// Aparece na vitrine da home e nas listas das páginas internas (agenda).
+  featured    Boolean         @default(false)
+  order       Int             @default(0)
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @updatedAt @map("updated_at")
+
+  @@index([active, order])
+  @@index([categoryId])
+  @@map("products")
 }
