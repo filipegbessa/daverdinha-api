@@ -11,6 +11,8 @@ import { PushSubscriptionsModule } from './push-subscriptions/push-subscriptions
 import { CategoriesModule } from './categories/categories.module';
 import { MediaRetentionModule } from './media/media-retention.module';
 import { OpenApiModule } from './openapi/openapi.module';
+import { ProductCategoriesModule } from './product-categories/product-categories.module';
+import { ProductsModule } from './products/products.module';
 
 @Module({
   imports: [
@@ -25,6 +27,8 @@ import { OpenApiModule } from './openapi/openapi.module';
     CategoriesModule,
     MediaRetentionModule,
     OpenApiModule,
+    ProductCategoriesModule,
+    ProductsModule,
   ],
   controllers: [AppController],
 })

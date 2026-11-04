@@ -16,18 +16,26 @@ import * as m12 from './conversations/dto/reply-audio.dto';
 import * as m13 from './conversations/dto/update-conversation.dto';
 import * as m14 from './categories/dto/create-category.dto';
 import * as m15 from './categories/dto/update-category.dto';
-import * as m16 from './app.controller';
-import * as m17 from './bot-settings/bot-settings.controller';
-import * as m18 from './menu-items/menu-items.controller';
-import * as m19 from './delivery-locations/delivery-locations.controller';
-import * as m20 from './delivery-locations/public-delivery-locations.controller';
-import * as m21 from './whatsapp/webhook.controller';
-import * as m22 from './push-subscriptions/push-subscriptions.controller';
-import * as m23 from './conversations/conversations.controller';
-import * as m24 from './categories/categories.controller';
-import * as m25 from './media/media-retention.controller';
-import * as m26 from './openapi/docs-page.controller';
-import * as m27 from './openapi/openapi.controller';
+import * as m16 from './product-categories/dto/create-product-category.dto';
+import * as m17 from './product-categories/dto/update-product-category.dto';
+import * as m18 from './products/dto/create-product.dto';
+import * as m19 from './products/dto/update-product.dto';
+import * as m20 from './app.controller';
+import * as m21 from './bot-settings/bot-settings.controller';
+import * as m22 from './menu-items/menu-items.controller';
+import * as m23 from './delivery-locations/delivery-locations.controller';
+import * as m24 from './delivery-locations/public-delivery-locations.controller';
+import * as m25 from './whatsapp/webhook.controller';
+import * as m26 from './push-subscriptions/push-subscriptions.controller';
+import * as m27 from './conversations/conversations.controller';
+import * as m28 from './categories/categories.controller';
+import * as m29 from './media/media-retention.controller';
+import * as m30 from './openapi/docs-page.controller';
+import * as m31 from './product-categories/product-categories.controller';
+import * as m32 from './product-categories/public-product-categories.controller';
+import * as m33 from './products/products.controller';
+import * as m34 from './products/public-products.controller';
+import * as m35 from './openapi/openapi.controller';
 
 export default async () => {
   const t = {};
@@ -208,11 +216,52 @@ export default async () => {
           },
         ],
         [m15, { UpdateCategoryDto: {} }],
+        [
+          m16,
+          {
+            CreateProductCategoryDto: {
+              name: { required: true, type: () => String },
+              description: {
+                required: false,
+                type: () => String,
+                description:
+                  'Texto de abertura da p\u00E1gina da categoria no site.',
+              },
+              active: { required: false, type: () => Boolean },
+              order: { required: false, type: () => Number },
+            },
+          },
+        ],
+        [m17, { UpdateProductCategoryDto: {} }],
+        [
+          m18,
+          {
+            CreateProductDto: {
+              name: { required: true, type: () => String },
+              description: { required: true, type: () => String },
+              price: { required: true, type: () => Number, minimum: 0 },
+              categoryId: {
+                required: true,
+                type: () => String,
+                format: 'uuid',
+              },
+              order: { required: false, type: () => Number },
+              active: { required: false, type: () => Boolean },
+              featured: {
+                required: false,
+                type: () => Boolean,
+                description:
+                  'Aparece na vitrine da home e nas listas das p\u00E1ginas internas.',
+              },
+            },
+          },
+        ],
+        [m19, { UpdateProductDto: {} }],
       ],
       controllers: [
-        [m16, { AppController: { health: {} } }],
+        [m20, { AppController: { health: {} } }],
         [
-          m17,
+          m21,
           {
             BotSettingsController: {
               get: { type: Object },
@@ -221,7 +270,7 @@ export default async () => {
           },
         ],
         [
-          m18,
+          m22,
           {
             MenuItemsController: {
               list: { type: Object },
@@ -234,23 +283,23 @@ export default async () => {
           },
         ],
         [
-          m19,
+          m23,
           {
             DeliveryLocationsController: { list: { type: Object }, update: {} },
           },
         ],
         [
-          m20,
+          m24,
           {
             PublicDeliveryLocationsController: {
               listCovered: { type: [Object] },
             },
           },
         ],
-        [m21, { WebhookController: { verify: { type: String }, receive: {} } }],
-        [m22, { PushSubscriptionsController: { save: {}, remove: {} } }],
+        [m25, { WebhookController: { verify: { type: String }, receive: {} } }],
+        [m26, { PushSubscriptionsController: { save: {}, remove: {} } }],
         [
-          m23,
+          m27,
           {
             ConversationsController: {
               list: {},
@@ -278,7 +327,7 @@ export default async () => {
           },
         ],
         [
-          m24,
+          m28,
           {
             CategoriesController: {
               list: {},
@@ -289,7 +338,7 @@ export default async () => {
           },
         ],
         [
-          m25,
+          m29,
           {
             MediaRetentionController: {
               run: {
@@ -299,8 +348,48 @@ export default async () => {
             },
           },
         ],
-        [m26, { DocsPageController: { page: { type: String } } }],
-        [m27, { OpenApiController: { get: { type: Object } } }],
+        [m30, { DocsPageController: { page: { type: String } } }],
+        [
+          m31,
+          {
+            ProductCategoriesController: {
+              list: { type: Object },
+              create: {},
+              update: {},
+              remove: {},
+            },
+          },
+        ],
+        [
+          m32,
+          {
+            PublicProductCategoriesController: {
+              listActive: { type: [Object] },
+            },
+          },
+        ],
+        [
+          m33,
+          {
+            ProductsController: {
+              list: {},
+              findOne: { type: Object },
+              create: { type: Object },
+              update: { type: Object },
+              remove: {},
+            },
+          },
+        ],
+        [
+          m34,
+          {
+            PublicProductsController: {
+              listActive: { type: [Object] },
+              findBySlug: { type: Object },
+            },
+          },
+        ],
+        [m35, { OpenApiController: { get: { type: Object } } }],
       ],
     },
   };
