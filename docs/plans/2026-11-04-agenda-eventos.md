@@ -2,11 +2,13 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** dar à Daverdinha uma agenda de eventos (oficinas, feirinhas, aulas no ateliê) que a cliente cadastra sozinha no admin e o site mostra em três lugares: a faixa acima do cabeçalho (eventos marcados como destaque), a lista `/agenda` e uma página por evento (`/agenda/[slug]`). Substitui a feature "Destaques" (slides do hero), que nunca foi construída — os endpoints `/hero-slides` nunca existiram nesta API e o hero do site agora é estático.
+> **Atualizado em 2026-11-04 (revisão da cliente):** a faixa de eventos acima do cabeçalho foi **removida** do site, então o campo `highlight` sai do contrato, do model e do DTO (removido abaixo; a decisão 6 não vale mais). E os slides do hero **voltam** como feature própria, pra depois: o site já lê `GET /hero-slides/active` (contrato em `src/features/site/types/hero-slide.ts` no `daverdinha`) e, sem a rota, mostra um slide fixo — com 2+ slides vira slideshow. Esse backend ainda não tem plano.
+
+**Goal:** dar à Daverdinha uma agenda de eventos (oficinas, feirinhas, aulas no ateliê) que a cliente cadastra sozinha no admin e o site mostra em `/agenda`, numa página por evento (`/agenda/[slug]`) e na seção "Próximos eventos" da home. Substitui a antiga tela "Destaques" do admin, que nunca foi construída.
 
 **Architecture:** um model novo no Postgres (`Event`) e um módulo NestJS `src/events/` seguindo o mesmo padrão do catálogo (`docs/plans/2026-11-04-catalogo-produtos.md`): service + controller admin protegido por `ClerkAuthGuard` + **controller público separado** (como `PublicDeliveryLocationsController`) + DTOs + testes colocados em `src/`. Foto do evento vai pro mesmo Vercel Blob do catálogo — `BlobStorageService` (Tarefa 3 do plano do catálogo) ganha um método pra prefixo `events/`. Slug reaproveita `uniqueSlug` de `src/common/slug.ts` (Tarefa 2 do plano do catálogo). **Este plano depende dessas duas tarefas do catálogo já estarem no `main`**; se não estiverem, fazê-las primeiro, como estão lá.
 
-Evento passado **não é apagado nem despublicado por ninguém**: a lista pública filtra por `endsAt >= now()` na consulta, então ele some da faixa e da lista sozinho, mas a página dele continua no ar (o site mostra "Este evento já aconteceu") pra link antigo — compartilhado no Instagram, no WhatsApp — não virar 404.
+Evento passado **não é apagado nem despublicado por ninguém**: a lista pública filtra por `endsAt >= now()` na consulta, então ele some das listas sozinho, mas a página dele continua no ar (o site mostra "Este evento já aconteceu") pra link antigo — compartilhado no Instagram, no WhatsApp — não virar 404.
 
 **Tech Stack:** NestJS 11, Prisma (Postgres), `@vercel/blob` (instalado pelo plano do catálogo), `@nestjs/platform-express` (`FileInterceptor`, já instalado), class-validator/class-transformer (já em uso).
 
@@ -28,7 +30,6 @@ interface SiteEvent {
   spots: number | null;
   imageUrl: string | null;
   ctaUrl: string | null;         // null = WhatsApp com mensagem pronta montada pelo site
-  highlight: boolean;            // aparece na faixa acima do cabeçalho
 }
 ```
 
@@ -41,7 +42,7 @@ interface SiteEvent {
 | 3 | **Passado some sozinho, por data.** `GET /events/upcoming` filtra `endsAt >= now()`; não existe job, cron nem flag "arquivado" — nada pra lembrar de fazer, e serverless não tem processo em background mesmo. |
 | 4 | **Página de evento passado continua no ar.** `GET /events/:slug` devolve qualquer evento publicado, passado ou futuro; quem decide mostrar "Este evento já aconteceu" é o site, comparando `endsAt` com a hora atual. |
 | 5 | **`null` tem significado, não é "faltou preencher"**: `locationName: null` = no ateliê (site usa o endereço da loja); `price: null` = gratuito; `spots: null` = sem limite divulgado; `ctaUrl: null` = inscrição pelo WhatsApp com mensagem pronta; `imageUrl: null` = site usa placeholder. O admin precisa conseguir **voltar** um campo pra `null` (ver Tarefa 3). |
-| 6 | **`highlight` é só um booleano**, sem unicidade nem ordem própria: pode haver mais de um evento em destaque; a faixa do site mostra o(s) próximo(s) pela ordem de `startsAt` que já vem da API. |
+| 6 | ~~`highlight`~~ — removido junto com a faixa de eventos do site (ver nota no topo). |
 | 7 | **Slug gerado do título na criação, estável ao renomear** — mesma regra e mesmo helper (`uniqueSlug`) do catálogo. `upcoming` é reservado (colidiria com a rota `GET /events/upcoming`). |
 | 8 | **Uma foto por evento** (`imageUrl: String?`), não array — a página do evento tem uma capa, não galeria. Upload no mesmo Vercel Blob do catálogo, prefixo `events/`. |
 | 9 | **Agenda vazia não é erro.** Zero eventos futuros → `[]` com 200, mesmo padrão de `delivery-locations/covered` e do catálogo. |
@@ -97,7 +98,6 @@ model Event {
   spots           Int?
   imageUrl        String?  @map("image_url")
   ctaUrl          String?  @map("cta_url")
-  highlight       Boolean  @default(false)
   published       Boolean  @default(false)
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
@@ -182,7 +182,6 @@ interface SiteEvent {
   locationName: string | null; locationAddress: string | null;
   price: number | null; spots: number | null;
   imageUrl: string | null; ctaUrl: string | null;
-  highlight: boolean;
 }
 // EventAdmin = SiteEvent + { published: boolean; createdAt: string; updatedAt: string }
 ```
@@ -202,7 +201,6 @@ export class CreateEventDto {
   @IsOptional() @Transform(({ value }) => (value === '' ? null : Number(value))) @IsNumber() @Min(0) price?: number | null;
   @IsOptional() @Transform(({ value }) => (value === '' ? null : Number(value))) @IsInt() @Min(1) spots?: number | null;
   @IsOptional() @Transform(emptyToNull) @IsUrl({ protocols: ['https'], require_protocol: true }) ctaUrl?: string | null;
-  @IsOptional() @Transform(({ value }) => value === 'true') @IsBoolean() highlight?: boolean;
   @IsOptional() @Transform(({ value }) => value === 'true') @IsBoolean() published?: boolean;
 }
 export class UpdateEventDto extends PartialType(CreateEventDto) {

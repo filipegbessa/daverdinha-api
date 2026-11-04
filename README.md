@@ -59,7 +59,7 @@ O caminho seguro depois de mudar `schema.prisma`:
 
 ## Estrutura
 
-- `src/` — módulos NestJS (`bot-settings`, `menu-items`, `delivery-locations`, `whatsapp`, `bot-engine`, `messaging`, `conversations`, `categories`, `push-notifications`, `media`, `prisma`, `common/auth`).
+- `src/` — módulos NestJS (`bot-settings`, `menu-items`, `delivery-locations`, `whatsapp`, `bot-engine`, `messaging`, `conversations`, `categories`, `push-notifications`, `media`, `product-categories`, `products`, `prisma`, `common/auth`).
 - `src/media/` — `MediaStorageService` (R2), `MediaRetentionService` (faxina + conferência) e a rota de cron que os liga. Ver "Imagens" abaixo.
 - `src/bootstrap.ts` — a configuração de app (body parser, CORS, `ValidationPipe`) compartilhada pelos dois entry points, pra que local e produção não divirjam.
 - `src/messaging/` — `ConversationMessengerService`, o único lugar que manda mensagem pro WhatsApp e grava no histórico. Os dois andam sempre juntos; fazer isso à mão em cada branch era como o histórico ficava com buracos.
@@ -227,6 +227,20 @@ Nenhum caminho quente tinha índice — e o Postgres **não cria índice em fore
 A coluna é mantida pelo `ConversationMessengerService`, na mesma transação da mensagem que a descreve. Como ele é o único que grava mensagem, o flag não tem como divergir. A exceção é o pedido de catálogo, que grava mensagem e pedido juntos numa transação própria — lá o `unread` é escrito à mão, e tem teste pra isso.
 
 Efeito colateral proposital: agora **toda** mensagem toca a conversa, então `updatedAt` passou a significar "última atividade" de verdade. Antes só as rotas que por acaso davam `update` na conversa é que a moviam pro topo da lista.
+
+## Catálogo do site (módulos `product-categories` e `products`)
+
+Produtos e categorias que a cliente cadastra no admin e o site mostra em `/produtos`. `ProductCategory` não tem relação com `Category` (rótulo de conversa), por isso o nome diferente.
+
+- **Rotas públicas, sem token**, em controllers separados (mesmo motivo do `PublicDeliveryLocationsController`), registrados **antes** dos do admin. Senão `GET /products/:id` capturaria `GET /products/active` e responderia 401.
+  - `GET /product-categories/active`: categorias ativas que têm pelo menos um produto ativo, com `{ id, name, slug, description }`.
+  - `GET /products/active?category=<slug>&featured=true`: produtos ativos de categorias ativas, ordenados por `order`. Os dois filtros são opcionais. `featured=true` traz só os marcados como destaque no admin, que é a vitrine da home. Slug desconhecido devolve `[]`, não 404.
+  - `GET /products/active/:slug`: 404 se o produto não existe, está inativo ou a categoria dele está.
+- **Admin** (`ClerkAuthGuard`): CRUD em `/product-categories` (JSON) e `/products` (multipart, campo `images`, até 6 fotos JPEG/PNG/WebP de até 5 MB). No `PATCH`, mandar fotos substitui todas.
+- **Slug** é gerado do nome na criação (`src/common/slug.ts`, com `-2`, `-3`… em colisão) e **nunca** muda ao renomear: é a URL no site. O slug de produto é único no catálogo inteiro. O site aninha a URL na categoria e redireciona quando ela muda.
+- **Preço** é `Decimal` no banco e sai sempre como `number` no JSON. O `Decimal` do Prisma serializaria como string.
+- **Fotos** vão pro Vercel Blob (`BlobStorageService`, `BLOB_READ_WRITE_TOKEN`), públicas, não pro R2 privado das conversas. Uma falha ao gravar apaga as fotos recém-enviadas, e as antigas só saem depois que a linha nova está salva.
+- Apagar uma categoria que ainda tem produto responde **409**, porque a FK é `RESTRICT`.
 
 ## Categorias (módulo `categories`)
 
