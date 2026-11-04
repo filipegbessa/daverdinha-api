@@ -52,8 +52,6 @@ O caminho seguro depois de mudar `schema.prisma`:
    ```
 5. Conferir com `prisma migrate status` — deve dizer "Database schema is up to date!".
 
-Migração futura pra Railway (fase de produção): ver `SPEC.md` → "Stack (decidida)".
-
 ## Testes
 
 - `npm test` — unitários
@@ -169,7 +167,43 @@ Além da reativação manual, uma conversa `paused_human` parada há 30 dias ou 
 
 Esses endpoints existem porque o número de WhatsApp do projeto não pode adotar retroativamente o recurso de "coexistência" do app/Cloud API da Meta (ele exige partir de uma conta de app do WhatsApp Business ativa, que este número não tem mais) — então o admin precisa da própria forma de responder pelo WhatsApp e de mover uma conversa entre bot e atendimento humano.
 
-Ver `docs/superpowers/plans/2026-08-31-da-verdinha-api-backend.md` e `SPEC.md` (raiz do monorepo) para o desenho completo.
+### Importar histórico de exports do WhatsApp (`scripts/import-whatsapp-export.ts`)
+
+Backfill do que aconteceu no celular **antes** do bot existir. A Cloud API não tem endpoint de histórico — o webhook só entrega o que chega depois que o número foi assinado — então a única fonte possível é o "Exportar conversa" do próprio app, que gera um `.txt` por conversa. O script lê esse arquivo (formato Android e iOS, pt-BR e en) e grava em `conversations`/`messages` com as datas originais.
+
+```bash
+# 1. descoberta: mostra os autores de cada arquivo, sem tocar no banco
+npx ts-node scripts/import-whatsapp-export.ts ./exports --parse-only
+
+# 2. simulação: já com --me e os telefones, mostra o que criaria ou mesclaria
+npx ts-node scripts/import-whatsapp-export.ts ./exports --me "Da Verdinha" --map mapa.json
+
+# 3. aplicar
+npx ts-node scripts/import-whatsapp-export.ts ./exports --me "Da Verdinha" --map mapa.json --commit
+```
+
+`--me` é o nome do negócio **como aparece no export** — é ele que decide o que é `outbound`. Se nenhum autor casar, o arquivo é pulado em vez de importado com todas as mensagens invertidas.
+
+`--map` é `{ "nome-do-arquivo.txt": { "phone": "5521...", "name": "..." } }`. O telefone é obrigatório e não vem no export para contato salvo (o arquivo mostra o **nome**), e precisa ser normalizado pro mesmo formato que o webhook grava (`5521984448130`, sem `+` nem separador) — é a chave que o `findFirst` do `BotEngineService` usa. Uma conversa sem telefone é reportada e pulada, e não importada sob um placeholder, que fragmentaria o histórico do cliente em duas conversas.
+
+O que o export não tem e portanto se perde: **mídia** (vem como `<Mídia oculta>`; não existe coluna de anexo, então a linha entra como `invalid_content`, que o admin já renderiza em itálico) e **pedidos de catálogo** (viram texto solto, sem `Order`/`OrderItem`).
+
+Dois detalhes que o script tem que corrigir à mão depois do insert:
+
+| Campo | Por quê |
+|---|---|
+| `conversations.updated_at` | é `@updatedAt`, então o Prisma estampa "agora" em qualquer write — o que jogaria toda conversa importada, por antiga que seja, pro topo da listagem do admin. É reescrito em SQL cru a partir da última mensagem da conversa. |
+| `conversations.unread` | o flag denormalizado "a última mensagem é do cliente", derivado junto no mesmo `UPDATE`. |
+
+Reimportar o mesmo arquivo é seguro: `Message` não tem chave única, então o script compara com o que a conversa já tem na janela de tempo do arquivo — mesmo segundo, mesma direção, mesmo corpo é a mesma mensagem.
+
+⚠️ **Efeito no bot.** Importar cria a conversa, e `BotEngineService.resolveConversation` usa a existência da linha como "cliente novo" (`isNew`). Um cliente cujo histórico foi importado cai em `handleMenuSelection` sem opção selecionada na próxima mensagem, o que conta uma tentativa inválida — mas `registerInvalidAttempt` termina chamando `showMenu`, então **ele recebe as boas-vindas + menu normalmente**. A única diferença real é começar com `invalidAttempts: 1`, ou seja, 2 tentativas até o handoff automático em vez de 3.
+
+Com o padrão `status: paused_human` (era conversa de humano mesmo), a primeira mensagem depois do import não recebe resposta do bot: fica não lida esperando um humano no admin. Se ninguém pegar, a reativação automática dos 30 dias devolve a conversa pro bot em silêncio e o cliente precisa mandar uma segunda mensagem pro menu aparecer.
+
+Um `isNew` que significasse "nunca enviamos nada pra esse cliente" **não** resolveria: o import traz as respostas da loja como `outbound`, então a conversa importada já teria mensagem outbound. Precisaria de coluna nova (`greeted`/`menuShownAt`, marcada pelo `showMenu`). Dado que o efeito é um contador começando em 1, não foi feito.
+
+Timestamps são construídos no fuso da máquina que roda o import, porque é a única leitura verdadeira deles: o export escreve o relógio de parede do celular, sem offset. Rode de uma máquina no fuso da loja.
 
 ## Paginação
 
