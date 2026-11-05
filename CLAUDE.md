@@ -40,7 +40,7 @@ CI (`.github/workflows/ci.yml`) runs `openapi:metadata` and fails on a diff in `
 
 **OpenAPI.** `GET /docs` serves a standalone page (Scalar, with its own Clerk login), and `GET /openapi.json` is behind the Clerk guard. Vercel doesn't run `nest build`, so the swagger plugin output is committed as `src/metadata.ts`. Update DTOs must use `PartialType` from `@nestjs/swagger`, not `@nestjs/mapped-types`. Multipart endpoints need manual `@ApiConsumes`/`@ApiBody`. Webhook and cron controllers use `@ApiExcludeController`.
 
-**Pagination.** List endpoints use `src/common/pagination.ts` (`page`/`perPage`, `pageBounds()`, `paginated()`). Message threads use cursors instead (`?before=` and an inclusive `?since=`, because the bot writes two messages in the same millisecond, and `id` breaks ties).
+**Pagination.** List endpoints use `src/common/pagination.ts` (`page`/`perPage`, `pageBounds()`, `paginated()`). **Any new list that can grow with use is paginated from day one** (and filterable on the server, e.g. `?q=` by name), because the admin pages it with `usePaginatedResource`. Only fixed or tiny sets return a bare array, on purpose: menu items, delivery locations, product categories. Say so in the service when a list is deliberately unpaginated. Message threads use cursors instead (`?before=` and an inclusive `?since=`, because the bot writes two messages in the same millisecond, and `id` breaks ties).
 
 **Phones** are stored normalized (`5521…`, no `+` or separators; see `src/common/format-phone.ts`), and conversation lookup by phone depends on it.
 

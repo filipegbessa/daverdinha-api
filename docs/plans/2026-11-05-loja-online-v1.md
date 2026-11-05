@@ -105,6 +105,8 @@ interface PublicSiteOrder {
 
 ## Global Constraints
 
+- **Lista que cresce é paginada desde o começo** (`src/common/pagination.ts`) e aceita busca/filtro no servidor — `GET /site-orders` já está assim; vale pra qualquer lista nova. Ver `CLAUDE.md` → Pagination.
+
 - **Produção tem dado real.** Schema novo vai pra Neon só como delta (`prisma migrate diff --from-url <prod> --to-schema-datamodel prisma/schema.prisma --script`), revisado (só `CREATE TABLE`/`CREATE TYPE`/`ADD COLUMN`/`CREATE INDEX`; qualquer `DROP`/`TRUNCATE` = parar), aplicado com `prisma db execute`, depois `prisma migrate resolve --applied <pasta_nova>`. A migration local continua squashed num único `*_init`. Entregar o SQL num `NEON-loja-v1.md` na raiz, fora do git (`.git/info/exclude`), como foi com o catálogo.
 - **Dinheiro é `Decimal(10,2)` no banco** e número só na borda (DTO de saída). Somas feitas com `Prisma.Decimal`, nunca com `number` — `0.1 + 0.2` não pode virar centavo errado no total cobrado.
 - **Nada do Mercado Pago fora de `src/mercado-pago/`.** Os outros módulos dependem da interface `MercadoPagoGateway` (abaixo), o que deixa os testes sem rede e a V2 trocando só esse módulo.
