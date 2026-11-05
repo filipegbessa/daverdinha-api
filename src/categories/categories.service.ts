@@ -59,7 +59,7 @@ export class CategoriesService {
 
   private mapDuplicateNameError(error: unknown) {
     if ((error as { code?: string }).code === 'P2002') {
-      return new ConflictException('Já existe uma categoria com esse nome.');
+      return new ConflictException('Já existe um marcador com esse nome.');
     }
     return error;
   }

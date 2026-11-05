@@ -228,6 +228,7 @@ model DeliveryZoneFee {
 Em `Product`: `stock Int?` (comentário: "`null` = sem controle de estoque") e `orderItems SiteOrderItem[]`.
 
 - [ ] **Step 2: Squash e aplicar local** — apagar a pasta `*_init` atual, `npx prisma migrate dev --name init`, `npx prisma db seed`, `npm test` (nada deve quebrar: só models novos).
+- [ ] **Step 2b: Seed das tabelas novas** em `prisma/seed.ts`, no mesmo molde de `seedCatalog()` (`upsert` por chave natural, `update: {}`, roda duas vezes sem duplicar): valor de entrega pra cada zona de `DeliveryLocation` (ex.: R$ 15 a R$ 35); `stock` em dois produtos do catálogo de exemplo (um com 1, outro com 0, pra testar esgotado); e três pedidos de exemplo identificados por `customerEmail` `*@exemplo.com` — um `paid` com entrega, um `paid` com retirada em preparo, um `pending_payment` já vencido. Nada disso entra em contagem do e2e (`test/prisma-schema.e2e-spec.ts`); se entrar, ajustar o número lá.
 - [ ] **Step 3: Delta de produção** — gerar com `prisma migrate diff` contra a Neon, conferir que só há `CREATE TYPE`, `CREATE TABLE`, `ALTER TABLE "products" ADD COLUMN "stock"`, `CREATE INDEX`, `ADD CONSTRAINT`; salvar em `NEON-loja-v1.md` com os passos (`db execute`, `migrate resolve --applied <pasta>`, `migrate status`). **Não aplicar** — o usuário aplica.
 - [ ] **Step 4: Commit**
 

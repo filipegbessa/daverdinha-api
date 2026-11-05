@@ -115,7 +115,7 @@ model Event {
 Run: `rm -rf prisma/migrations && npx prisma migrate dev --name init`
 Expected: uma única pasta nova em `prisma/migrations/`, aplicada num Postgres **local**, `prisma generate` sem erro. Produção só pelo caminho do delta (Global Constraints).
 
-- [ ] **Step 3: Rodar o seed existente** — `npx prisma db seed`; termina sem erro (agenda nasce vazia, decisão 9).
+- [ ] **Step 3: Seed de exemplo** — `seedEvents()` em `prisma/seed.ts` com os mesmos eventos de `sampleEvents()` do site (`src/features/site/data/samples.ts` no `daverdinha`), datas relativas a hoje (dois futuros e um passado, pra testar "Este evento já aconteceu"), `upsert` por `slug` com `update: {}` (nunca desfaz edição do admin), sem foto. Rodar `npx prisma db seed` duas vezes e conferir que não duplica.
 - [ ] **Step 4: Commit**
 
 ```bash

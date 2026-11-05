@@ -52,6 +52,8 @@ Migrations are squashed into a single `prisma/migrations/*_init` folder that is 
 
 `scripts/` holds standalone ts-node tools, tested with `npm run test:scripts`: `generate-cep-ranges.ts` (CNEFE → `prisma/data/cep-ranges.json`), `generate-openapi-metadata.ts`, and `import-whatsapp-export.ts` (backfills WhatsApp chat exports; dry-run unless `--commit`). `prisma/data/*.json` currently holds sample data, and the seed creates every bairro with `covered: false`.
 
+**Every new table gets local sample data in `prisma/seed.ts`** in the same change that adds it (see `seedCatalog()`): upsert by a natural key with `update: {}`, so re-running the seed never duplicates rows or overwrites what was edited in the admin. The catalog seed mirrors the site's preview samples (`daverdinha/src/features/site/data/samples.ts`).
+
 ## Conventions
 
 Commit messages use Conventional Commits in English (`feat(scope): …`, `fix(scope): …`). README and code-adjacent docs are in Portuguese. Implementation plans live in `docs/plans/`. Unit specs sit next to the code as `*.spec.ts`.

@@ -117,7 +117,7 @@ describe('CategoriesService', () => {
     await expect(
       service.create({ name: 'Bingo', color: '#185928' }),
     ).rejects.toThrow(
-      new ConflictException('Já existe uma categoria com esse nome.'),
+      new ConflictException('Já existe um marcador com esse nome.'),
     );
   });
 
@@ -142,7 +142,7 @@ describe('CategoriesService', () => {
     await expect(
       service.update('cat1', { name: 'Fechou compra' }),
     ).rejects.toThrow(
-      new ConflictException('Já existe uma categoria com esse nome.'),
+      new ConflictException('Já existe um marcador com esse nome.'),
     );
   });
 

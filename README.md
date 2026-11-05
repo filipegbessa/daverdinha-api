@@ -230,7 +230,7 @@ Efeito colateral proposital: agora **toda** mensagem toca a conversa, então `up
 
 ## Catálogo do site (módulos `product-categories` e `products`)
 
-Produtos e categorias que a cliente cadastra no admin e o site mostra em `/produtos`. `ProductCategory` não tem relação com `Category` (rótulo de conversa), por isso o nome diferente.
+Produtos e categorias que a cliente cadastra no admin e o site mostra em `/produtos`. `ProductCategory` ("Categorias" no admin) não tem relação com `Category` ("Marcadores" no admin, rótulo de conversa), por isso o nome diferente.
 
 - **Rotas públicas, sem token**, em controllers separados (mesmo motivo do `PublicDeliveryLocationsController`), registrados **antes** dos do admin. Senão `GET /products/:id` capturaria `GET /products/active` e responderia 401.
   - `GET /product-categories/active`: categorias ativas que têm pelo menos um produto ativo, com `{ id, name, slug, description }`.
@@ -242,9 +242,9 @@ Produtos e categorias que a cliente cadastra no admin e o site mostra em `/produ
 - **Fotos** vão pro Vercel Blob (`BlobStorageService`, `BLOB_READ_WRITE_TOKEN`), públicas, não pro R2 privado das conversas. Uma falha ao gravar apaga as fotos recém-enviadas, e as antigas só saem depois que a linha nova está salva.
 - Apagar uma categoria que ainda tem produto responde **409**, porque a FK é `RESTRICT`.
 
-## Categorias (módulo `categories`)
+## Marcadores (módulo `categories`)
 
-Rótulos coloridos que o admin anexa a conversas, pra filtrar a lista depois.
+Rótulos coloridos que o admin anexa a conversas, pra filtrar a lista depois. Na tela do admin se chamam **marcadores** (`/admin/marcadores`); no código e nas rotas continuam `Category` / `/categories`, e "Categorias" no admin passou a ser o catálogo (`ProductCategory`, módulo `product-categories`).
 
 - `GET /categories?page=&perPage=` — página de categorias com a contagem de conversas de cada uma, ordenada por nome. Devolve `{ items, page, perPage, total, totalPages }`. Diferente das conversas, o nome não muda sozinho, então as fronteiras de página ficam paradas.
 - `POST /categories` / `PATCH /categories/:id` / `DELETE /categories/:id` — CRUD.
