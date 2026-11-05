@@ -168,6 +168,45 @@ describe('ProductsService', () => {
     expect(prisma.product.delete).toHaveBeenCalledWith({ where: { id: 'p1' } });
   });
 
+  describe('list', () => {
+    it('pages the whole catalog when no filter is given', async () => {
+      await service.list({ page: 2, perPage: 10 });
+
+      expect(prisma.product.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: {}, skip: 10, take: 10 }),
+      );
+      expect(prisma.product.count).toHaveBeenCalledWith({ where: {} });
+    });
+
+    it('combines name search, category, active and featured, and counts with the same filter', async () => {
+      await service.list({
+        q: '  vaso ',
+        categoryId: 'c1',
+        active: false,
+        featured: true,
+      });
+
+      const where = {
+        name: { contains: 'vaso', mode: 'insensitive' },
+        categoryId: 'c1',
+        active: false,
+        featured: true,
+      };
+      expect(prisma.product.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where }),
+      );
+      expect(prisma.product.count).toHaveBeenCalledWith({ where });
+    });
+
+    it('ignores a blank search', async () => {
+      await service.list({ q: '   ' });
+
+      expect(prisma.product.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: {} }),
+      );
+    });
+  });
+
   describe('listActive', () => {
     it('returns [] when there are no active products', async () => {
       await expect(service.listActive()).resolves.toEqual([]);

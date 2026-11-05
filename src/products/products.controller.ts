@@ -17,11 +17,11 @@ import {
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiBody, ApiConsumes, ApiTags } from '@nestjs/swagger';
 import { ClerkAuthGuard } from '../common/auth/clerk-auth.guard';
-import { PaginationQueryDto } from '../common/pagination';
 import { ProductsService } from './products.service';
 import type { UploadedPhoto } from './products.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
+import { ListProductsDto } from './dto/list-products.dto';
 
 export const ALLOWED_IMAGE_MIMETYPES = [
   'image/jpeg',
@@ -78,7 +78,7 @@ export class ProductsController {
   constructor(private readonly service: ProductsService) {}
 
   @Get()
-  list(@Query() query: PaginationQueryDto) {
+  list(@Query() query: ListProductsDto) {
     return this.service.list(query);
   }
 

@@ -6,11 +6,7 @@ import {
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { BlobStorageService } from '../media/blob-storage.service';
-import {
-  PaginationQueryDto,
-  pageBounds,
-  paginated,
-} from '../common/pagination';
+import { pageBounds, paginated } from '../common/pagination';
 import { uniqueSlug } from '../common/slug';
 import {
   isForeignKeyViolation,
@@ -18,6 +14,7 @@ import {
 } from '../common/prisma-errors';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
+import { ListProductsDto } from './dto/list-products.dto';
 
 /** O que o Multer entrega por foto — só o que o upload usa. */
 export interface UploadedPhoto {
@@ -87,16 +84,24 @@ export class ProductsService {
     private readonly blob: BlobStorageService,
   ) {}
 
-  async list(query: PaginationQueryDto = {}) {
+  async list(query: ListProductsDto = {}) {
     const { page, perPage, skip, take } = pageBounds(query);
+    const search = query.q?.trim();
+    const where: Prisma.ProductWhereInput = {
+      ...(search && { name: { contains: search, mode: 'insensitive' } }),
+      ...(query.categoryId && { categoryId: query.categoryId }),
+      ...(query.active !== undefined && { active: query.active }),
+      ...(query.featured !== undefined && { featured: query.featured }),
+    };
     const [rows, total] = await Promise.all([
       this.prisma.product.findMany({
+        where,
         include: WITH_CATEGORY,
         orderBy: ORDER,
         skip,
         take,
       }),
-      this.prisma.product.count(),
+      this.prisma.product.count({ where }),
     ]);
     return paginated(rows.map(toAdmin), total, page, perPage);
   }
