@@ -79,6 +79,139 @@ async function seedCategories() {
   }
 }
 
+/**
+ * Catálogo de exemplo pra desenvolver o site e o admin localmente. Mesmos
+ * produtos de `src/features/site/data/samples.ts` no `daverdinha`, então a
+ * vitrine local fica igual à prévia. Sem fotos: elas moram no Vercel Blob,
+ * e o site mostra o placeholder. Os destaques são 6 de propósito, mais do
+ * que cabe numa linha, pra vitrine da home virar carrossel.
+ */
+const PRODUCT_CATEGORIES = [
+  {
+    name: 'Vasos',
+    slug: 'vasos',
+    description:
+      'Vasos de cerâmica, terracota e cimento pintados à mão no ateliê, do tamanho de uma suculenta ao de uma costela-de-adão.',
+  },
+  {
+    name: 'Mudas',
+    slug: 'mudas',
+    description:
+      'Mudas saudáveis, aclimatadas no ateliê e prontas pra ir pra casa, com dica de cuidado na entrega.',
+  },
+  {
+    name: 'Arranjos',
+    slug: 'arranjos',
+    description:
+      'Arranjos montados sob medida pra presente, mesa posta ou um canto da casa que pede verde.',
+  },
+  {
+    name: 'Kits',
+    slug: 'kits',
+    description:
+      'Tudo o que precisa pra montar o seu: vaso, substrato, planta e o passo a passo.',
+  },
+];
+
+const PRODUCTS = [
+  {
+    name: 'Vaso Terracota M',
+    slug: 'vaso-terracota-m',
+    category: 'vasos',
+    price: '89.90',
+    featured: true,
+    description:
+      'Vaso de terracota de 18 cm, com furo de drenagem e prato. A terracota respira e ajuda a raiz a não encharcar — bom pra quem rega demais.',
+  },
+  {
+    name: 'Vaso Pintado Folhagem',
+    slug: 'vaso-pintado-folhagem',
+    category: 'vasos',
+    price: '119.00',
+    featured: true,
+    description:
+      'Cerâmica de 14 cm pintada à mão no ateliê. Cada peça sai um pouco diferente da outra.',
+  },
+  {
+    name: 'Jiboia em cuia',
+    slug: 'jiboia-em-cuia',
+    category: 'mudas',
+    price: '59.00',
+    featured: true,
+    description:
+      'Jiboia já enraizada numa cuia de coco. Gosta de luz indireta e rega quando a terra secar.',
+  },
+  {
+    name: 'Suculenta Echeveria',
+    slug: 'suculenta-echeveria',
+    category: 'mudas',
+    price: '32.00',
+    featured: false,
+    description: 'Echeveria em vaso de 8 cm. Sol pela manhã e pouca água.',
+  },
+  {
+    name: 'Arranjo Tropical',
+    slug: 'arranjo-tropical',
+    category: 'arranjos',
+    price: '159.00',
+    featured: true,
+    description:
+      'Folhagens tropicais num cachepô de palha, montado no dia da entrega.',
+  },
+  {
+    name: 'Kit Terrário Pequeno',
+    slug: 'kit-terrario-pequeno',
+    category: 'kits',
+    price: '129.00',
+    featured: true,
+    description:
+      'Pote de vidro, pedrisco, carvão, substrato, duas mudas e o passo a passo pra montar em casa.',
+  },
+  {
+    name: 'Kit Kokedama',
+    slug: 'kit-kokedama',
+    category: 'kits',
+    price: '89.00',
+    featured: true,
+    description: 'Musgo, substrato, barbante e uma muda pra fazer sua kokedama.',
+  },
+  {
+    name: 'Arranjo de Mesa',
+    slug: 'arranjo-de-mesa',
+    category: 'arranjos',
+    price: '99.00',
+    featured: false,
+    description: 'Arranjo baixo pra centro de mesa, com suculentas e musgo.',
+  },
+];
+
+async function seedCatalog() {
+  // `update: {}` em tudo: rodar o seed de novo nunca desfaz o que foi
+  // editado no admin, só recria o que foi apagado.
+  const categoryIds = new Map<string, string>();
+  for (const [order, category] of PRODUCT_CATEGORIES.entries()) {
+    const row = await prisma.productCategory.upsert({
+      where: { slug: category.slug },
+      update: {},
+      create: { ...category, order },
+    });
+    categoryIds.set(category.slug, row.id);
+  }
+
+  for (const [order, { category, ...product }] of PRODUCTS.entries()) {
+    await prisma.product.upsert({
+      where: { slug: product.slug },
+      update: {},
+      create: {
+        ...product,
+        order,
+        images: [],
+        categoryId: categoryIds.get(category)!,
+      },
+    });
+  }
+}
+
 interface SeedMessage {
   direction: 'inbound' | 'outbound';
   body: string;
@@ -255,6 +388,7 @@ async function main() {
   await seedDeliveryLocations();
   await seedCategories();
   await seedConversations();
+  await seedCatalog();
 
   const menuItems = [
     {
