@@ -389,6 +389,8 @@ git commit -m "feat(events): expose public agenda endpoints and wire module"
 
 ## Task 6 (fase posterior): `GET /delivery-locations/check?cep=` — checagem de CEP pro site
 
+> ➡️ **Movida para `docs/plans/2026-11-05-loja-online-v1.md` (Tarefa 2)**: o frete da loja depende dela. Os passos abaixo continuam valendo, com `zone` a mais no retorno `covered`.
+
 > **Fase posterior — não faz parte da entrega da Agenda.** Registrado aqui porque nasceu da mesma proposta do site. Hoje o site checa no navegador: chama a BrasilAPI (`https://brasilapi.com.br/api/cep/v2/{cep}`) e compara o bairro devolvido (normalizado: minúsculo, sem acento) com a lista de `GET /delivery-locations/covered`. É uma aproximação provisória: ignora as `CepRange` curadas pela dona (que **ganham** da BrasilAPI no bot) e pode dizer "entregamos" pra um CEP que o bot recusaria, ou o contrário. Esta tarefa move a decisão pro backend, reaproveitando exatamente a lógica do bot.
 
 **Files:**
