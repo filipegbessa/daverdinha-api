@@ -12,6 +12,12 @@ import {
   isForeignKeyViolation,
   isUniqueViolation,
 } from '../common/prisma-errors';
+import {
+  availabilityOf,
+  reservedQuantities,
+  stockLeft,
+  type Availability,
+} from '../site-orders/stock';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { ListProductsDto } from './dto/list-products.dto';
@@ -31,6 +37,10 @@ export interface ProductPublic {
   price: number;
   images: string[];
   category: { id: string; name: string; slug: string };
+  /** Já desconta as unidades reservadas por pedidos pendentes. */
+  availability: Availability;
+  /** Prazo de confecção; só vem preenchido quando é sob encomenda. */
+  leadTimeDays: number | null;
 }
 
 export interface ProductAdmin extends ProductPublic {
@@ -38,6 +48,10 @@ export interface ProductAdmin extends ProductPublic {
   active: boolean;
   featured: boolean;
   order: number;
+  /** O que está cadastrado, sem descontar reservas. `null` = sob encomenda. */
+  stock: number | null;
+  // `leadTimeDays` aqui é o prazo salvo, mesmo em pronta entrega: o admin
+  // preenche o campo com ele se a cliente voltar pra sob encomenda.
 }
 
 const WITH_CATEGORY = {
@@ -51,21 +65,29 @@ const ACTIVE = { active: true, category: { active: true } } as const;
 
 type ProductRow = Prisma.ProductGetPayload<{ include: typeof WITH_CATEGORY }>;
 
+/** Unidades reservadas por pedidos pendentes, por produto (ver `reservedQuantities`). */
+type Reserved = Map<string, number>;
+
 /**
  * Único lugar que converte `price`: o `Decimal` do Prisma vira string no
  * JSON ("89.9"), e o site espera número. Toda leitura passa por aqui.
  */
-function toAdmin(row: ProductRow): ProductAdmin {
+function toAdmin(row: ProductRow, reserved: Reserved): ProductAdmin {
   return {
-    ...toPublic(row),
+    ...toPublic(row, reserved),
     categoryId: row.categoryId,
     active: row.active,
     featured: row.featured,
     order: row.order,
+    stock: row.stock,
+    leadTimeDays: row.leadTimeDays,
   };
 }
 
-function toPublic(row: ProductRow): ProductPublic {
+function toPublic(row: ProductRow, reserved: Reserved): ProductPublic {
+  const availability = availabilityOf(
+    stockLeft(row.stock, reserved.get(row.id) ?? 0),
+  );
   return {
     id: row.id,
     name: row.name,
@@ -74,7 +96,27 @@ function toPublic(row: ProductRow): ProductPublic {
     price: new Prisma.Decimal(row.price).toNumber(),
     images: row.images,
     category: row.category,
+    availability,
+    leadTimeDays: availability === 'made_to_order' ? row.leadTimeDays : null,
   };
+}
+
+/**
+ * Sob encomenda precisa de prazo. Só confere quando a requisição mexe em
+ * estoque ou prazo: um PATCH só do "ativo", ou um produto antigo que nunca
+ * teve prazo, continua salvando.
+ */
+function assertLeadTime(
+  dto: Pick<CreateProductDto, 'stock' | 'leadTimeDays'>,
+  current: { stock: number | null; leadTimeDays: number | null },
+) {
+  if (dto.stock === undefined && dto.leadTimeDays === undefined) return;
+  const stock = dto.stock !== undefined ? dto.stock : current.stock;
+  const leadTimeDays =
+    dto.leadTimeDays !== undefined ? dto.leadTimeDays : current.leadTimeDays;
+  if (stock === null && leadTimeDays === null) {
+    throw new BadRequestException('Informe o prazo de confecção.');
+  }
 }
 
 @Injectable()
@@ -103,11 +145,17 @@ export class ProductsService {
       }),
       this.prisma.product.count({ where }),
     ]);
-    return paginated(rows.map(toAdmin), total, page, perPage);
+    const reserved = await this.reservedFor(rows);
+    return paginated(
+      rows.map((row) => toAdmin(row, reserved)),
+      total,
+      page,
+      perPage,
+    );
   }
 
   async findOne(id: string): Promise<ProductAdmin> {
-    return toAdmin(await this.findRow(id));
+    return this.withReservations(await this.findRow(id));
   }
 
   /**
@@ -118,9 +166,10 @@ export class ProductsService {
     dto: CreateProductDto,
     files: UploadedPhoto[] = [],
   ): Promise<ProductAdmin> {
+    assertLeadTime(dto, { stock: null, leadTimeDays: null });
     const images = await this.upload(files);
     try {
-      return toAdmin(await this.insert(dto, images));
+      return this.withReservations(await this.insert(dto, images));
     } catch (error) {
       await this.deleteAll(images);
       throw this.mapError(error);
@@ -138,6 +187,7 @@ export class ProductsService {
     files: UploadedPhoto[] = [],
   ): Promise<ProductAdmin> {
     const current = await this.findRow(id);
+    assertLeadTime(dto, current);
     const images = files.length > 0 ? await this.upload(files) : undefined;
 
     let updated: ProductRow;
@@ -153,7 +203,7 @@ export class ProductsService {
     }
 
     if (images) await this.deleteAll(current.images);
-    return toAdmin(updated);
+    return this.withReservations(updated);
   }
 
   async remove(id: string): Promise<void> {
@@ -178,7 +228,8 @@ export class ProductsService {
       include: WITH_CATEGORY,
       orderBy: ORDER,
     });
-    return rows.map(toPublic);
+    const reserved = await this.reservedFor(rows);
+    return rows.map((row) => toPublic(row, reserved));
   }
 
   async findActiveBySlug(slug: string): Promise<ProductPublic | null> {
@@ -186,7 +237,7 @@ export class ProductsService {
       where: { slug, ...ACTIVE },
       include: WITH_CATEGORY,
     });
-    return row ? toPublic(row) : null;
+    return row ? toPublic(row, await this.reservedFor([row])) : null;
   }
 
   private async insert(
@@ -212,6 +263,16 @@ export class ProductsService {
       }
       throw error;
     }
+  }
+
+  /** Uma consulta agrupada pra lista toda; sob encomenda não precisa de reserva. */
+  private reservedFor(rows: ProductRow[]): Promise<Reserved> {
+    const counted = rows.filter((r) => r.stock !== null).map((r) => r.id);
+    return reservedQuantities(this.prisma, counted, new Date());
+  }
+
+  private async withReservations(row: ProductRow): Promise<ProductAdmin> {
+    return toAdmin(row, await this.reservedFor([row]));
   }
 
   private async findRow(id: string): Promise<ProductRow> {

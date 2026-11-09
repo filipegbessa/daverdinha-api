@@ -7,8 +7,13 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  Max,
   Min,
 } from 'class-validator';
+
+/** Campo vazio vira `null`: é como o admin marca "sob encomenda" ou limpa o prazo. */
+const toNullableInt = ({ value }: { value: unknown }) =>
+  value === '' || value === null || value === 'null' ? null : Number(value);
 
 /**
  * Chega como `multipart/form-data` (junto com as fotos), então todo número e
@@ -47,4 +52,19 @@ export class CreateProductDto {
   @Transform(({ value }) => value === true || value === 'true')
   @IsBoolean()
   featured?: boolean;
+
+  /** Com número: pronta entrega (0 = esgotado). `null`: sob encomenda. */
+  @IsOptional()
+  @Transform(toNullableInt)
+  @IsInt()
+  @Min(0)
+  stock?: number | null;
+
+  /** Prazo de confecção em dias; obrigatório quando o produto é sob encomenda. */
+  @IsOptional()
+  @Transform(toNullableInt)
+  @IsInt()
+  @Min(1)
+  @Max(180)
+  leadTimeDays?: number | null;
 }

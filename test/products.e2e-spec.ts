@@ -14,9 +14,10 @@ import { configureApp } from '../src/bootstrap';
 describe('Public catalog (e2e)', () => {
   const prisma = new PrismaClient();
   let app: INestApplication;
-  const ids: { categories: string[]; products: string[] } = {
+  const ids: { categories: string[]; products: string[]; orders: string[] } = {
     categories: [],
     products: [],
+    orders: [],
   };
 
   beforeAll(async () => {
@@ -73,9 +74,59 @@ describe('Public catalog (e2e)', () => {
       });
       ids.products.push(product.id);
     }
+
+    // Estoque: um de cada estado, mais um com a única unidade reservada por
+    // um pedido pendente e outro com a reserva já vencida.
+    const stockCases = [
+      { slug: 'e2e-pronta', stock: 2, leadTimeDays: 9 },
+      { slug: 'e2e-esgotado', stock: 0 },
+      { slug: 'e2e-encomenda', stock: null, leadTimeDays: 10 },
+      { slug: 'e2e-reservado', stock: 1 },
+      { slug: 'e2e-reserva-vencida', stock: 1 },
+    ];
+    for (const { slug, ...stock } of stockCases) {
+      const product = await prisma.product.create({
+        data: {
+          name: slug,
+          slug,
+          description: 'd',
+          price: '10',
+          images: [],
+          categoryId: vasos.id,
+          order: 10,
+          ...stock,
+        },
+      });
+      ids.products.push(product.id);
+      if (slug === 'e2e-reservado' || slug === 'e2e-reserva-vencida') {
+        const minutes = slug === 'e2e-reservado' ? 30 : -30;
+        const order = await prisma.siteOrder.create({
+          data: {
+            customerName: 'E2E',
+            customerEmail: 'e2e@exemplo.com',
+            customerPhone: '5521999999999',
+            deliveryMethod: 'pickup',
+            subtotal: '10',
+            deliveryFee: '0',
+            total: '10',
+            expiresAt: new Date(Date.now() + minutes * 60 * 1000),
+            items: {
+              create: {
+                productId: product.id,
+                productName: slug,
+                unitPrice: '10',
+                quantity: 1,
+              },
+            },
+          },
+        });
+        ids.orders.push(order.id);
+      }
+    }
   });
 
   afterAll(async () => {
+    await prisma.siteOrder.deleteMany({ where: { id: { in: ids.orders } } });
     await prisma.product.deleteMany({ where: { id: { in: ids.products } } });
     await prisma.productCategory.deleteMany({
       where: { id: { in: ids.categories } },
@@ -120,18 +171,43 @@ describe('Public catalog (e2e)', () => {
           name: 'E2E Vasos',
           slug: 'e2e-vasos',
         },
+        availability: 'made_to_order',
+        leadTimeDays: null,
       },
     ]);
+  });
+
+  it('shows in stock, sold out and made to order, counting only reservations that have not expired', async () => {
+    const { body } = await request(app.getHttpServer())
+      .get('/products/active?category=e2e-vasos')
+      .expect(200);
+
+    const products = body as {
+      slug: string;
+      availability: string;
+      leadTimeDays: number | null;
+    }[];
+    const bySlug = Object.fromEntries(
+      products.map((p) => [p.slug, [p.availability, p.leadTimeDays]]),
+    );
+    expect(bySlug).toMatchObject({
+      'e2e-pronta': ['in_stock', null],
+      'e2e-esgotado': ['sold_out', null],
+      'e2e-encomenda': ['made_to_order', 10],
+      'e2e-reservado': ['sold_out', null],
+      'e2e-reserva-vencida': ['in_stock', null],
+    });
   });
 
   it('filters by category slug, and an unknown slug is an empty list', async () => {
     const vasos = await request(app.getHttpServer())
       .get('/products/active?category=e2e-vasos')
       .expect(200);
-    expect(vasos.body.map((p: { slug: string }) => p.slug)).toEqual([
-      'e2e-vaso',
-      'e2e-muda',
-    ]);
+    expect(
+      (vasos.body as { slug: string }[])
+        .map((p) => p.slug)
+        .filter((slug) => ['e2e-vaso', 'e2e-muda'].includes(slug)),
+    ).toEqual(['e2e-vaso', 'e2e-muda']);
 
     await request(app.getHttpServer())
       .get('/products/active?category=nao-existe')

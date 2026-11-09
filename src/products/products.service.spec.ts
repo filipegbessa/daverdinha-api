@@ -19,6 +19,8 @@ function row(overrides: Record<string, unknown> = {}) {
     category,
     active: true,
     order: 0,
+    stock: null as number | null,
+    leadTimeDays: 10 as number | null,
     createdAt: new Date(),
     updatedAt: new Date(),
     ...overrides,
@@ -38,7 +40,10 @@ const dto = {
 
 describe('ProductsService', () => {
   let service: ProductsService;
-  let prisma: { product: Record<string, jest.Mock> };
+  let prisma: {
+    product: Record<string, jest.Mock>;
+    siteOrderItem: { groupBy: jest.Mock };
+  };
   let blob: { uploadProductImage: jest.Mock; deleteImage: jest.Mock };
 
   beforeEach(async () => {
@@ -54,6 +59,7 @@ describe('ProductsService', () => {
         update: jest.fn(({ data }) => row(data)),
         delete: jest.fn(),
       },
+      siteOrderItem: { groupBy: jest.fn().mockResolvedValue([]) },
     };
     blob = {
       uploadProductImage: jest.fn(
@@ -256,7 +262,118 @@ describe('ProductsService', () => {
         price: 89.9,
         images: [],
         category: { id: 'c1', name: 'Vasos', slug: 'vasos' },
+        availability: 'made_to_order',
+        leadTimeDays: 10,
       });
+    });
+
+    it('discounts pending reservations and hides the lead time of in-stock products', async () => {
+      prisma.product.findMany.mockResolvedValue([
+        row({ id: 'p1', stock: 3, leadTimeDays: 10 }),
+        row({ id: 'p2', stock: 1 }),
+        row({ id: 'p3', stock: null, leadTimeDays: 7 }),
+      ]);
+      prisma.siteOrderItem.groupBy.mockResolvedValue([
+        { productId: 'p2', _sum: { quantity: 1 } },
+      ]);
+
+      const products = await service.listActive();
+
+      expect(
+        products.map((p) => [p.id, p.availability, p.leadTimeDays]),
+      ).toEqual([
+        ['p1', 'in_stock', null],
+        ['p2', 'sold_out', null],
+        ['p3', 'made_to_order', 7],
+      ]);
+      // Uma consulta pra lista toda, só com os produtos que têm estoque.
+      expect(prisma.siteOrderItem.groupBy).toHaveBeenCalledTimes(1);
+      expect(prisma.siteOrderItem.groupBy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            productId: { in: ['p1', 'p2'] },
+          }),
+        }),
+      );
+    });
+
+    it('keeps sold-out products listed', async () => {
+      prisma.product.findMany.mockResolvedValue([row({ stock: 0 })]);
+
+      const [product] = await service.listActive();
+
+      expect(product.availability).toBe('sold_out');
+    });
+  });
+
+  describe('stock and lead time', () => {
+    it('creates a made-to-order product with its lead time', async () => {
+      const result = await service.create(
+        { ...dto, stock: null, leadTimeDays: 10 },
+        [],
+      );
+
+      expect(prisma.product.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ stock: null, leadTimeDays: 10 }),
+        }),
+      );
+      expect(result.availability).toBe('made_to_order');
+    });
+
+    it('refuses a made-to-order product without a lead time', async () => {
+      await expect(
+        service.create({ ...dto, stock: null, leadTimeDays: null }, []),
+      ).rejects.toThrow(
+        new BadRequestException('Informe o prazo de confecção.'),
+      );
+      expect(prisma.product.create).not.toHaveBeenCalled();
+    });
+
+    it('checks a partial update against the saved lead time', async () => {
+      prisma.product.findUnique.mockResolvedValue(
+        row({ stock: 5, leadTimeDays: null }),
+      );
+      await expect(service.update('p1', { stock: null })).rejects.toThrow(
+        BadRequestException,
+      );
+
+      prisma.product.findUnique.mockResolvedValue(
+        row({ stock: 5, leadTimeDays: 7 }),
+      );
+      await expect(service.update('p1', { stock: null })).resolves.toEqual(
+        expect.objectContaining({ stock: null }),
+      );
+    });
+
+    it('does not check when the request does not touch stock, so older products still save', async () => {
+      prisma.product.findUnique.mockResolvedValue(
+        row({ stock: null, leadTimeDays: null }),
+      );
+
+      await expect(service.update('p1', { active: false })).resolves.toEqual(
+        expect.objectContaining({ active: false }),
+      );
+    });
+
+    it('creates without stock fields, as the admin did before this change', async () => {
+      await expect(service.create(dto, [])).resolves.toBeDefined();
+    });
+
+    it('gives the admin the raw stock and the saved lead time', async () => {
+      prisma.product.findUnique.mockResolvedValue(
+        row({ stock: 2, leadTimeDays: 7 }),
+      );
+
+      const product = await service.findOne('p1');
+
+      expect(product).toEqual(
+        expect.objectContaining({
+          stock: 2,
+          leadTimeDays: 7,
+          availability: 'in_stock',
+        }),
+      );
     });
   });
 

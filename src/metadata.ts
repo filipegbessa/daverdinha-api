@@ -254,6 +254,23 @@ export default async () => {
                 description:
                   'Aparece na vitrine da home e nas listas das p\u00E1ginas internas.',
               },
+              stock: {
+                required: false,
+                type: () => Number,
+                nullable: true,
+                description:
+                  'Com n\u00FAmero: pronta entrega (0 = esgotado). `null`: sob encomenda.',
+                minimum: 0,
+              },
+              leadTimeDays: {
+                required: false,
+                type: () => Number,
+                nullable: true,
+                description:
+                  'Prazo de confec\u00E7\u00E3o em dias; obrigat\u00F3rio quando o produto \u00E9 sob encomenda.',
+                minimum: 1,
+                maximum: 180,
+              },
             },
           },
         ],
