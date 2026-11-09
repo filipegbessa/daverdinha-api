@@ -18,7 +18,7 @@
 | Catálogo — API (`src/product-categories`, `src/products`, Blob) | ✅ feito (`docs/plans/2026-11-04-catalogo-produtos.md`) e delta aplicado na Neon. Falta só `npx prisma migrate resolve --applied 20261104204120_init` em produção. |
 | Catálogo — vitrine e cadastro no admin | ✅ feitos (plano irmão, Fase 1); falta a verificação com a API real (Tarefa 4 de lá) |
 | Checagem de CEP compartilhada (bot + site) | ✅ Tarefa 2 (2026-11-09) |
-| Loja V1 — produtos | ✅ Tarefas 1, 3, 4 e 5 (2026-11-09; delta da Tarefa 1 aplicado na Neon). ⏳ Tarefas 6–10: a 6 (Pagar.me) espera a chave de teste da conta da cliente |
+| Loja V1 — produtos | ✅ Tarefas 1, 3, 4 e 5 (2026-11-09; delta da Tarefa 1 aplicado na Neon). ✅ sem gateway: página pública do pedido com vencimento (Tarefa 9, falta a reconciliação) e admin de pedidos (Tarefa 10, falta `POST :id/sync`). ⏳ Tarefas 6–8 e o que falta da 9 e da 10 esperam a chave de teste do Pagar.me da cliente |
 | Agenda de eventos — API | ⏳ `docs/plans/2026-11-04-agenda-eventos.md`, Tarefas 1–5 (pré-requisito dos ingressos) |
 | Loja V1 — ingressos | ⏳ Tarefas 11–13 deste plano |
 | Fechamento (e2e, docs, produção) | ⏳ Tarefa 14 |
