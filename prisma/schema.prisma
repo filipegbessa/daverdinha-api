@@ -50,15 +50,35 @@ model MenuItem {
 }
 
 model DeliveryLocation {
-  id         String     @id @default(uuid())
+  id         String        @id @default(uuid())
   zone       String
-  regionName String     @unique @map("region_name")
-  covered    Boolean    @default(true)
+  regionName String        @unique @map("region_name")
+  covered    Boolean       @default(true)
   cepRanges  CepRange[]
-  createdAt  DateTime   @default(now()) @map("created_at")
-  updatedAt  DateTime   @updatedAt @map("updated_at")
+  /// Área de entrega do site (subdivisão da zona, com valor). Sem área, o
+  /// site não entrega no bairro mesmo que ele esteja coberto pelo bot.
+  areaId     String?       @map("area_id")
+  area       DeliveryArea? @relation(fields: [areaId], references: [id], onDelete: SetNull)
+  createdAt  DateTime      @default(now()) @map("created_at")
+  updatedAt  DateTime      @updatedAt @map("updated_at")
 
+  @@index([areaId])
   @@map("delivery_locations")
+}
+
+/// Subdivisão de uma zona com valor de entrega próprio. Bairro coberto sem
+/// área = entrega indisponível no site, nunca frete grátis.
+model DeliveryArea {
+  id        String             @id @default(uuid())
+  zone      String
+  name      String
+  fee       Decimal            @db.Decimal(10, 2)
+  locations DeliveryLocation[]
+  createdAt DateTime           @default(now()) @map("created_at")
+  updatedAt DateTime           @updatedAt @map("updated_at")
+
+  @@unique([zone, name])
+  @@map("delivery_areas")
 }
 
 model CepRange {
@@ -246,27 +266,144 @@ model ProductCategory {
 }
 
 model Product {
-  id          String          @id @default(uuid())
-  name        String
+  id           String          @id @default(uuid())
+  name         String
   /// Único no catálogo inteiro, não por categoria: o site acha o produto só
   /// pelo slug e redireciona se a categoria da URL estiver desatualizada.
-  slug        String          @unique
-  description String
-  price       Decimal         @db.Decimal(10, 2)
+  slug         String          @unique
+  description  String
+  price        Decimal         @db.Decimal(10, 2)
   /// URLs públicas no Vercel Blob; a primeira é a capa.
-  images      String[]
-  categoryId  String          @map("category_id")
+  images       String[]
+  categoryId   String          @map("category_id")
   // Sem onDelete: RESTRICT, então apagar uma categoria com produto falha
   // (P2003) em vez de levar os produtos junto.
-  category    ProductCategory @relation(fields: [categoryId], references: [id])
-  active      Boolean         @default(true)
+  category     ProductCategory @relation(fields: [categoryId], references: [id])
+  active       Boolean         @default(true)
   /// Aparece na vitrine da home e nas listas das páginas internas (agenda).
-  featured    Boolean         @default(false)
-  order       Int             @default(0)
-  createdAt   DateTime        @default(now()) @map("created_at")
-  updatedAt   DateTime        @updatedAt @map("updated_at")
+  featured     Boolean         @default(false)
+  order        Int             @default(0)
+  /// Com número: pronta entrega, e 0 disponível é esgotado. `null` = sob
+  /// encomenda (vende sem limite e usa `leadTimeDays`).
+  stock        Int?
+  /// Prazo de confecção em dias; obrigatório quando `stock` é `null`. Fica
+  /// guardado ao voltar pra pronta entrega, pra reaparecer se mudar de novo.
+  leadTimeDays Int?            @map("lead_time_days")
+  orderItems   SiteOrderItem[]
+  createdAt    DateTime        @default(now()) @map("created_at")
+  updatedAt    DateTime        @updatedAt @map("updated_at")
 
   @@index([active, order])
   @@index([categoryId])
   @@map("products")
+}
+
+enum SiteOrderStatus {
+  pending_payment
+  paid
+  expired
+  cancelled
+  refunded
+}
+
+enum FulfillmentStatus {
+  awaiting
+  preparing
+  ready
+  completed
+}
+
+enum DeliveryMethod {
+  pickup
+  delivery
+}
+
+/// Já nasce com os dois tipos, mesmo que os ingressos venham depois: assim o
+/// schema dos ingressos só cria tabela/coluna, sem `ALTER ... DROP NOT NULL`.
+enum SiteOrderKind {
+  products
+  tickets
+}
+
+/// Pedido feito no site (carrinho ou ingresso + Pagar.me). Não confundir com
+/// `Order`, que é o pedido de catálogo recebido pelo WhatsApp.
+model SiteOrder {
+  id                String            @id @default(uuid())
+  /// Vira o código `DV-0001` mostrado pra cliente e pro comprador.
+  number            Int               @unique @default(autoincrement())
+  /// Vai na URL pública do pedido; o número é sequencial e não pode ser.
+  publicToken       String            @unique @default(uuid()) @map("public_token")
+  kind              SiteOrderKind     @default(products)
+  status            SiteOrderStatus   @default(pending_payment)
+  fulfillmentStatus FulfillmentStatus @default(awaiting) @map("fulfillment_status")
+  customerName      String            @map("customer_name")
+  customerEmail     String            @map("customer_email")
+  customerPhone     String            @map("customer_phone")
+  /// `null` em pedido de ingresso (não tem entrega).
+  deliveryMethod    DeliveryMethod?   @map("delivery_method")
+  cep               String?
+  street            String?
+  streetNumber      String?           @map("street_number")
+  complement        String?
+  bairro            String?
+  /// Snapshot do nome da zona e da área no momento do pedido.
+  deliveryZone      String?           @map("delivery_zone")
+  deliveryArea      String?           @map("delivery_area")
+  notes             String?
+  subtotal          Decimal           @db.Decimal(10, 2)
+  deliveryFee       Decimal           @map("delivery_fee") @db.Decimal(10, 2)
+  total             Decimal           @db.Decimal(10, 2)
+  /// Link de pagamento (`pl_…`), pedido (`or_…`) e cobrança (`ch_…`) no
+  /// Pagar.me. Nomes neutros de propósito: só `src/pagarme/` sabe o formato.
+  gatewayLinkId     String?           @unique @map("gateway_link_id")
+  gatewayOrderId    String?           @unique @map("gateway_order_id")
+  gatewayChargeId   String?           @map("gateway_charge_id")
+  gatewayStatus     String?           @map("gateway_status")
+  paymentUrl        String?           @map("payment_url")
+  paidAt            DateTime?         @map("paid_at")
+  expiresAt         DateTime          @map("expires_at")
+  lastSyncedAt      DateTime?         @map("last_synced_at")
+  items             SiteOrderItem[]
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
+
+  @@index([kind, status, createdAt])
+  @@map("site_orders")
+}
+
+model SiteOrderItem {
+  id           String    @id @default(uuid())
+  orderId      String    @map("order_id")
+  order        SiteOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  /// SetNull: o produto pode ser excluído depois; o pedido guarda a foto do momento.
+  productId    String?   @map("product_id")
+  product      Product?  @relation(fields: [productId], references: [id], onDelete: SetNull)
+  productName  String    @map("product_name")
+  productSlug  String?   @map("product_slug")
+  imageUrl     String?   @map("image_url")
+  unitPrice    Decimal   @map("unit_price") @db.Decimal(10, 2)
+  quantity     Int
+  /// Snapshot: `null` = pronta entrega; número = sob encomenda com esse prazo.
+  leadTimeDays Int?      @map("lead_time_days")
+
+  @@index([orderId])
+  @@index([productId])
+  @@map("site_order_items")
+}
+
+/// Configurações da loja editadas no admin. Linha única (id = 1), como
+/// `BotSettings`; o service cria com os valores padrão se ela não existir.
+model StoreSettings {
+  id                  Int      @id @default(1)
+  pickupEnabled       Boolean  @default(true) @map("pickup_enabled")
+  pickupAddress       String   @map("pickup_address")
+  pickupHours         String   @map("pickup_hours")
+  pickupInstructions  String?  @map("pickup_instructions")
+  /// Parcelamento sem juros pro comprador: até `maxInstallments`, desde que
+  /// cada parcela fique em pelo menos `minInstallmentValue`.
+  maxInstallments     Int      @default(3) @map("max_installments")
+  minInstallmentValue Decimal  @default(30) @map("min_installment_value") @db.Decimal(10, 2)
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  @@map("store_settings")
 }

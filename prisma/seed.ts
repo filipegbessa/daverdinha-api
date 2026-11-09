@@ -1,5 +1,5 @@
 // prisma/seed.ts
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 import * as fs from 'fs';
 import * as path from 'path';
 import { normalizeText } from '../src/common/normalize-text';
@@ -84,7 +84,9 @@ async function seedCategories() {
  * produtos de `src/features/site/data/samples.ts` no `daverdinha`, então a
  * vitrine local fica igual à prévia. Sem fotos: elas moram no Vercel Blob,
  * e o site mostra o placeholder. Os destaques são 6 de propósito, mais do
- * que cabe numa linha, pra vitrine da home virar carrossel.
+ * que cabe numa linha, pra vitrine da home virar carrossel. O estoque cobre
+ * os três estados do site: pronta entrega (`stock` com número), esgotado
+ * (`stock: 0`) e sob encomenda (`stock: null` com prazo de confecção).
  */
 const PRODUCT_CATEGORIES = [
   {
@@ -117,6 +119,8 @@ const PRODUCTS = [
   {
     name: 'Vaso Terracota M',
     slug: 'vaso-terracota-m',
+    stock: 5,
+    leadTimeDays: null,
     category: 'vasos',
     price: '89.90',
     featured: true,
@@ -126,6 +130,8 @@ const PRODUCTS = [
   {
     name: 'Vaso Pintado Folhagem',
     slug: 'vaso-pintado-folhagem',
+    stock: 1,
+    leadTimeDays: null,
     category: 'vasos',
     price: '119.00',
     featured: true,
@@ -135,6 +141,8 @@ const PRODUCTS = [
   {
     name: 'Jiboia em cuia',
     slug: 'jiboia-em-cuia',
+    stock: 8,
+    leadTimeDays: null,
     category: 'mudas',
     price: '59.00',
     featured: true,
@@ -144,6 +152,8 @@ const PRODUCTS = [
   {
     name: 'Suculenta Echeveria',
     slug: 'suculenta-echeveria',
+    stock: 0,
+    leadTimeDays: null,
     category: 'mudas',
     price: '32.00',
     featured: false,
@@ -152,6 +162,8 @@ const PRODUCTS = [
   {
     name: 'Arranjo Tropical',
     slug: 'arranjo-tropical',
+    stock: null,
+    leadTimeDays: 3,
     category: 'arranjos',
     price: '159.00',
     featured: true,
@@ -161,6 +173,8 @@ const PRODUCTS = [
   {
     name: 'Kit Terrário Pequeno',
     slug: 'kit-terrario-pequeno',
+    stock: null,
+    leadTimeDays: 10,
     category: 'kits',
     price: '129.00',
     featured: true,
@@ -170,6 +184,8 @@ const PRODUCTS = [
   {
     name: 'Kit Kokedama',
     slug: 'kit-kokedama',
+    stock: null,
+    leadTimeDays: 7,
     category: 'kits',
     price: '89.00',
     featured: true,
@@ -178,6 +194,8 @@ const PRODUCTS = [
   {
     name: 'Arranjo de Mesa',
     slug: 'arranjo-de-mesa',
+    stock: null,
+    leadTimeDays: 5,
     category: 'arranjos',
     price: '99.00',
     featured: false,
@@ -207,6 +225,179 @@ async function seedCatalog() {
         order,
         images: [],
         categoryId: categoryIds.get(category)!,
+      },
+    });
+  }
+}
+
+/** Mesmo endereço de `daverdinha/src/data/business.ts`. */
+const STORE_SETTINGS = {
+  pickupAddress:
+    'R. Capiberibe, 32 - Santo Cristo, Rio de Janeiro - RJ, 20220-030',
+  pickupHours: 'Seg a sex, 10h às 18h · Sáb, 10h às 14h',
+};
+
+async function seedStoreSettings() {
+  await prisma.storeSettings.upsert({
+    where: { id: 1 },
+    update: {},
+    create: { id: 1, ...STORE_SETTINGS },
+  });
+}
+
+/**
+ * Duas áreas por zona ("Perto" e "Longe"), com os bairros da zona divididos
+ * entre elas em ordem alfabética. O último bairro de cada zona fica sem área,
+ * pra testar entrega indisponível. Só preenche bairros ainda sem área: rodar
+ * de novo não desfaz o que foi arrumado no admin.
+ */
+const DELIVERY_AREAS = [
+  { name: 'Perto', fee: '15.00' },
+  { name: 'Longe', fee: '30.00' },
+];
+
+async function seedDeliveryAreas() {
+  const locations = await prisma.deliveryLocation.findMany({
+    orderBy: { regionName: 'asc' },
+  });
+  const zones = [...new Set(locations.map((l) => l.zone))];
+
+  for (const zone of zones) {
+    const [near, far] = await Promise.all(
+      DELIVERY_AREAS.map((area) =>
+        prisma.deliveryArea.upsert({
+          where: { zone_name: { zone, name: area.name } },
+          update: {},
+          create: { zone, ...area },
+        }),
+      ),
+    );
+    const inZone = locations.filter((l) => l.zone === zone).slice(0, -1);
+    const half = Math.ceil(inZone.length / 2);
+    for (const [index, location] of inZone.entries()) {
+      if (location.areaId) continue;
+      await prisma.deliveryLocation.update({
+        where: { id: location.id },
+        data: { areaId: index < half ? near.id : far.id },
+      });
+    }
+  }
+}
+
+interface SeedSiteOrderItem {
+  slug: string;
+  quantity: number;
+}
+
+interface SeedSiteOrder {
+  customerEmail: string;
+  customerName: string;
+  customerPhone: string;
+  status: 'paid' | 'pending_payment';
+  fulfillmentStatus: 'awaiting' | 'preparing';
+  delivery: boolean;
+  items: SeedSiteOrderItem[];
+}
+
+/** Identificados pelo e-mail `@exemplo.com`, que nunca é de cliente real. */
+const SITE_ORDERS: SeedSiteOrder[] = [
+  {
+    customerEmail: 'maria@exemplo.com',
+    customerName: 'Maria Souza',
+    customerPhone: '5521999990101',
+    status: 'paid',
+    fulfillmentStatus: 'awaiting',
+    delivery: true,
+    items: [
+      { slug: 'vaso-terracota-m', quantity: 1 },
+      { slug: 'kit-kokedama', quantity: 1 },
+    ],
+  },
+  {
+    customerEmail: 'joao@exemplo.com',
+    customerName: 'João Lima',
+    customerPhone: '5521999990102',
+    status: 'paid',
+    fulfillmentStatus: 'preparing',
+    delivery: false,
+    items: [{ slug: 'arranjo-tropical', quantity: 1 }],
+  },
+  {
+    customerEmail: 'ana@exemplo.com',
+    customerName: 'Ana Rocha',
+    customerPhone: '5521999990103',
+    status: 'pending_payment',
+    fulfillmentStatus: 'awaiting',
+    delivery: false,
+    items: [{ slug: 'jiboia-em-cuia', quantity: 2 }],
+  },
+];
+
+async function seedSiteOrders() {
+  const deliveryLocation = await prisma.deliveryLocation.findFirst({
+    where: { areaId: { not: null } },
+    include: { area: true },
+    orderBy: { regionName: 'asc' },
+  });
+  const hourAgo = new Date(Date.now() - 60 * 60 * 1000);
+
+  for (const order of SITE_ORDERS) {
+    const existing = await prisma.siteOrder.findFirst({
+      where: { customerEmail: order.customerEmail },
+    });
+    if (existing) continue;
+
+    const products = await prisma.product.findMany({
+      where: { slug: { in: order.items.map((i) => i.slug) } },
+    });
+    const items = order.items.flatMap(({ slug, quantity }) => {
+      const product = products.find((p) => p.slug === slug);
+      if (!product) return []; // apagado no admin: o exemplo segue sem ele
+      return [
+        {
+          productId: product.id,
+          productName: product.name,
+          productSlug: product.slug,
+          imageUrl: product.images[0] ?? null,
+          unitPrice: product.price,
+          quantity,
+          leadTimeDays: product.stock === null ? product.leadTimeDays : null,
+        },
+      ];
+    });
+    if (items.length === 0) continue;
+
+    const subtotal = items.reduce(
+      (sum, item) => sum.add(item.unitPrice.mul(item.quantity)),
+      new Prisma.Decimal(0),
+    );
+    const area = order.delivery ? deliveryLocation?.area : null;
+    const deliveryFee = area?.fee ?? new Prisma.Decimal(0);
+
+    await prisma.siteOrder.create({
+      data: {
+        customerName: order.customerName,
+        customerEmail: order.customerEmail,
+        customerPhone: order.customerPhone,
+        status: order.status,
+        fulfillmentStatus: order.fulfillmentStatus,
+        deliveryMethod: area ? 'delivery' : 'pickup',
+        ...(area &&
+          deliveryLocation && {
+            cep: '20220030',
+            street: 'Rua de Exemplo',
+            streetNumber: '100',
+            bairro: deliveryLocation.regionName,
+            deliveryZone: area.zone,
+            deliveryArea: area.name,
+          }),
+        subtotal,
+        deliveryFee,
+        total: subtotal.add(deliveryFee),
+        paidAt: order.status === 'paid' ? hourAgo : null,
+        // Pendente já vencido: aparece como "vencido" assim que alguém lê.
+        expiresAt: hourAgo,
+        items: { create: items },
       },
     });
   }
@@ -389,6 +580,9 @@ async function main() {
   await seedCategories();
   await seedConversations();
   await seedCatalog();
+  await seedStoreSettings();
+  await seedDeliveryAreas();
+  await seedSiteOrders();
 
   const menuItems = [
     {
