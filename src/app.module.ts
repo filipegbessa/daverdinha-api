@@ -13,6 +13,7 @@ import { MediaRetentionModule } from './media/media-retention.module';
 import { OpenApiModule } from './openapi/openapi.module';
 import { ProductCategoriesModule } from './product-categories/product-categories.module';
 import { ProductsModule } from './products/products.module';
+import { StoreSettingsModule } from './store-settings/store-settings.module';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { ProductsModule } from './products/products.module';
     OpenApiModule,
     ProductCategoriesModule,
     ProductsModule,
+    StoreSettingsModule,
   ],
   controllers: [AppController],
 })

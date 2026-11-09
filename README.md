@@ -135,6 +135,26 @@ O bot não pergunta mais o nome do bairro: agora ele pede o **CEP** do cliente (
 
 Um CEP é considerado **não resolvido** tanto quando o formato é inválido (diferente de 8 dígitos) quanto quando a consulta à BrasilAPI falha ou não retorna bairro. Nesse caso o bot responde com `deliveryRetryMessage` e dá mais uma chance ao cliente; se a segunda tentativa também não resolver, o bot desiste e passa a conversa pro atendimento humano (`deliveryUnrecognizedMessage`, status `paused_human`) — igual ao comportamento de excesso de tentativas inválidas do resto do bot.
 
+### Checagem de CEP do site (`GET /delivery-locations/check?cep=`)
+
+**Pública.** Usa a mesma função do bot (`DeliveryLocationsService.resolveCep`: faixas locais primeiro, BrasilAPI depois), então o site e o bot nunca dão respostas diferentes pro mesmo CEP. Responde `{ status: 'covered' | 'not_covered' | 'unresolved', bairro? }`; CEP mal formatado ou ausente é `unresolved` com 200, não 400. A zona e o id do bairro ficam de fora da resposta (só o frete usa). ⚠️ Cada chamada pode bater na BrasilAPI e não há limite por IP: avaliar cache ou rate limit antes de anunciar o checador no site.
+
+### Áreas de entrega do site (`delivery-areas`)
+
+Subdivisões de uma zona com valor de entrega próprio (`DeliveryArea { zone, name, fee }`), cadastradas no admin. Cada bairro está em no máximo uma área, sempre da sua zona (`DeliveryLocation.areaId`). O frete do site é o valor da área do bairro do CEP; bairro atendido sem área **não** recebe entrega pelo site, nunca vira frete grátis. O bot não usa áreas.
+
+- `GET /delivery-areas` (autenticado): por zona, as áreas com seus bairros e os bairros atendidos ainda sem área (`unassigned`). Sem paginação, porque é um conjunto pequeno e fixo.
+- `POST /delivery-areas` `{ zone, name, fee }`, `PATCH /delivery-areas/:id` `{ name?, fee? }`, `DELETE /delivery-areas/:id` (os bairros ficam sem área). Nome repetido na mesma zona: 409.
+- `PUT /delivery-areas/:id/locations` `{ locationIds }`: troca a lista inteira numa transação. Bairro de outra zona: 400.
+
+### Configurações da loja (módulo `store-settings`)
+
+Linha única (`StoreSettings`, id 1), como `BotSettings`, criada com o endereço do ateliê na primeira leitura se não existir.
+
+- `GET`/`PATCH /store-settings` (autenticado): retirada no ateliê (ligada/desligada, endereço, horário, instruções) e parcelamento no cartão (`maxInstallments`, de 1 a 12, e `minInstallmentValue`). Endereço e horário não podem ficar vazios: pra tirar a retirada, desliga `pickupEnabled`.
+- `GET /store-settings/public` (público): só `{ maxInstallments, minInstallmentValue }`, pro site mostrar "em até 3x sem juros".
+- Parcelas de um pedido: `installmentsFor(total)` = até o máximo, desde que cada parcela fique em pelo menos o valor mínimo, nunca menos de 1.
+
 ### Pipeline de dados (CNEFE → faixas de CEP)
 
 A cobertura por CEP depende de dois arquivos em `prisma/data/`, montados em duas etapas:

@@ -16,7 +16,7 @@ npm test                                   # unit tests (src/**/*.spec.ts)
 npx jest src/bot-engine/bot-engine.service.spec.ts   # single file
 npx jest -t "some test name"               # single test by name
 npm run test:scripts                       # scripts/**/*.spec.ts (separate jest config, runs outside Nest)
-npm run test:e2e                           # test/*.e2e-spec.ts; needs migrated and seeded DB
+npm run test:e2e                           # test/*.e2e-spec.ts, in band (some count seeded rows while others insert); needs migrated and seeded DB
 npm run build
 
 npm run openapi:metadata      # regenerate src/metadata.ts after touching any DTO or controller
