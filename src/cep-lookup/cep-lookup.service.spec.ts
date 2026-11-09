@@ -82,4 +82,37 @@ describe('CepLookupService', () => {
     expect(init.signal).toBeInstanceOf(AbortSignal);
     expect(init.signal.aborted).toBe(false);
   });
+
+  it('returns the city too, so the caller can tell Rio from Niterói', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ neighborhood: 'Centro', city: 'Niterói' }),
+    });
+
+    await expect(service.lookup('24020000')).resolves.toEqual({
+      bairro: 'Centro',
+      city: 'Niterói',
+    });
+  });
+
+  it('remembers a good answer, so the same CEP does not call BrasilAPI twice', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ neighborhood: 'Catete' }),
+    });
+
+    await service.lookup('22220000');
+    await service.lookup('22220000');
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not remember a failure, so the next try calls again', async () => {
+    fetchMock.mockResolvedValue({ ok: false, json: () => Promise.resolve({}) });
+
+    await service.lookup('22220000');
+    await service.lookup('22220000');
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
 });

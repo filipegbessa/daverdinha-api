@@ -133,11 +133,13 @@ O bot não pergunta mais o nome do bairro: agora ele pede o **CEP** do cliente (
 1. **Local** — o CEP é comparado contra as faixas seedadas na tabela `CepRange` de cada `DeliveryLocation`. Se cair dentro de alguma faixa, a cobertura (`covered`) já é decidida ali, sem chamada externa.
 2. **Fallback via API** — se o CEP não cair em nenhuma faixa seedada, o `CepLookupService` consulta a BrasilAPI (`GET /api/cep/v2/{cep}`) pra obter o bairro correspondente, que então é comparado (normalizado) contra os `regionName` cadastrados.
 
+CEP de outra cidade (a BrasilAPI devolve a cidade) é **não atendido**, mesmo que o bairro tenha o mesmo nome de um do Rio ("Centro" de Niterói), e o nome mostrado vem com a cidade ("Centro (Niterói)").
+
 Um CEP é considerado **não resolvido** tanto quando o formato é inválido (diferente de 8 dígitos) quanto quando a consulta à BrasilAPI falha ou não retorna bairro. Nesse caso o bot responde com `deliveryRetryMessage` e dá mais uma chance ao cliente; se a segunda tentativa também não resolver, o bot desiste e passa a conversa pro atendimento humano (`deliveryUnrecognizedMessage`, status `paused_human`) — igual ao comportamento de excesso de tentativas inválidas do resto do bot.
 
 ### Checagem de CEP do site (`GET /delivery-locations/check?cep=`)
 
-**Pública.** Usa a mesma função do bot (`DeliveryLocationsService.resolveCep`: faixas locais primeiro, BrasilAPI depois), então o site e o bot nunca dão respostas diferentes pro mesmo CEP. Responde `{ status: 'covered' | 'not_covered' | 'unresolved', bairro? }`; CEP mal formatado ou ausente é `unresolved` com 200, não 400. A zona e o id do bairro ficam de fora da resposta (só o frete usa). ⚠️ Cada chamada pode bater na BrasilAPI e não há limite por IP: avaliar cache ou rate limit antes de anunciar o checador no site.
+**Pública.** Usa a mesma função do bot (`DeliveryLocationsService.resolveCep`: faixas locais primeiro, BrasilAPI depois), então o site e o bot nunca dão respostas diferentes pro mesmo CEP. Responde `{ status: 'covered' | 'not_covered' | 'unresolved', bairro? }`; CEP mal formatado ou ausente é `unresolved` com 200, não 400. A zona e o id do bairro ficam de fora da resposta (só o frete usa). Resposta com `Cache-Control: public, s-maxage=600`: a CDN da Vercel guarda por CEP por 10 minutos (mudar a cobertura no admin leva até isso pra aparecer no site; o bot não tem esse cache). Além disso, o `CepLookupService` guarda em memória, por 24 h, o bairro de cada CEP que a BrasilAPI respondeu.
 
 ### Áreas de entrega do site (`delivery-areas`)
 

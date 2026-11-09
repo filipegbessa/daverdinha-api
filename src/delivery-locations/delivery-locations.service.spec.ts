@@ -153,6 +153,26 @@ describe('DeliveryLocationsService', () => {
       });
     });
 
+    it('never matches a bairro of another city with the same name', async () => {
+      cepLookup.lookup.mockResolvedValue({ bairro: 'Catete', city: 'Niterói' });
+
+      await expect(service.resolveCep('24020000')).resolves.toEqual({
+        status: 'not_covered',
+        bairro: 'Catete (Niterói)',
+      });
+    });
+
+    it('matches when BrasilAPI says the CEP is in Rio', async () => {
+      cepLookup.lookup.mockResolvedValue({
+        bairro: 'Catete',
+        city: 'Rio de Janeiro',
+      });
+
+      await expect(service.resolveCep('22220000')).resolves.toEqual(
+        expect.objectContaining({ status: 'covered', bairro: 'Catete' }),
+      );
+    });
+
     it('reports unresolved for a CEP that is not 8 digits, without any lookup', async () => {
       await expect(service.resolveCep('2221')).resolves.toEqual({
         status: 'unresolved',

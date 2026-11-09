@@ -1,4 +1,4 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Controller, Get, Header, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { DeliveryLocationsService } from './delivery-locations.service';
 import { CheckCepDto } from './dto/check-cep.dto';
@@ -25,8 +25,14 @@ export class PublicDeliveryLocationsController {
     return this.service.listCoveredByZone();
   }
 
-  /** "Entregamos no seu CEP?" do site, com a mesma resposta que o bot dá. */
+  /**
+   * "Entregamos no seu CEP?" do site, com a mesma resposta que o bot dá.
+   * A CDN da Vercel guarda a resposta por CEP (a URL) por 10 minutos: o
+   * mesmo CEP não chega à função nem à BrasilAPI de novo. Mudar a cobertura
+   * no admin leva até esse tempo pra aparecer aqui (o bot não tem cache).
+   */
   @Get('check')
+  @Header('Cache-Control', 'public, s-maxage=600, stale-while-revalidate=3600')
   async check(@Query() query: CheckCepDto): Promise<CepCheck> {
     const result = await this.service.resolveCep(query.cep ?? '');
     return result.status === 'unresolved'

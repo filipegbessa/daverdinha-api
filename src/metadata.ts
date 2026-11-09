@@ -49,8 +49,8 @@ import * as m45 from './products/public-products.controller';
 import * as m46 from './store-settings/store-settings.controller';
 import * as m47 from './store-settings/public-store-settings.controller';
 import * as m48 from './checkout/public-checkout.controller';
-import * as m49 from './openapi/openapi.controller';
-import * as m50 from './site-orders/site-orders.controller';
+import * as m49 from './site-orders/site-orders.controller';
+import * as m50 from './openapi/openapi.controller';
 
 export default async () => {
   const t = {
@@ -510,7 +510,7 @@ export default async () => {
               listCovered: { type: [Object] },
               check: {
                 summary:
-                  '"Entregamos no seu CEP?" do site, com a mesma resposta que o bot d\u00E1.',
+                  '"Entregamos no seu CEP?" do site, com a mesma resposta que o bot d\u00E1.\nA CDN da Vercel guarda a resposta por CEP (a URL) por 10 minutos: o\nmesmo CEP n\u00E3o chega \u00E0 fun\u00E7\u00E3o nem \u00E0 BrasilAPI de novo. Mudar a cobertura\nno admin leva at\u00E9 esse tempo pra aparecer aqui (o bot n\u00E3o tem cache).',
                 type: Object,
               },
             },
@@ -651,9 +651,8 @@ export default async () => {
             },
           },
         ],
-        [m49, { OpenApiController: { get: { type: Object } } }],
         [
-          m50,
+          m49,
           {
             SiteOrdersController: {
               list: {},
@@ -663,6 +662,7 @@ export default async () => {
             },
           },
         ],
+        [m50, { OpenApiController: { get: { type: Object } } }],
       ],
     },
   };

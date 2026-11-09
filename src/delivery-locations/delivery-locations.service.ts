@@ -9,6 +9,9 @@ export interface CoveredZone {
   bairros: string[];
 }
 
+/** A cidade atendida; CEP de outra cidade nunca é atendido. */
+const RIO = 'Rio de Janeiro';
+
 /**
  * Para onde um CEP leva. `covered`/`not_covered` com `locationId` e `zone`
  * quando o bairro é um dos nossos; `not_covered` só com o `bairro` quando a
@@ -82,6 +85,13 @@ export class DeliveryLocationsService {
 
     const lookup = await this.cepLookup.lookup(cep);
     if (!lookup) return { status: 'unresolved' };
+    // Só bairro do Rio: "Centro" de Niterói não pode casar com o Centro daqui.
+    if (lookup.city && normalizeText(lookup.city) !== normalizeText(RIO)) {
+      return {
+        status: 'not_covered',
+        bairro: `${lookup.bairro} (${lookup.city})`,
+      };
+    }
 
     const normalizedBairro = normalizeText(lookup.bairro);
     const apiMatch = locations.find(
