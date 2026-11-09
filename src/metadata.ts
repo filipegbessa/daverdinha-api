@@ -5,38 +5,39 @@ import * as m1 from './menu-items/dto/create-menu-item.dto';
 import * as m2 from './menu-items/dto/update-menu-item.dto';
 import * as m3 from './menu-items/dto/reorder-menu-items.dto';
 import * as m4 from './delivery-locations/dto/update-delivery-location.dto';
-import * as m5 from './push-subscriptions/dto/save-push-subscription.dto';
-import * as m6 from './push-subscriptions/dto/remove-push-subscription.dto';
-import * as m7 from './common/pagination';
-import * as m8 from './conversations/dto/list-conversations.dto';
-import * as m9 from './conversations/dto/list-messages.dto';
-import * as m10 from './conversations/dto/reply.dto';
-import * as m11 from './conversations/dto/reply-image.dto';
-import * as m12 from './conversations/dto/reply-audio.dto';
-import * as m13 from './conversations/dto/update-conversation.dto';
-import * as m14 from './categories/dto/create-category.dto';
-import * as m15 from './categories/dto/update-category.dto';
-import * as m16 from './product-categories/dto/create-product-category.dto';
-import * as m17 from './product-categories/dto/update-product-category.dto';
-import * as m18 from './products/dto/create-product.dto';
-import * as m19 from './products/dto/update-product.dto';
-import * as m20 from './products/dto/list-products.dto';
-import * as m21 from './app.controller';
-import * as m22 from './bot-settings/bot-settings.controller';
-import * as m23 from './menu-items/menu-items.controller';
-import * as m24 from './delivery-locations/delivery-locations.controller';
-import * as m25 from './delivery-locations/public-delivery-locations.controller';
-import * as m26 from './whatsapp/webhook.controller';
-import * as m27 from './push-subscriptions/push-subscriptions.controller';
-import * as m28 from './conversations/conversations.controller';
-import * as m29 from './categories/categories.controller';
-import * as m30 from './media/media-retention.controller';
-import * as m31 from './openapi/docs-page.controller';
-import * as m32 from './product-categories/product-categories.controller';
-import * as m33 from './product-categories/public-product-categories.controller';
-import * as m34 from './products/products.controller';
-import * as m35 from './products/public-products.controller';
-import * as m36 from './openapi/openapi.controller';
+import * as m5 from './delivery-locations/dto/check-cep.dto';
+import * as m6 from './push-subscriptions/dto/save-push-subscription.dto';
+import * as m7 from './push-subscriptions/dto/remove-push-subscription.dto';
+import * as m8 from './common/pagination';
+import * as m9 from './conversations/dto/list-conversations.dto';
+import * as m10 from './conversations/dto/list-messages.dto';
+import * as m11 from './conversations/dto/reply.dto';
+import * as m12 from './conversations/dto/reply-image.dto';
+import * as m13 from './conversations/dto/reply-audio.dto';
+import * as m14 from './conversations/dto/update-conversation.dto';
+import * as m15 from './categories/dto/create-category.dto';
+import * as m16 from './categories/dto/update-category.dto';
+import * as m17 from './product-categories/dto/create-product-category.dto';
+import * as m18 from './product-categories/dto/update-product-category.dto';
+import * as m19 from './products/dto/create-product.dto';
+import * as m20 from './products/dto/update-product.dto';
+import * as m21 from './products/dto/list-products.dto';
+import * as m22 from './app.controller';
+import * as m23 from './bot-settings/bot-settings.controller';
+import * as m24 from './menu-items/menu-items.controller';
+import * as m25 from './delivery-locations/delivery-locations.controller';
+import * as m26 from './delivery-locations/public-delivery-locations.controller';
+import * as m27 from './whatsapp/webhook.controller';
+import * as m28 from './push-subscriptions/push-subscriptions.controller';
+import * as m29 from './conversations/conversations.controller';
+import * as m30 from './categories/categories.controller';
+import * as m31 from './media/media-retention.controller';
+import * as m32 from './openapi/docs-page.controller';
+import * as m33 from './product-categories/product-categories.controller';
+import * as m34 from './product-categories/public-product-categories.controller';
+import * as m35 from './products/products.controller';
+import * as m36 from './products/public-products.controller';
+import * as m37 from './openapi/openapi.controller';
 
 export default async () => {
   const t = {};
@@ -102,8 +103,9 @@ export default async () => {
             },
           },
         ],
+        [m5, { CheckCepDto: { cep: { required: false, type: () => String } } }],
         [
-          m5,
+          m6,
           {
             SavePushSubscriptionDto: {
               endpoint: { required: true, type: () => String },
@@ -111,7 +113,7 @@ export default async () => {
           },
         ],
         [
-          m6,
+          m7,
           {
             RemovePushSubscriptionDto: {
               endpoint: { required: true, type: () => String },
@@ -119,7 +121,7 @@ export default async () => {
           },
         ],
         [
-          m7,
+          m8,
           {
             PaginationQueryDto: {
               page: {
@@ -139,7 +141,7 @@ export default async () => {
           },
         ],
         [
-          m8,
+          m9,
           {
             ListConversationsDto: {
               q: {
@@ -154,7 +156,7 @@ export default async () => {
           },
         ],
         [
-          m9,
+          m10,
           {
             ListMessagesDto: {
               since: {
@@ -174,7 +176,7 @@ export default async () => {
           },
         ],
         [
-          m10,
+          m11,
           {
             ReplyDto: {
               text: { required: true, type: () => String },
@@ -183,7 +185,7 @@ export default async () => {
           },
         ],
         [
-          m11,
+          m12,
           {
             ReplyImageDto: {
               caption: { required: false, type: () => String },
@@ -192,7 +194,7 @@ export default async () => {
           },
         ],
         [
-          m12,
+          m13,
           {
             ReplyAudioDto: {
               replyToMessageId: { required: false, type: () => String },
@@ -200,7 +202,7 @@ export default async () => {
           },
         ],
         [
-          m13,
+          m14,
           {
             UpdateConversationDto: {
               name: { required: true, type: () => String },
@@ -208,7 +210,7 @@ export default async () => {
           },
         ],
         [
-          m14,
+          m15,
           {
             CreateCategoryDto: {
               name: { required: true, type: () => String },
@@ -216,9 +218,9 @@ export default async () => {
             },
           },
         ],
-        [m15, { UpdateCategoryDto: {} }],
+        [m16, { UpdateCategoryDto: {} }],
         [
-          m16,
+          m17,
           {
             CreateProductCategoryDto: {
               name: { required: true, type: () => String },
@@ -233,9 +235,9 @@ export default async () => {
             },
           },
         ],
-        [m17, { UpdateProductCategoryDto: {} }],
+        [m18, { UpdateProductCategoryDto: {} }],
         [
-          m18,
+          m19,
           {
             CreateProductDto: {
               name: { required: true, type: () => String },
@@ -274,9 +276,9 @@ export default async () => {
             },
           },
         ],
-        [m19, { UpdateProductDto: {} }],
+        [m20, { UpdateProductDto: {} }],
         [
-          m20,
+          m21,
           {
             ListProductsDto: {
               q: {
@@ -304,9 +306,9 @@ export default async () => {
         ],
       ],
       controllers: [
-        [m21, { AppController: { health: {} } }],
+        [m22, { AppController: { health: {} } }],
         [
-          m22,
+          m23,
           {
             BotSettingsController: {
               get: { type: Object },
@@ -315,7 +317,7 @@ export default async () => {
           },
         ],
         [
-          m23,
+          m24,
           {
             MenuItemsController: {
               list: { type: Object },
@@ -328,23 +330,28 @@ export default async () => {
           },
         ],
         [
-          m24,
+          m25,
           {
             DeliveryLocationsController: { list: { type: Object }, update: {} },
           },
         ],
         [
-          m25,
+          m26,
           {
             PublicDeliveryLocationsController: {
               listCovered: { type: [Object] },
+              check: {
+                summary:
+                  '"Entregamos no seu CEP?" do site, com a mesma resposta que o bot d\u00E1.',
+                type: Object,
+              },
             },
           },
         ],
-        [m26, { WebhookController: { verify: { type: String }, receive: {} } }],
-        [m27, { PushSubscriptionsController: { save: {}, remove: {} } }],
+        [m27, { WebhookController: { verify: { type: String }, receive: {} } }],
+        [m28, { PushSubscriptionsController: { save: {}, remove: {} } }],
         [
-          m28,
+          m29,
           {
             ConversationsController: {
               list: {},
@@ -372,7 +379,7 @@ export default async () => {
           },
         ],
         [
-          m29,
+          m30,
           {
             CategoriesController: {
               list: {},
@@ -383,7 +390,7 @@ export default async () => {
           },
         ],
         [
-          m30,
+          m31,
           {
             MediaRetentionController: {
               run: {
@@ -393,9 +400,9 @@ export default async () => {
             },
           },
         ],
-        [m31, { DocsPageController: { page: { type: String } } }],
+        [m32, { DocsPageController: { page: { type: String } } }],
         [
-          m32,
+          m33,
           {
             ProductCategoriesController: {
               list: { type: Object },
@@ -406,7 +413,7 @@ export default async () => {
           },
         ],
         [
-          m33,
+          m34,
           {
             PublicProductCategoriesController: {
               listActive: { type: [Object] },
@@ -414,7 +421,7 @@ export default async () => {
           },
         ],
         [
-          m34,
+          m35,
           {
             ProductsController: {
               list: {},
@@ -426,7 +433,7 @@ export default async () => {
           },
         ],
         [
-          m35,
+          m36,
           {
             PublicProductsController: {
               listActive: { type: [Object] },
@@ -434,7 +441,7 @@ export default async () => {
             },
           },
         ],
-        [m36, { OpenApiController: { get: { type: Object } } }],
+        [m37, { OpenApiController: { get: { type: Object } } }],
       ],
     },
   };

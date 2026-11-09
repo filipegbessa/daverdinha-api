@@ -6,7 +6,6 @@ import { MenuItemsModule } from '../menu-items/menu-items.module';
 import { MessagingModule } from '../messaging/messaging.module';
 import { WhatsAppClientModule } from '../whatsapp/whatsapp-client.module';
 import { DeliveryLocationsModule } from '../delivery-locations/delivery-locations.module';
-import { CepLookupModule } from '../cep-lookup/cep-lookup.module';
 import { MediaStorageModule } from '../media/media-storage.module';
 
 @Module({
@@ -16,7 +15,6 @@ import { MediaStorageModule } from '../media/media-storage.module';
     MessagingModule,
     WhatsAppClientModule,
     DeliveryLocationsModule,
-    CepLookupModule,
     MediaStorageModule,
   ],
   providers: [BotEngineService, DeliveryCheckService],

@@ -3,19 +3,12 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ConversationMessengerService } from '../messaging/conversation-messenger.service';
 import { MenuItemsService } from '../menu-items/menu-items.service';
 import { DeliveryLocationsService } from '../delivery-locations/delivery-locations.service';
-import { CepLookupService } from '../cep-lookup/cep-lookup.service';
-import { normalizeText } from '../common/normalize-text';
 
 const MAX_DELIVERY_CEP_ATTEMPTS = 2;
 
 // Placeholder the admin can drop into the confirmed/not-covered messages to
 // have the resolved bairro spliced in ("entregamos aí no [local]").
 const LOCATION_PLACEHOLDER = /\[local\]/g;
-
-type ResolutionResult =
-  | { kind: 'covered'; covered: boolean; bairro: string }
-  | { kind: 'not-covered'; bairro: string }
-  | { kind: 'unresolved' };
 
 @Injectable()
 export class DeliveryCheckService {
@@ -24,7 +17,6 @@ export class DeliveryCheckService {
     private readonly messenger: ConversationMessengerService,
     private readonly menuItems: MenuItemsService,
     private readonly deliveryLocations: DeliveryLocationsService,
-    private readonly cepLookup: CepLookupService,
   ) {}
 
   async start(conversation: { id: string; phone: string }): Promise<void> {
@@ -40,24 +32,25 @@ export class DeliveryCheckService {
     conversation: { id: string; phone: string; invalidAttempts: number },
     text: string,
   ): Promise<void> {
-    const cep = text.replace(/\D/g, '');
-    const result = await this.resolveLocation(cep);
+    // Mesma resolução do checador de CEP do site (faixas locais primeiro,
+    // BrasilAPI depois), pra os dois nunca darem respostas diferentes.
+    const result = await this.deliveryLocations.resolveCep(text);
 
     // Annotated with the bairro we resolved, so the operator reading the
     // transcript sees "22211-200 (Catete)" rather than a bare number.
     await this.messenger.recordInbound(
       conversation.id,
-      result.kind === 'unresolved' ? text : `${text} (${result.bairro})`,
+      result.status === 'unresolved' ? text : `${text} (${result.bairro})`,
     );
 
-    if (result.kind === 'unresolved') {
+    if (result.status === 'unresolved') {
       await this.registerUnresolvedAttempt(conversation);
       return;
     }
 
     const item = await this.menuItems.findSystemDeliveryItem();
     const template =
-      result.kind === 'covered' && result.covered
+      result.status === 'covered'
         ? (item.deliveryConfirmedMessage ?? '')
         : (item.deliveryNotCoveredMessage ?? '');
 
@@ -69,45 +62,6 @@ export class DeliveryCheckService {
       where: { id: conversation.id },
       data: { awaitingDeliveryReply: false, status: 'paused_human' },
     });
-  }
-
-  /**
-   * Our own CEP ranges win over the external lookup: they're the ranges the
-   * owner curated, so they stay authoritative even if BrasilAPI disagrees
-   * or is down.
-   */
-  private async resolveLocation(cep: string): Promise<ResolutionResult> {
-    if (cep.length !== 8) return { kind: 'unresolved' };
-    const cepNumber = Number(cep);
-
-    const locations = await this.deliveryLocations.list();
-    const localMatch = locations.find((loc) =>
-      loc.cepRanges.some(
-        (range) => cepNumber >= range.startCep && cepNumber <= range.endCep,
-      ),
-    );
-    if (localMatch)
-      return {
-        kind: 'covered',
-        covered: localMatch.covered,
-        bairro: localMatch.regionName,
-      };
-
-    const lookup = await this.cepLookup.lookup(cep);
-    if (!lookup) return { kind: 'unresolved' };
-
-    const normalizedBairro = normalizeText(lookup.bairro);
-    const apiMatch = locations.find(
-      (loc) => normalizeText(loc.regionName) === normalizedBairro,
-    );
-    if (apiMatch)
-      return {
-        kind: 'covered',
-        covered: apiMatch.covered,
-        bairro: apiMatch.regionName,
-      };
-
-    return { kind: 'not-covered', bairro: lookup.bairro };
   }
 
   /**

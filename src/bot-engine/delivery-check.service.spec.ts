@@ -11,10 +11,14 @@ import { CepLookupService } from '../cep-lookup/cep-lookup.service';
 
 describe('DeliveryCheckService', () => {
   let service: DeliveryCheckService;
-  let prisma: { conversation: any; message: any; $transaction: jest.Mock };
+  let prisma: {
+    conversation: any;
+    message: any;
+    deliveryLocation: any;
+    $transaction: jest.Mock;
+  };
   let whatsapp: { sendText: jest.Mock };
   let menuItems: { findSystemDeliveryItem: jest.Mock };
-  let deliveryLocations: { list: jest.Mock };
   let cepLookup: { lookup: jest.Mock };
 
   const messages = {
@@ -48,6 +52,7 @@ describe('DeliveryCheckService', () => {
     prisma = {
       conversation: { update: jest.fn() },
       message: { create: jest.fn().mockResolvedValue({ id: 'msg1' }) },
+      deliveryLocation: { findMany: jest.fn().mockResolvedValue(locations) },
       $transaction: jest.fn((ops: any[]) => Promise.all(ops)),
     };
     whatsapp = {
@@ -56,7 +61,6 @@ describe('DeliveryCheckService', () => {
     menuItems = {
       findSystemDeliveryItem: jest.fn().mockResolvedValue(messages),
     };
-    deliveryLocations = { list: jest.fn().mockResolvedValue(locations) };
     cepLookup = { lookup: jest.fn() };
 
     const moduleRef = await Test.createTestingModule({
@@ -65,14 +69,19 @@ describe('DeliveryCheckService', () => {
         { provide: PrismaService, useValue: prisma },
         { provide: WhatsAppClientService, useValue: whatsapp },
         { provide: MenuItemsService, useValue: menuItems },
-        { provide: DeliveryLocationsService, useValue: deliveryLocations },
+        // A resolução de CEP de verdade (é ela que o bot usa), lendo os
+        // bairros do prisma mockado.
+        DeliveryLocationsService,
         { provide: CepLookupService, useValue: cepLookup },
         // The real messenger, wired to the same prisma/whatsapp mocks — the
         // send-and-persist pairing is exactly what these tests assert on.
         ConversationMessengerService,
         // O messenger passou a saber mandar imagem, então o módulo de teste
         // precisa do storage — que este fluxo não usa.
-        { provide: MediaStorageService, useValue: { put: jest.fn(), signedUrl: jest.fn() } },
+        {
+          provide: MediaStorageService,
+          useValue: { put: jest.fn(), signedUrl: jest.fn() },
+        },
         AudioTranscodeService,
       ],
     }).compile();
