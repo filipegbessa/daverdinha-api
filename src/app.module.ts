@@ -14,6 +14,8 @@ import { OpenApiModule } from './openapi/openapi.module';
 import { ProductCategoriesModule } from './product-categories/product-categories.module';
 import { ProductsModule } from './products/products.module';
 import { StoreSettingsModule } from './store-settings/store-settings.module';
+import { SiteOrdersModule } from './site-orders/site-orders.module';
+import { CheckoutModule } from './checkout/checkout.module';
 
 @Module({
   imports: [
@@ -31,6 +33,8 @@ import { StoreSettingsModule } from './store-settings/store-settings.module';
     ProductCategoriesModule,
     ProductsModule,
     StoreSettingsModule,
+    SiteOrdersModule,
+    CheckoutModule,
   ],
   controllers: [AppController],
 })

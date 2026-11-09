@@ -1,58 +1,63 @@
 /* eslint-disable */
 // Gerado por scripts/generate-openapi-metadata.ts — não edite à mão.
-import * as m0 from './bot-settings/dto/update-bot-settings.dto';
-import * as m1 from './menu-items/dto/create-menu-item.dto';
-import * as m2 from './menu-items/dto/update-menu-item.dto';
-import * as m3 from './menu-items/dto/reorder-menu-items.dto';
-import * as m4 from './delivery-locations/dto/update-delivery-location.dto';
-import * as m5 from './delivery-locations/dto/check-cep.dto';
-import * as m6 from './delivery-locations/dto/create-delivery-area.dto';
-import * as m7 from './delivery-locations/dto/update-delivery-area.dto';
-import * as m8 from './delivery-locations/dto/set-area-locations.dto';
-import * as m9 from './push-subscriptions/dto/save-push-subscription.dto';
-import * as m10 from './push-subscriptions/dto/remove-push-subscription.dto';
-import * as m11 from './common/pagination';
-import * as m12 from './conversations/dto/list-conversations.dto';
-import * as m13 from './conversations/dto/list-messages.dto';
-import * as m14 from './conversations/dto/reply.dto';
-import * as m15 from './conversations/dto/reply-image.dto';
-import * as m16 from './conversations/dto/reply-audio.dto';
-import * as m17 from './conversations/dto/update-conversation.dto';
-import * as m18 from './categories/dto/create-category.dto';
-import * as m19 from './categories/dto/update-category.dto';
-import * as m20 from './product-categories/dto/create-product-category.dto';
-import * as m21 from './product-categories/dto/update-product-category.dto';
-import * as m22 from './products/dto/create-product.dto';
-import * as m23 from './products/dto/update-product.dto';
-import * as m24 from './products/dto/list-products.dto';
-import * as m25 from './store-settings/dto/update-store-settings.dto';
-import * as m26 from './app.controller';
-import * as m27 from './bot-settings/bot-settings.controller';
-import * as m28 from './menu-items/menu-items.controller';
-import * as m29 from './delivery-locations/delivery-locations.controller';
-import * as m30 from './delivery-locations/public-delivery-locations.controller';
-import * as m31 from './delivery-locations/delivery-areas.controller';
-import * as m32 from './whatsapp/webhook.controller';
-import * as m33 from './push-subscriptions/push-subscriptions.controller';
-import * as m34 from './conversations/conversations.controller';
-import * as m35 from './categories/categories.controller';
-import * as m36 from './media/media-retention.controller';
-import * as m37 from './openapi/docs-page.controller';
-import * as m38 from './product-categories/product-categories.controller';
-import * as m39 from './product-categories/public-product-categories.controller';
-import * as m40 from './products/products.controller';
-import * as m41 from './products/public-products.controller';
-import * as m42 from './openapi/openapi.controller';
-import * as m43 from './store-settings/store-settings.controller';
-import * as m44 from './store-settings/public-store-settings.controller';
+import * as m0 from './checkout/dto/cart-item.dto';
+import * as m1 from './bot-settings/dto/update-bot-settings.dto';
+import * as m2 from './menu-items/dto/create-menu-item.dto';
+import * as m3 from './menu-items/dto/update-menu-item.dto';
+import * as m4 from './menu-items/dto/reorder-menu-items.dto';
+import * as m5 from './delivery-locations/dto/update-delivery-location.dto';
+import * as m6 from './delivery-locations/dto/check-cep.dto';
+import * as m7 from './delivery-locations/dto/create-delivery-area.dto';
+import * as m8 from './delivery-locations/dto/update-delivery-area.dto';
+import * as m9 from './delivery-locations/dto/set-area-locations.dto';
+import * as m10 from './push-subscriptions/dto/save-push-subscription.dto';
+import * as m11 from './push-subscriptions/dto/remove-push-subscription.dto';
+import * as m12 from './common/pagination';
+import * as m13 from './conversations/dto/list-conversations.dto';
+import * as m14 from './conversations/dto/list-messages.dto';
+import * as m15 from './conversations/dto/reply.dto';
+import * as m16 from './conversations/dto/reply-image.dto';
+import * as m17 from './conversations/dto/reply-audio.dto';
+import * as m18 from './conversations/dto/update-conversation.dto';
+import * as m19 from './categories/dto/create-category.dto';
+import * as m20 from './categories/dto/update-category.dto';
+import * as m21 from './product-categories/dto/create-product-category.dto';
+import * as m22 from './product-categories/dto/update-product-category.dto';
+import * as m23 from './products/dto/create-product.dto';
+import * as m24 from './products/dto/update-product.dto';
+import * as m25 from './products/dto/list-products.dto';
+import * as m26 from './store-settings/dto/update-store-settings.dto';
+import * as m27 from './checkout/dto/quote.dto';
+import * as m28 from './app.controller';
+import * as m29 from './bot-settings/bot-settings.controller';
+import * as m30 from './menu-items/menu-items.controller';
+import * as m31 from './delivery-locations/delivery-locations.controller';
+import * as m32 from './delivery-locations/public-delivery-locations.controller';
+import * as m33 from './delivery-locations/delivery-areas.controller';
+import * as m34 from './whatsapp/webhook.controller';
+import * as m35 from './push-subscriptions/push-subscriptions.controller';
+import * as m36 from './conversations/conversations.controller';
+import * as m37 from './categories/categories.controller';
+import * as m38 from './media/media-retention.controller';
+import * as m39 from './openapi/docs-page.controller';
+import * as m40 from './product-categories/product-categories.controller';
+import * as m41 from './product-categories/public-product-categories.controller';
+import * as m42 from './products/products.controller';
+import * as m43 from './products/public-products.controller';
+import * as m44 from './store-settings/store-settings.controller';
+import * as m45 from './store-settings/public-store-settings.controller';
+import * as m46 from './openapi/openapi.controller';
+import * as m47 from './checkout/public-checkout.controller';
 
 export default async () => {
-  const t = {};
+  const t = {
+    ['./checkout/dto/cart-item.dto']: await m0,
+  };
   return {
     '@nestjs/swagger': {
       models: [
         [
-          m0,
+          m1,
           {
             UpdateBotSettingsDto: {
               botEnabled: { required: false, type: () => Boolean },
@@ -67,7 +72,7 @@ export default async () => {
           },
         ],
         [
-          m1,
+          m2,
           {
             CreateMenuItemDto: {
               order: { required: true, type: () => Number },
@@ -93,9 +98,9 @@ export default async () => {
             },
           },
         ],
-        [m2, { UpdateMenuItemDto: {} }],
+        [m3, { UpdateMenuItemDto: {} }],
         [
-          m3,
+          m4,
           {
             ReorderMenuItemsDto: {
               orderedIds: { required: true, type: () => [String] },
@@ -103,16 +108,16 @@ export default async () => {
           },
         ],
         [
-          m4,
+          m5,
           {
             UpdateDeliveryLocationDto: {
               covered: { required: true, type: () => Boolean },
             },
           },
         ],
-        [m5, { CheckCepDto: { cep: { required: false, type: () => String } } }],
+        [m6, { CheckCepDto: { cep: { required: false, type: () => String } } }],
         [
-          m6,
+          m7,
           {
             CreateDeliveryAreaDto: {
               zone: {
@@ -133,9 +138,9 @@ export default async () => {
             },
           },
         ],
-        [m7, { UpdateDeliveryAreaDto: {} }],
+        [m8, { UpdateDeliveryAreaDto: {} }],
         [
-          m8,
+          m9,
           {
             SetAreaLocationsDto: {
               locationIds: {
@@ -150,7 +155,7 @@ export default async () => {
           },
         ],
         [
-          m9,
+          m10,
           {
             SavePushSubscriptionDto: {
               endpoint: { required: true, type: () => String },
@@ -158,7 +163,7 @@ export default async () => {
           },
         ],
         [
-          m10,
+          m11,
           {
             RemovePushSubscriptionDto: {
               endpoint: { required: true, type: () => String },
@@ -166,7 +171,7 @@ export default async () => {
           },
         ],
         [
-          m11,
+          m12,
           {
             PaginationQueryDto: {
               page: {
@@ -186,7 +191,7 @@ export default async () => {
           },
         ],
         [
-          m12,
+          m13,
           {
             ListConversationsDto: {
               q: {
@@ -201,7 +206,7 @@ export default async () => {
           },
         ],
         [
-          m13,
+          m14,
           {
             ListMessagesDto: {
               since: {
@@ -221,7 +226,7 @@ export default async () => {
           },
         ],
         [
-          m14,
+          m15,
           {
             ReplyDto: {
               text: { required: true, type: () => String },
@@ -230,7 +235,7 @@ export default async () => {
           },
         ],
         [
-          m15,
+          m16,
           {
             ReplyImageDto: {
               caption: { required: false, type: () => String },
@@ -239,7 +244,7 @@ export default async () => {
           },
         ],
         [
-          m16,
+          m17,
           {
             ReplyAudioDto: {
               replyToMessageId: { required: false, type: () => String },
@@ -247,7 +252,7 @@ export default async () => {
           },
         ],
         [
-          m17,
+          m18,
           {
             UpdateConversationDto: {
               name: { required: true, type: () => String },
@@ -255,7 +260,7 @@ export default async () => {
           },
         ],
         [
-          m18,
+          m19,
           {
             CreateCategoryDto: {
               name: { required: true, type: () => String },
@@ -263,9 +268,9 @@ export default async () => {
             },
           },
         ],
-        [m19, { UpdateCategoryDto: {} }],
+        [m20, { UpdateCategoryDto: {} }],
         [
-          m20,
+          m21,
           {
             CreateProductCategoryDto: {
               name: { required: true, type: () => String },
@@ -280,9 +285,9 @@ export default async () => {
             },
           },
         ],
-        [m21, { UpdateProductCategoryDto: {} }],
+        [m22, { UpdateProductCategoryDto: {} }],
         [
-          m22,
+          m23,
           {
             CreateProductDto: {
               name: { required: true, type: () => String },
@@ -321,9 +326,9 @@ export default async () => {
             },
           },
         ],
-        [m23, { UpdateProductDto: {} }],
+        [m24, { UpdateProductDto: {} }],
         [
-          m24,
+          m25,
           {
             ListProductsDto: {
               q: {
@@ -350,7 +355,7 @@ export default async () => {
           },
         ],
         [
-          m25,
+          m26,
           {
             UpdateStoreSettingsDto: {
               pickupEnabled: {
@@ -394,11 +399,45 @@ export default async () => {
             },
           },
         ],
-      ],
-      controllers: [
-        [m26, { AppController: { health: {} } }],
+        [
+          m0,
+          {
+            CartItemDto: {
+              productId: { required: true, type: () => String, format: 'uuid' },
+              quantity: {
+                required: true,
+                type: () => Number,
+                minimum: 1,
+                maximum: 20,
+              },
+            },
+          },
+        ],
         [
           m27,
+          {
+            QuoteDto: {
+              items: {
+                required: true,
+                type: () => [t['./checkout/dto/cart-item.dto'].CartItemDto],
+                minItems: 1,
+                maxItems: 30,
+              },
+              cep: {
+                required: false,
+                type: () => String,
+                description:
+                  'Com ou sem m\u00E1scara; sem CEP, a cota\u00E7\u00E3o diz `no_cep` na entrega.',
+                maxLength: 20,
+              },
+            },
+          },
+        ],
+      ],
+      controllers: [
+        [m28, { AppController: { health: {} } }],
+        [
+          m29,
           {
             BotSettingsController: {
               get: { type: Object },
@@ -407,7 +446,7 @@ export default async () => {
           },
         ],
         [
-          m28,
+          m30,
           {
             MenuItemsController: {
               list: { type: Object },
@@ -420,13 +459,13 @@ export default async () => {
           },
         ],
         [
-          m29,
+          m31,
           {
             DeliveryLocationsController: { list: { type: Object }, update: {} },
           },
         ],
         [
-          m30,
+          m32,
           {
             PublicDeliveryLocationsController: {
               listCovered: { type: [Object] },
@@ -439,7 +478,7 @@ export default async () => {
           },
         ],
         [
-          m31,
+          m33,
           {
             DeliveryAreasController: {
               list: { type: [Object] },
@@ -450,10 +489,10 @@ export default async () => {
             },
           },
         ],
-        [m32, { WebhookController: { verify: { type: String }, receive: {} } }],
-        [m33, { PushSubscriptionsController: { save: {}, remove: {} } }],
+        [m34, { WebhookController: { verify: { type: String }, receive: {} } }],
+        [m35, { PushSubscriptionsController: { save: {}, remove: {} } }],
         [
-          m34,
+          m36,
           {
             ConversationsController: {
               list: {},
@@ -481,7 +520,7 @@ export default async () => {
           },
         ],
         [
-          m35,
+          m37,
           {
             CategoriesController: {
               list: {},
@@ -492,7 +531,7 @@ export default async () => {
           },
         ],
         [
-          m36,
+          m38,
           {
             MediaRetentionController: {
               run: {
@@ -502,9 +541,9 @@ export default async () => {
             },
           },
         ],
-        [m37, { DocsPageController: { page: { type: String } } }],
+        [m39, { DocsPageController: { page: { type: String } } }],
         [
-          m38,
+          m40,
           {
             ProductCategoriesController: {
               list: { type: Object },
@@ -515,7 +554,7 @@ export default async () => {
           },
         ],
         [
-          m39,
+          m41,
           {
             PublicProductCategoriesController: {
               listActive: { type: [Object] },
@@ -523,7 +562,7 @@ export default async () => {
           },
         ],
         [
-          m40,
+          m42,
           {
             ProductsController: {
               list: {},
@@ -535,7 +574,7 @@ export default async () => {
           },
         ],
         [
-          m41,
+          m43,
           {
             PublicProductsController: {
               listActive: { type: [Object] },
@@ -543,9 +582,8 @@ export default async () => {
             },
           },
         ],
-        [m42, { OpenApiController: { get: { type: Object } } }],
         [
-          m43,
+          m44,
           {
             StoreSettingsController: {
               get: { type: Object },
@@ -554,8 +592,21 @@ export default async () => {
           },
         ],
         [
-          m44,
+          m45,
           { PublicStoreSettingsController: { getPublic: { type: Object } } },
+        ],
+        [m46, { OpenApiController: { get: { type: Object } } }],
+        [
+          m47,
+          {
+            PublicCheckoutController: {
+              quote: {
+                summary:
+                  'Pre\u00E7o, estoque e frete do carrinho, sempre calculados no servidor.',
+                type: Object,
+              },
+            },
+          },
         ],
       ],
     },

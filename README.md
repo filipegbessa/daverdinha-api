@@ -262,6 +262,13 @@ Produtos e categorias que a cliente cadastra no admin e o site mostra em `/produ
 - **Fotos** vão pro Vercel Blob (`BlobStorageService`, `BLOB_READ_WRITE_TOKEN`), públicas, não pro R2 privado das conversas. Uma falha ao gravar apaga as fotos recém-enviadas, e as antigas só saem depois que a linha nova está salva.
 - Apagar uma categoria que ainda tem produto responde **409**, porque a FK é `RESTRICT`.
 
+## Loja online (módulos `checkout` e `site-orders`)
+
+Em construção pelo plano `docs/plans/2026-11-05-loja-online-v1.md`. Por enquanto:
+
+- `POST /checkout/quote` (público) `{ items: [{ productId, quantity }], cep? }`: cota o carrinho. **Preço, estoque e frete vêm sempre do banco**; o corpo só diz qual produto e quantos (qualquer outro campo é descartado pelo `whitelist`). Item repetido é somado. Produto inexistente, inativo ou sem estoque suficiente vira `problems` (com `available`, já descontando reservas), não erro, e fica fora do subtotal. A entrega vem da área do bairro do CEP (`delivery.available: false` com `no_cep`, `unresolved`, `not_covered` ou `no_area` nos outros casos, nunca frete zero) e a retirada das configurações da loja. `installments` são as parcelas sem juros sobre o subtotal. Limites: 1 a 30 itens, quantidade de 1 a 20.
+- A cotação (`SiteOrdersService.quoteDetails`) aceita uma transação, pra criação do pedido refazer a conta com os produtos travados (`lockProducts` em `src/site-orders/stock.ts`).
+
 ## Marcadores (módulo `categories`)
 
 Rótulos coloridos que o admin anexa a conversas, pra filtrar a lista depois. Na tela do admin se chamam **marcadores** (`/admin/marcadores`); no código e nas rotas continuam `Category` / `/categories`, e "Categorias" no admin passou a ser o catálogo (`ProductCategory`, módulo `product-categories`).
