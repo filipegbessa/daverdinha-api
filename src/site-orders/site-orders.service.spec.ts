@@ -1,4 +1,5 @@
 import { Test } from '@nestjs/testing';
+import { ConflictException, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { SiteOrdersService } from './site-orders.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -241,6 +242,272 @@ describe('SiteOrdersService.quote', () => {
       const quote = await service.quote([{ productId: 'p1', quantity: 1 }]);
 
       expect(quote.pickup).toEqual({ available: false });
+    });
+  });
+});
+
+describe('SiteOrdersService orders', () => {
+  let service: SiteOrdersService;
+  let prisma: {
+    siteOrder: Record<string, jest.Mock>;
+    product: { updateMany: jest.Mock };
+    $transaction: jest.Mock;
+  };
+
+  function order(overrides: Record<string, unknown> = {}) {
+    return {
+      id: 'o1',
+      number: 42,
+      publicToken: 'tok',
+      kind: 'products',
+      status: 'paid',
+      fulfillmentStatus: 'awaiting',
+      customerName: 'Maria Souza',
+      customerEmail: 'maria@exemplo.com',
+      customerPhone: '5521999998888',
+      deliveryMethod: 'delivery',
+      cep: '22220000',
+      street: 'Rua do Catete',
+      streetNumber: '100',
+      complement: null,
+      bairro: 'Catete',
+      deliveryZone: 'Zona Sul',
+      deliveryArea: 'Perto',
+      notes: null,
+      subtotal: new Prisma.Decimal('89.90'),
+      deliveryFee: new Prisma.Decimal('15.00'),
+      total: new Prisma.Decimal('104.90'),
+      gatewayLinkId: null,
+      gatewayOrderId: null,
+      gatewayChargeId: null,
+      gatewayStatus: null,
+      paymentUrl: 'https://pay',
+      paidAt: new Date('2026-11-09T12:00:00Z'),
+      expiresAt: new Date('2026-11-09T13:00:00Z'),
+      lastSyncedAt: null,
+      createdAt: new Date('2026-11-09T12:00:00Z'),
+      updatedAt: new Date('2026-11-09T12:00:00Z'),
+      items: [
+        {
+          id: 'i1',
+          orderId: 'o1',
+          productId: 'p1',
+          productName: 'Vaso M',
+          productSlug: 'vaso-m',
+          imageUrl: null,
+          unitPrice: new Prisma.Decimal('89.90'),
+          quantity: 2,
+          leadTimeDays: null,
+        },
+      ],
+      ...overrides,
+    };
+  }
+
+  beforeEach(async () => {
+    prisma = {
+      siteOrder: {
+        findUnique: jest.fn().mockResolvedValue(order()),
+        findMany: jest.fn().mockResolvedValue([order()]),
+        count: jest.fn().mockResolvedValue(1),
+        update: jest.fn(({ data }) => order(data)),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      product: { updateMany: jest.fn() },
+      $transaction: jest.fn((fn: (tx: unknown) => unknown) => fn(prisma)),
+    };
+    const moduleRef = await Test.createTestingModule({
+      providers: [
+        SiteOrdersService,
+        { provide: PrismaService, useValue: prisma },
+        { provide: DeliveryLocationsService, useValue: {} },
+        { provide: DeliveryAreasService, useValue: {} },
+        {
+          provide: StoreSettingsService,
+          useValue: { get: jest.fn().mockResolvedValue(settings) },
+        },
+      ],
+    }).compile();
+    service = moduleRef.get(SiteOrdersService);
+  });
+
+  describe('findPublicByToken', () => {
+    it('finds by the secret token and never shows the street, phone or e-mail', async () => {
+      const result = await service.findPublicByToken('tok');
+
+      expect(prisma.siteOrder.findUnique).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { publicToken: 'tok' } }),
+      );
+      expect(result).toEqual(
+        expect.objectContaining({
+          code: 'DV-0042',
+          bairro: 'Catete',
+          total: 104.9,
+          paymentUrl: null,
+        }),
+      );
+      const text = JSON.stringify(result);
+      for (const secret of [
+        'Rua do Catete',
+        '5521999998888',
+        'maria@exemplo.com',
+      ]) {
+        expect(text).not.toContain(secret);
+      }
+    });
+
+    it('is a 404 for an unknown token', async () => {
+      prisma.siteOrder.findUnique.mockResolvedValue(null);
+
+      await expect(service.findPublicByToken('nope')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('turns a pending order past its deadline into expired, without a cron', async () => {
+      prisma.siteOrder.findUnique.mockResolvedValue(
+        order({ status: 'pending_payment', expiresAt: new Date('2020-01-01') }),
+      );
+
+      const result = await service.findPublicByToken('tok');
+
+      expect(prisma.siteOrder.updateMany).toHaveBeenCalledWith({
+        where: { id: 'o1', status: 'pending_payment' },
+        data: { status: 'expired' },
+      });
+      expect(result.status).toBe('expired');
+      expect(result.paymentUrl).toBeNull();
+    });
+
+    it('shows the payment link only while pending, and the pickup details for pickup orders', async () => {
+      prisma.siteOrder.findUnique.mockResolvedValue(
+        order({
+          status: 'pending_payment',
+          expiresAt: new Date(Date.now() + 60_000),
+          deliveryMethod: 'pickup',
+        }),
+      );
+
+      const result = await service.findPublicByToken('tok');
+
+      expect(result.paymentUrl).toBe('https://pay');
+      expect(result.pickup).toEqual({
+        address: 'R. Capiberibe, 32',
+        hours: 'Seg a sex',
+        instructions: null,
+      });
+    });
+  });
+
+  describe('list', () => {
+    it('shows only paid orders by default, newest first', async () => {
+      const result = await service.list({});
+
+      expect(prisma.siteOrder.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { status: 'paid' },
+          orderBy: { createdAt: 'desc' },
+        }),
+      );
+      expect(result.items[0]).toEqual(
+        expect.objectContaining({
+          code: 'DV-0042',
+          customer: expect.objectContaining({ phone: '5521999998888' }),
+          address: expect.objectContaining({ street: 'Rua do Catete' }),
+        }),
+      );
+    });
+
+    it('searches by order code or buyer name, with status and kind', async () => {
+      await service.list({
+        q: 'DV-0042',
+        status: 'pending_payment',
+        kind: 'products',
+      });
+
+      expect(prisma.siteOrder.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            status: 'pending_payment',
+            kind: 'products',
+            OR: [
+              { customerName: { contains: 'DV-0042', mode: 'insensitive' } },
+              { number: 42 },
+            ],
+          },
+        }),
+      );
+
+      await service.list({ q: 'maria' });
+      expect(prisma.siteOrder.count).toHaveBeenLastCalledWith({
+        where: {
+          status: 'paid',
+          OR: [{ customerName: { contains: 'maria', mode: 'insensitive' } }],
+        },
+      });
+    });
+  });
+
+  describe('updateFulfillment', () => {
+    it('only changes a paid order', async () => {
+      await service.updateFulfillment('o1', { fulfillmentStatus: 'ready' });
+      expect(prisma.siteOrder.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { fulfillmentStatus: 'ready' } }),
+      );
+
+      prisma.siteOrder.findUnique.mockResolvedValue(
+        order({
+          status: 'pending_payment',
+          expiresAt: new Date(Date.now() + 60_000),
+        }),
+      );
+      await expect(
+        service.updateFulfillment('o1', { fulfillmentStatus: 'ready' }),
+      ).rejects.toThrow(ConflictException);
+    });
+  });
+
+  describe('cancel', () => {
+    it('cancels a paid order and puts its units back in stock', async () => {
+      await service.cancel('o1');
+
+      expect(prisma.siteOrder.updateMany).toHaveBeenCalledWith({
+        where: { id: 'o1', status: 'paid' },
+        data: { status: 'cancelled' },
+      });
+      expect(prisma.product.updateMany).toHaveBeenCalledWith({
+        where: { id: 'p1', stock: { not: null } },
+        data: { stock: { increment: 2 } },
+      });
+    });
+
+    it('cancels a pending order without touching the stock, which was only reserved', async () => {
+      prisma.siteOrder.findUnique.mockResolvedValue(
+        order({
+          status: 'pending_payment',
+          expiresAt: new Date(Date.now() + 60_000),
+        }),
+      );
+
+      await service.cancel('o1');
+
+      expect(prisma.product.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('refuses an order that is already closed', async () => {
+      prisma.siteOrder.findUnique.mockResolvedValue(
+        order({ status: 'refunded' }),
+      );
+
+      await expect(service.cancel('o1')).rejects.toThrow(ConflictException);
+      expect(prisma.siteOrder.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('does not put stock back when the status changed in the meantime', async () => {
+      prisma.siteOrder.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(service.cancel('o1')).rejects.toThrow(ConflictException);
+      expect(prisma.product.updateMany).not.toHaveBeenCalled();
     });
   });
 });

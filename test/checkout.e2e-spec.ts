@@ -4,6 +4,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/bootstrap';
 import { PrismaService } from '../src/prisma/prisma.service';
+import { SiteOrdersService } from '../src/site-orders/site-orders.service';
 
 /**
  * A cotação contra o banco de verdade: CEP resolvido pela faixa local (sem
@@ -196,5 +197,85 @@ describe('Checkout quote (e2e)', () => {
       400,
     );
     await quote({ items: [{ productId: 'abc', quantity: 1 }] }).expect(400);
+  });
+
+  it('expires a late pending order on read and shows it without contact details', async () => {
+    const order = await prisma.siteOrder.create({
+      data: {
+        customerName: 'E2E',
+        customerEmail: 'e2e-checkout@exemplo.com',
+        customerPhone: '5521999999999',
+        deliveryMethod: 'delivery',
+        street: 'Rua Secreta',
+        bairro: 'E2E Bairro Com Área',
+        subtotal: '19.90',
+        deliveryFee: '12.50',
+        total: '32.40',
+        paymentUrl: 'https://pay',
+        expiresAt: new Date(Date.now() - 60_000),
+        items: {
+          create: {
+            productId: ids.ready,
+            productName: 'E2E Pronto',
+            unitPrice: '19.90',
+            quantity: 1,
+          },
+        },
+      },
+    });
+
+    const { body } = await request(app.getHttpServer())
+      .get(`/checkout/orders/${order.publicToken}`)
+      .expect(200);
+
+    expect(body).toMatchObject({
+      status: 'expired',
+      paymentUrl: null,
+      total: 32.4,
+      bairro: 'E2E Bairro Com Área',
+    });
+    expect(JSON.stringify(body)).not.toContain('Rua Secreta');
+    await request(app.getHttpServer())
+      .get('/checkout/orders/nao-existe')
+      .expect(404);
+  });
+
+  it('cancelling a paid order puts the units back in stock', async () => {
+    const before = await prisma.product.findUniqueOrThrow({
+      where: { id: ids.ready },
+    });
+    const order = await prisma.siteOrder.create({
+      data: {
+        customerName: 'E2E',
+        customerEmail: 'e2e-checkout@exemplo.com',
+        customerPhone: '5521999999999',
+        deliveryMethod: 'pickup',
+        status: 'paid',
+        subtotal: '39.80',
+        deliveryFee: '0',
+        total: '39.80',
+        expiresAt: new Date(),
+        items: {
+          create: {
+            productId: ids.ready,
+            productName: 'E2E Pronto',
+            unitPrice: '19.90',
+            quantity: 2,
+          },
+        },
+      },
+    });
+
+    const cancelled = await app.get(SiteOrdersService).cancel(order.id);
+
+    expect(cancelled.status).toBe('cancelled');
+    const after = await prisma.product.findUniqueOrThrow({
+      where: { id: ids.ready },
+    });
+    expect(after.stock).toBe((before.stock ?? 0) + 2);
+  });
+
+  it('keeps the order admin behind auth', async () => {
+    await request(app.getHttpServer()).get('/site-orders').expect(401);
   });
 });

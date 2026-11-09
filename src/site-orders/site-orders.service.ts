@@ -1,5 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { pageBounds, paginated } from '../common/pagination';
 import { PrismaService } from '../prisma/prisma.service';
 import { DeliveryLocationsService } from '../delivery-locations/delivery-locations.service';
 import { DeliveryAreasService } from '../delivery-locations/delivery-areas.service';
@@ -8,6 +13,17 @@ import { installmentsFor } from '../store-settings/installments';
 import { availableStock } from './stock';
 import { lineTotal, orderTotals } from './pricing';
 import type { CartItemDto } from '../checkout/dto/cart-item.dto';
+import { parseOrderCode } from './order-code';
+import {
+  toAdminOrder,
+  toPublicOrder,
+  WITH_ITEMS,
+  type PublicSiteOrder,
+  type SiteOrderAdmin,
+  type SiteOrderRow,
+} from './site-order-views';
+import type { ListSiteOrdersDto } from './dto/list-site-orders.dto';
+import type { UpdateFulfillmentDto } from './dto/update-fulfillment.dto';
 
 /** Cliente do Prisma ou transação: a cotação roda dentro da criação do pedido. */
 type Db = Prisma.TransactionClient;
@@ -191,6 +207,134 @@ export class SiteOrdersService {
   }
 
   /**
+   * A página pública do pedido, achada pelo token secreto (nunca pelo número,
+   * que é sequencial). Pedido pendente que passou do prazo vira `expired`
+   * aqui mesmo, na leitura: não tem cron.
+   */
+  async findPublicByToken(token: string): Promise<PublicSiteOrder> {
+    const row = await this.prisma.siteOrder.findUnique({
+      where: { publicToken: token },
+      include: WITH_ITEMS,
+    });
+    if (!row) throw new NotFoundException('Pedido não encontrado.');
+    const [order, settings] = await Promise.all([
+      this.expireIfDue(row),
+      this.storeSettings.get(),
+    ]);
+    return toPublicOrder(order, settings);
+  }
+
+  /**
+   * Lista do admin, mais recente primeiro. Sem filtro de status mostra só os
+   * pagos, que é o que a cliente acompanha no dia a dia; pendentes e vencidos
+   * ficam atrás do filtro.
+   */
+  async list(query: ListSiteOrdersDto = {}) {
+    const { page, perPage, skip, take } = pageBounds(query);
+    const search = query.q?.trim();
+    const number = search ? parseOrderCode(search) : null;
+    const where: Prisma.SiteOrderWhereInput = {
+      status: query.status ?? 'paid',
+      ...(query.kind && { kind: query.kind }),
+      ...(search && {
+        OR: [
+          { customerName: { contains: search, mode: 'insensitive' } },
+          ...(number !== null ? [{ number }] : []),
+        ],
+      }),
+    };
+    const [rows, total] = await Promise.all([
+      this.prisma.siteOrder.findMany({
+        where,
+        include: WITH_ITEMS,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take,
+      }),
+      this.prisma.siteOrder.count({ where }),
+    ]);
+    return paginated(rows.map(toAdminOrder), total, page, perPage);
+  }
+
+  async findById(id: string): Promise<SiteOrderAdmin> {
+    return toAdminOrder(await this.expireIfDue(await this.findRow(id)));
+  }
+
+  /** Preparo só faz sentido em pedido pago. */
+  async updateFulfillment(
+    id: string,
+    dto: UpdateFulfillmentDto,
+  ): Promise<SiteOrderAdmin> {
+    const row = await this.findRow(id);
+    if (row.status !== 'paid') {
+      throw new ConflictException(
+        'Só dá pra mudar o preparo de um pedido pago.',
+      );
+    }
+    return toAdminOrder(
+      await this.prisma.siteOrder.update({
+        where: { id },
+        data: { fulfillmentStatus: dto.fulfillmentStatus },
+        include: WITH_ITEMS,
+      }),
+    );
+  }
+
+  /**
+   * Cancela um pedido pendente ou pago. Pago devolve o estoque (o estorno do
+   * dinheiro é no painel do gateway, na V1). A troca de status é condicional,
+   * pra um cancelamento e um pagamento chegando juntos não devolverem estoque
+   * de um pedido que acabou pago.
+   */
+  async cancel(id: string): Promise<SiteOrderAdmin> {
+    const row = await this.findRow(id);
+    if (row.status !== 'pending_payment' && row.status !== 'paid') {
+      throw new ConflictException('Esse pedido não pode mais ser cancelado.');
+    }
+    await this.prisma.$transaction(async (tx) => {
+      const { count } = await tx.siteOrder.updateMany({
+        where: { id, status: row.status },
+        data: { status: 'cancelled' },
+      });
+      if (count === 0) {
+        throw new ConflictException(
+          'O pedido mudou enquanto era cancelado. Recarregue a página.',
+        );
+      }
+      if (row.status === 'paid' && row.kind === 'products') {
+        await returnStock(tx, row);
+      }
+    });
+    return this.findById(id);
+  }
+
+  private async findRow(id: string): Promise<SiteOrderRow> {
+    const row = await this.prisma.siteOrder.findUnique({
+      where: { id },
+      include: WITH_ITEMS,
+    });
+    if (!row) throw new NotFoundException('Pedido não encontrado.');
+    return row;
+  }
+
+  /**
+   * Pendente depois do prazo vira `expired`. Condicional no status, pra não
+   * atropelar um pagamento que tenha chegado no mesmo instante.
+   */
+  private async expireIfDue(
+    row: SiteOrderRow,
+    now: Date = new Date(),
+  ): Promise<SiteOrderRow> {
+    if (row.status !== 'pending_payment' || row.expiresAt > now) return row;
+    const { count } = await this.prisma.siteOrder.updateMany({
+      where: { id: row.id, status: 'pending_payment' },
+      data: { status: 'expired' },
+    });
+    if (count === 1) return { ...row, status: 'expired' };
+    return this.findRow(row.id);
+  }
+
+  /**
    * Entrega pro CEP: o bairro tem que estar atendido e numa área com valor.
    * Qualquer outro caso é entrega indisponível, nunca frete zero.
    */
@@ -248,4 +392,15 @@ function toPublicQuote(details: QuoteDetails): CheckoutQuote {
       : details.delivery,
     problems: details.problems,
   };
+}
+
+/** Devolve ao estoque as unidades de um pedido pago (só de produto com estoque contado). */
+async function returnStock(db: Db, order: SiteOrderRow): Promise<void> {
+  for (const item of order.items) {
+    if (!item.productId) continue;
+    await db.product.updateMany({
+      where: { id: item.productId, stock: { not: null } },
+      data: { stock: { increment: item.quantity } },
+    });
+  }
 }

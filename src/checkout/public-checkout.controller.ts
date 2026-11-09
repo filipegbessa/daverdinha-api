@@ -1,4 +1,12 @@
-import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Post,
+} from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { SiteOrdersService } from '../site-orders/site-orders.service';
 import { QuoteDto } from './dto/quote.dto';
@@ -17,5 +25,11 @@ export class PublicCheckoutController {
   @HttpCode(HttpStatus.OK)
   quote(@Body() dto: QuoteDto) {
     return this.orders.quote(dto.items, dto.cep);
+  }
+
+  /** A página do pedido, pelo token secreto do link (`/pedido/<token>` no site). */
+  @Get('orders/:token')
+  findOrder(@Param('token') token: string) {
+    return this.orders.findPublicByToken(token);
   }
 }
