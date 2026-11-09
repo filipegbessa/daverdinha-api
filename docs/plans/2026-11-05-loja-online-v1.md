@@ -6,6 +6,7 @@
 > - **2026-11-06:** vai ter estoque (Tarefa 4 obrigatória); venda de ingresso pros eventos da agenda, em compra separada, com nome por participante e inscrição gratuita pelo site (decisões 12–18, Tarefas 11–13).
 > - **2026-11-09:** **pagamento pelo Pagar.me (Stone)**, não mais Mercado Pago — decidido; boleto confirmado fora. Produto **sob encomenda** ganha prazo de confecção e selo próprio; esgotado continua esgotado. Frete por **área de entrega** (subdivisão das zonas, com valor próprio) no lugar do valor por zona. **Retirada configurada no admin** (endereço, horário), começando com o endereço do ateliê. **Máximo de ingressos por compra configurável por evento** (padrão 10). **Cartão à vista ou parcelado, sem juros pro comprador**, com número máximo de parcelas e parcela mínima configurados no admin (decisão 19).
 > - **2026-11-09 (docs do Pagar.me lidas):** o checkout passa a ser criado por **link de pagamento** (`POST /paymentlinks`, o fluxo documentado pra checkout hospedado), não por `POST /orders`. A referência lida está em "Referência do Pagar.me", logo abaixo das decisões; o Step 0 da Tarefa 6 ficou só com o que a documentação não responde.
+> - **2026-11-09 (escopo do MVP):** **ingressos ficam fora do MVP** — a primeira entrega é só a venda de produtos. As decisões 12–18 e as Tarefas 11–13 continuam aqui como desenho pronto pra depois; o `SiteOrder` já nasce com `kind`, então ligar os ingressos depois não muda o que vai ao ar agora. A Tarefa 14 fecha só o caminho de produtos.
 
 **Goal:** a cliente final compra pelo site: monta o carrinho, escolhe entrega ou retirada, paga no Pagar.me (checkout hospedado, fora do site) e volta pra uma página do pedido. Também compra ingresso (ou se inscreve, se o evento é gratuito) direto na página do evento. A Daverdinha vê e acompanha os pedidos no mesmo admin das conversas, recebe push de venda nova, cadastra áreas de entrega com valor, retirada, estoque e prazo de encomenda, e tem a lista de presença de cada evento.
 
@@ -19,9 +20,8 @@
 | Catálogo — vitrine e cadastro no admin | ✅ feitos (plano irmão, Fase 1); falta a verificação com a API real (Tarefa 4 de lá) |
 | Checagem de CEP compartilhada (bot + site) | ✅ Tarefa 2 (2026-11-09) |
 | Loja V1 — produtos | ✅ Tarefas 1, 3, 4 e 5 (2026-11-09; delta da Tarefa 1 aplicado na Neon). ✅ sem gateway: página pública do pedido com vencimento (Tarefa 9, falta a reconciliação) e admin de pedidos (Tarefa 10, falta `POST :id/sync`). ⏳ Tarefas 6–8 e o que falta da 9 e da 10 esperam a chave de teste do Pagar.me da cliente |
-| Agenda de eventos — API | ⏳ `docs/plans/2026-11-04-agenda-eventos.md`, Tarefas 1–5 (pré-requisito dos ingressos) |
-| Loja V1 — ingressos | ⏳ Tarefas 11–13 deste plano |
-| Fechamento (e2e, docs, produção) | ⏳ Tarefa 14 |
+| Fechamento (e2e, docs, produção) | ⏳ Tarefa 14, só produtos |
+| Ingressos (e a agenda da API, `docs/plans/2026-11-04-agenda-eventos.md`, Tarefas 1–5) | ⏸️ fora do MVP (2026-11-09); Tarefas 11–13 ficam como desenho pra depois |
 | V2 — pagamento dentro do site, e-mails, "avise-me" | fora deste plano (ver "Depois da V1") |
 
 **Architecture:** módulos novos seguindo o padrão do catálogo — service + controller admin com `ClerkAuthGuard` + **controller público separado**, registrado antes do admin:
@@ -657,6 +657,8 @@ O webhook manda JSON normal e não depende do corpo cru — não precisa do `Raw
 ---
 
 ## Task 11: Ingressos — schema e vagas
+
+> ⏸️ **Fora do MVP (2026-11-09).** As Tarefas 11–13 ficam como desenho pra depois da loja de produtos no ar.
 
 **Pré-requisito:** plano da agenda (`2026-11-04-agenda-eventos.md`), Tarefas 1–5, no `main` (model `Event`, `EventsService`, controllers admin e público).
 
