@@ -37,10 +37,16 @@ export class PushNotificationsService implements OnModuleInit {
     if (!VAPID_SUBJECT || !VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) return;
 
     try {
-      webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+      webpush.setVapidDetails(
+        VAPID_SUBJECT,
+        VAPID_PUBLIC_KEY,
+        VAPID_PRIVATE_KEY,
+      );
       this.vapidConfigured = true;
     } catch (error) {
-      this.logger.warn(`Invalid VAPID configuration, push notifications disabled: ${error}`);
+      this.logger.warn(
+        `Invalid VAPID configuration, push notifications disabled: ${error}`,
+      );
     }
   }
 

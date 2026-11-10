@@ -1,4 +1,7 @@
-import { clerkFrontendApiProxy, DEFAULT_PROXY_PATH } from '@clerk/backend/proxy';
+import {
+  clerkFrontendApiProxy,
+  DEFAULT_PROXY_PATH,
+} from '@clerk/backend/proxy';
 import type { NextFunction, Request, Response } from 'express';
 import getRawBody from 'raw-body';
 
@@ -18,7 +21,10 @@ import getRawBody from 'raw-body';
  */
 export function clerkProxyMiddleware(env: NodeJS.ProcessEnv = process.env) {
   return async (req: Request, res: Response, next: NextFunction) => {
-    if (req.path !== DEFAULT_PROXY_PATH && !req.path.startsWith(`${DEFAULT_PROXY_PATH}/`)) {
+    if (
+      req.path !== DEFAULT_PROXY_PATH &&
+      !req.path.startsWith(`${DEFAULT_PROXY_PATH}/`)
+    ) {
       return next();
     }
 
@@ -26,17 +32,21 @@ export function clerkProxyMiddleware(env: NodeJS.ProcessEnv = process.env) {
       const headers = new Headers();
       for (const [key, value] of Object.entries(req.headers)) {
         if (value === undefined) continue;
-        for (const item of Array.isArray(value) ? value : [value]) headers.append(key, item);
+        for (const item of Array.isArray(value) ? value : [value])
+          headers.append(key, item);
       }
       const hasBody = req.method !== 'GET' && req.method !== 'HEAD';
       // The helper derives the public origin it reports to Clerk from
       // X-Forwarded-Proto/Host, which Vercel sets; the URL's own host is
       // just a fallback for local runs.
-      const request = new Request(`http://${req.headers.host}${req.originalUrl}`, {
-        method: req.method,
-        headers,
-        body: hasBody ? new Uint8Array(await getRawBody(req)) : undefined,
-      });
+      const request = new Request(
+        `http://${req.headers.host}${req.originalUrl}`,
+        {
+          method: req.method,
+          headers,
+          body: hasBody ? new Uint8Array(await getRawBody(req)) : undefined,
+        },
+      );
 
       const response = await clerkFrontendApiProxy(request, {
         publishableKey: env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,

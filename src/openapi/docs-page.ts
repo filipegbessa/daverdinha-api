@@ -15,7 +15,8 @@
  */
 
 const SCALAR_VERSION = '1.46.4';
-const SCALAR_SRI = 'sha384-BbTs28WithFYxTDCiH0YPK5tv3MflhBVpABoMjfb9UqXa/hegSE9I4THoddKejMF';
+const SCALAR_SRI =
+  'sha384-BbTs28WithFYxTDCiH0YPK5tv3MflhBVpABoMjfb9UqXa/hegSE9I4THoddKejMF';
 // Same major the admin's @clerk/nextjs loads.
 const CLERK_JS_MAJOR = 6;
 
@@ -28,13 +29,16 @@ export function clerkFrontendApi(publishableKey: string): string {
   const match = /^pk_(test|live)_(.+)$/.exec(publishableKey);
   const host = match ? Buffer.from(match[2], 'base64').toString('utf8') : '';
   if (!host.endsWith('$') || !/^[a-z0-9.-]+\$$/i.test(host)) {
-    throw new Error('NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY não é uma publishable key válida do Clerk.');
+    throw new Error(
+      'NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY não é uma publishable key válida do Clerk.',
+    );
   }
   return host.slice(0, -1);
 }
 
 /** JSON that is safe to drop inside an inline <script>. */
-const scriptJson = (value: unknown) => JSON.stringify(value).replace(/</g, '\\u003c');
+const scriptJson = (value: unknown) =>
+  JSON.stringify(value).replace(/</g, '\\u003c');
 
 export function renderDocsPage(publishableKey: string): string {
   const frontendApi = clerkFrontendApi(publishableKey);

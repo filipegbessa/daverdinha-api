@@ -3,7 +3,10 @@ export function createCorsOriginHandler(frontendUrlEnv: string | undefined) {
     .split(',')
     .map((url) => url.trim());
 
-  return (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+  return (
+    origin: string | undefined,
+    callback: (err: Error | null, allow?: boolean) => void,
+  ) => {
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {

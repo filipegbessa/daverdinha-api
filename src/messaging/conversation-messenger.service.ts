@@ -95,7 +95,10 @@ export class ConversationMessengerService {
 
     const buffer =
       kind === 'audio'
-        ? await this.audioTranscode.normalizeIfNeeded(file.buffer, file.mimeType)
+        ? await this.audioTranscode.normalizeIfNeeded(
+            file.buffer,
+            file.mimeType,
+          )
         : file.buffer;
 
     const mediaId = await this.whatsapp.uploadMedia(buffer, file.mimeType);

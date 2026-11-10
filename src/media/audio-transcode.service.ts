@@ -33,7 +33,9 @@ export class AudioTranscodeService {
       await this.runFfmpeg(inputPath, outputPath);
       return await readFile(outputPath);
     } catch (error) {
-      this.logger.warn(`Audio re-encode failed, sending the original file: ${error}`);
+      this.logger.warn(
+        `Audio re-encode failed, sending the original file: ${error}`,
+      );
       return buffer;
     } finally {
       await rm(dir, { recursive: true, force: true });
@@ -60,7 +62,10 @@ export class AudioTranscodeService {
       proc.on('error', reject);
       proc.on('close', (code) => {
         if (code === 0) resolve();
-        else reject(new Error(`ffmpeg exited with code ${code}: ${stderr.slice(-500)}`));
+        else
+          reject(
+            new Error(`ffmpeg exited with code ${code}: ${stderr.slice(-500)}`),
+          );
       });
     });
   }

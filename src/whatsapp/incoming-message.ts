@@ -69,7 +69,12 @@ export interface IncomingMessage {
 export interface MessageStatusUpdate {
   wamid: string;
   status: string;
-  errors?: { code?: number; title?: string; message?: string; details?: string }[];
+  errors?: {
+    code?: number;
+    title?: string;
+    message?: string;
+    details?: string;
+  }[];
 }
 
 /**
@@ -129,8 +134,9 @@ export function parseMessageStatuses(payload: unknown): MessageStatusUpdate[] {
   if (!raw) return [];
 
   return raw
-    .filter((s): s is typeof s & { id: string; status: string } =>
-      typeof s.id === 'string' && typeof s.status === 'string',
+    .filter(
+      (s): s is typeof s & { id: string; status: string } =>
+        typeof s.id === 'string' && typeof s.status === 'string',
     )
     .map((s) => ({
       wamid: s.id,

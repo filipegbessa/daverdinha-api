@@ -22,7 +22,9 @@ export class OpenApiService {
 
   getDocument(): Promise<OpenAPIObject> {
     if (!this.app) {
-      throw new Error('OpenApiService.attach(app) não foi chamado — ver configureApp.');
+      throw new Error(
+        'OpenApiService.attach(app) não foi chamado — ver configureApp.',
+      );
     }
     this.document ??= this.build(this.app).catch((error) => {
       // Não guarda a falha: a próxima chamada tenta de novo.
@@ -38,9 +40,16 @@ export class OpenApiService {
     await SwaggerModule.loadPluginMetadata(metadata);
     const config = new DocumentBuilder()
       .setTitle('Daverdinha API')
-      .setDescription('Backend do bot de WhatsApp e do painel admin da Daverdinha.')
+      .setDescription(
+        'Backend do bot de WhatsApp e do painel admin da Daverdinha.',
+      )
       .setVersion('1.0')
-      .addBearerAuth({ type: 'http', scheme: 'bearer', bearerFormat: 'JWT', description: 'Token de sessão do Clerk.' })
+      .addBearerAuth({
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+        description: 'Token de sessão do Clerk.',
+      })
       .build();
     return SwaggerModule.createDocument(app, config);
   }
