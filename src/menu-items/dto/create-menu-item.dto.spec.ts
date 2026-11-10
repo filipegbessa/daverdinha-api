@@ -4,7 +4,12 @@ import { plainToInstance } from 'class-transformer';
 import { CreateMenuItemDto } from './create-menu-item.dto';
 
 function buildDto(topic: string) {
-  return plainToInstance(CreateMenuItemDto, { order: 0, topic, type: 'texto', reply: 'oi' });
+  return plainToInstance(CreateMenuItemDto, {
+    order: 0,
+    topic,
+    type: 'texto',
+    reply: 'oi',
+  });
 }
 
 describe('CreateMenuItemDto', () => {
@@ -20,5 +25,14 @@ describe('CreateMenuItemDto', () => {
     expect(errors).toHaveLength(1);
     expect(errors[0].property).toBe('topic');
     expect(errors[0].constraints).toHaveProperty('maxLength');
+  });
+
+  it('apara o topic e recusa topic só com espaço', async () => {
+    const trimmed = buildDto('  Bingo  ');
+    expect(trimmed.topic).toBe('Bingo');
+
+    const errors = await validate(buildDto('   '));
+    expect(errors).toHaveLength(1);
+    expect(errors[0].constraints).toHaveProperty('isNotEmpty');
   });
 });

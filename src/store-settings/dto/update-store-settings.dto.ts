@@ -10,9 +10,7 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
-
-const trim = ({ value }: { value: unknown }) =>
-  typeof value === 'string' ? value.trim() : value;
+import { emptyToNull, trim } from '../../common/transforms';
 
 export class UpdateStoreSettingsDto {
   /** Desligada, o checkout não oferece retirada. */
@@ -37,9 +35,7 @@ export class UpdateStoreSettingsDto {
 
   /** Texto livre ("toque o interfone 2"); vazio vira `null`. */
   @IsOptional()
-  @Transform(({ value }: { value: unknown }) =>
-    typeof value === 'string' && value.trim() === '' ? null : trim({ value }),
-  )
+  @Transform(emptyToNull)
   @IsString()
   @MaxLength(500)
   pickupInstructions?: string | null;

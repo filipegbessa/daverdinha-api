@@ -106,7 +106,14 @@ export default async () => {
           m4,
           {
             ReorderMenuItemsDto: {
-              orderedIds: { required: true, type: () => [String] },
+              orderedIds: {
+                required: true,
+                type: () => [String],
+                description:
+                  'Todos os itens, na ordem nova. O teto \u00E9 folgado: o menu tem poucos itens.',
+                format: 'uuid',
+                maxItems: 50,
+              },
             },
           },
         ],
@@ -201,10 +208,14 @@ export default async () => {
                 required: false,
                 type: () => String,
                 description:
-                  'Free text matched against the contact name and the phone number.',
+                  'Texto livre, comparado com o nome do contato e com o telefone. No\ntelefone vale qualquer formata\u00E7\u00E3o ("+55 (21) 98444-8130", "98444-8130"):\na busca usa s\u00F3 os d\u00EDgitos.',
               },
               unread: { required: false, type: () => Boolean },
-              categoryId: { required: false, type: () => String },
+              categoryId: {
+                required: false,
+                type: () => String,
+                format: 'uuid',
+              },
             },
           },
         ],
@@ -232,7 +243,12 @@ export default async () => {
           m15,
           {
             ReplyDto: {
-              text: { required: true, type: () => String },
+              text: {
+                required: true,
+                type: () => String,
+                description:
+                  'N\u00E3o pode ser vazio: a Cloud API recusa mensagem de texto sem corpo.',
+              },
               replyToMessageId: { required: false, type: () => String },
             },
           },

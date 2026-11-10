@@ -7,9 +7,7 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
-
-const trim = ({ value }: { value: unknown }) =>
-  typeof value === 'string' ? value.trim() : value;
+import { trim } from '../../common/transforms';
 
 export class CreateDeliveryAreaDto {
   /** Uma das zonas que já existem nos bairros (`DeliveryLocation.zone`). */

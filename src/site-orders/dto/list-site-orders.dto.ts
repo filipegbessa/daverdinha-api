@@ -1,6 +1,7 @@
 import { Transform } from 'class-transformer';
 import { IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
 import { PaginationQueryDto } from '../../common/pagination';
+import { trim } from '../../common/transforms';
 
 export const SITE_ORDER_STATUSES = [
   'pending_payment',
@@ -22,9 +23,7 @@ export class ListSiteOrdersDto extends PaginationQueryDto {
 
   /** Código (`DV-0042`, `42`) ou nome do comprador. */
   @IsOptional()
-  @Transform(({ value }: { value: unknown }) =>
-    typeof value === 'string' ? value.trim() : value,
-  )
+  @Transform(trim)
   @IsString()
   @MaxLength(100)
   q?: string;

@@ -1,4 +1,6 @@
+import { Transform } from 'class-transformer';
 import { IsNotEmpty, IsString, Matches } from 'class-validator';
+import { trim } from '../../common/transforms';
 
 // The admin picks freely from a colour input, so the only thing worth
 // enforcing is that what arrives is a colour at all — anything else would
@@ -6,6 +8,7 @@ import { IsNotEmpty, IsString, Matches } from 'class-validator';
 const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
 
 export class CreateCategoryDto {
+  @Transform(trim)
   @IsString()
   @IsNotEmpty()
   name: string;

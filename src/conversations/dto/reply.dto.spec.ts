@@ -35,4 +35,14 @@ describe('ReplyDto', () => {
     expect(errors[0].property).toBe('replyToMessageId');
     expect(errors[0].constraints).toHaveProperty('isString');
   });
+
+  it('recusa texto vazio ou só com espaço', async () => {
+    const dto = plainToInstance(ReplyDto, { text: '   ' });
+
+    const errors = await validate(dto);
+
+    expect(errors).toHaveLength(1);
+    expect(errors[0].property).toBe('text');
+    expect(errors[0].constraints).toHaveProperty('isNotEmpty');
+  });
 });

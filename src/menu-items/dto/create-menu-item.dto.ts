@@ -1,10 +1,13 @@
+import { Transform } from 'class-transformer';
 import {
   IsBoolean,
   IsInt,
+  IsNotEmpty,
   IsOptional,
   IsString,
   MaxLength,
 } from 'class-validator';
+import { trim } from '../../common/transforms';
 
 // WhatsApp's interactive list message rejects the whole request
 // (error #131009) if any row title is longer than this — capping it here
@@ -15,7 +18,9 @@ export class CreateMenuItemDto {
   @IsInt()
   order: number;
 
+  @Transform(trim)
   @IsString()
+  @IsNotEmpty()
   @MaxLength(MENU_ITEM_TOPIC_MAX_LENGTH)
   topic: string;
 

@@ -10,16 +10,14 @@ import {
   Max,
   Min,
 } from 'class-validator';
-
-/** Campo vazio vira `null`: é como o admin marca "sob encomenda" ou limpa o prazo. */
-const toNullableInt = ({ value }: { value: unknown }) =>
-  value === '' || value === null || value === 'null' ? null : Number(value);
+import { toBoolean, toNullableInt, trim } from '../../common/transforms';
 
 /**
  * Chega como `multipart/form-data` (junto com as fotos), então todo número e
  * booleano vem como string e precisa de conversão explícita.
  */
 export class CreateProductDto {
+  @Transform(trim)
   @IsString()
   @IsNotEmpty()
   name: string;
@@ -41,15 +39,14 @@ export class CreateProductDto {
   @Type(() => Number)
   order?: number;
 
-  // `@Type(() => Boolean)` não serve: `Boolean('false')` é `true`.
   @IsOptional()
-  @Transform(({ value }) => value === true || value === 'true')
+  @Transform(toBoolean)
   @IsBoolean()
   active?: boolean;
 
   /** Aparece na vitrine da home e nas listas das páginas internas. */
   @IsOptional()
-  @Transform(({ value }) => value === true || value === 'true')
+  @Transform(toBoolean)
   @IsBoolean()
   featured?: boolean;
 

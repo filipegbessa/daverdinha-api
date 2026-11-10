@@ -1,4 +1,4 @@
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   IsBoolean,
   IsInt,
@@ -6,12 +6,14 @@ import {
   IsOptional,
   IsString,
 } from 'class-validator';
+import { trim } from '../../common/transforms';
 
 /**
  * Sem `slug`: ele é gerado do nome na criação e nunca editado, porque é a URL
  * da categoria no site.
  */
 export class CreateProductCategoryDto {
+  @Transform(trim)
   @IsString()
   @IsNotEmpty()
   name: string;
