@@ -6,9 +6,9 @@ import * as m2 from './menu-items/dto/create-menu-item.dto';
 import * as m3 from './menu-items/dto/update-menu-item.dto';
 import * as m4 from './menu-items/dto/reorder-menu-items.dto';
 import * as m5 from './delivery-locations/dto/update-delivery-location.dto';
-import * as m6 from './delivery-locations/dto/check-cep.dto';
-import * as m7 from './delivery-locations/dto/create-delivery-area.dto';
-import * as m8 from './delivery-locations/dto/update-delivery-area.dto';
+import * as m6 from './delivery-locations/dto/create-delivery-area.dto';
+import * as m7 from './delivery-locations/dto/update-delivery-area.dto';
+import * as m8 from './delivery-locations/dto/check-cep.dto';
 import * as m9 from './delivery-locations/dto/set-area-locations.dto';
 import * as m10 from './push-subscriptions/dto/save-push-subscription.dto';
 import * as m11 from './push-subscriptions/dto/remove-push-subscription.dto';
@@ -126,9 +126,8 @@ export default async () => {
             },
           },
         ],
-        [m6, { CheckCepDto: { cep: { required: false, type: () => String } } }],
         [
-          m7,
+          m6,
           {
             CreateDeliveryAreaDto: {
               zone: {
@@ -149,7 +148,8 @@ export default async () => {
             },
           },
         ],
-        [m8, { UpdateDeliveryAreaDto: {} }],
+        [m7, { UpdateDeliveryAreaDto: {} }],
+        [m8, { CheckCepDto: { cep: { required: false, type: () => String } } }],
         [
           m9,
           {
@@ -546,7 +546,7 @@ export default async () => {
               listCovered: { type: [Object] },
               check: {
                 summary:
-                  '"Entregamos no seu CEP?" do site, com a mesma resposta que o bot d\u00E1.\nA CDN da Vercel guarda a resposta por CEP (a URL) por 10 minutos: o\nmesmo CEP n\u00E3o chega \u00E0 fun\u00E7\u00E3o nem \u00E0 BrasilAPI de novo. Mudar a cobertura\nno admin leva at\u00E9 esse tempo pra aparecer aqui (o bot n\u00E3o tem cache).',
+                  '"Entregamos no seu CEP?" do site, com a mesma resposta que o bot d\u00E1.\nA CDN da Vercel guarda a resposta por CEP (a URL) por 10 minutos: o\nmesmo CEP n\u00E3o chega \u00E0 fun\u00E7\u00E3o nem \u00E0 BrasilAPI de novo. Mudar a cobertura\nno admin leva at\u00E9 esse tempo pra aparecer aqui (o bot n\u00E3o tem cache),\ne o mesmo vale pro valor do frete (o checkout n\u00E3o usa este cache).',
                 type: Object,
               },
             },
