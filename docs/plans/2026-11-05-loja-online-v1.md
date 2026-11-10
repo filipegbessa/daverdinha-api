@@ -84,7 +84,7 @@ Fontes: `docs.pagar.me/docs/conecte-o-checkout-pagarme-usando-ia`, `docs/llms.md
 
 **Pendente da conta Stone/Pagar.me da cliente** (esclarecer durante o desenvolvimento, quando ela trouxer as informações da conta; até lá valem os padrões do plano): plano contratado e taxas (Pix, crédito à vista, parcelado), prazo de recebimento, se a conta já tem acesso à API e ao sandbox, e o que isso muda no parcelamento (quantas parcelas, parcela mínima e se o "sem juros" compensa ou se os juros vão pro comprador). O código não depende desses números: parcelas e parcela mínima são configuração no admin. Entra no Step 0 da Tarefa 6.
 
-**Pra confirmar com a cliente:** política de troca/devolução e de cancelamento de ingresso — respostas pelo questionário `daverdinha/docs/questionario-politicas.md`, que vira o texto das páginas (plano irmão, Tarefa 12).
+**Pra confirmar com a cliente:** entrega, retirada e troca/devolução, parcelamento e nota fiscal — respostas pelo questionário `daverdinha/docs/questionario-politicas.md`, que vira o texto das páginas (plano irmão, Tarefa 12). Cancelamento de ingresso fica em `daverdinha/docs/questionario-ingressos.md`, pra depois do MVP.
 
 ## Contratos
 
