@@ -151,7 +151,7 @@ describe('ConversationsService', () => {
       );
     });
 
-    it('searches name case-insensitively and phone by substring', async () => {
+    it('searches name case-insensitively, and skips the phone when the search has no digits', async () => {
       prisma.conversation.findMany.mockResolvedValue([]);
 
       await service.list({ q: '  maria  ' });
@@ -159,13 +159,43 @@ describe('ConversationsService', () => {
       expect(prisma.conversation.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: {
+            OR: [{ name: { contains: 'maria', mode: 'insensitive' } }],
+          },
+        }),
+      );
+    });
+
+    it('busca o telefone só pelos dígitos, como o banco guarda', async () => {
+      prisma.conversation.findMany.mockResolvedValue([]);
+
+      await service.list({ q: '98444-8130' });
+
+      expect(prisma.conversation.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
             OR: [
-              { name: { contains: 'maria', mode: 'insensitive' } },
-              { phone: { contains: 'maria' } },
+              { name: { contains: '98444-8130', mode: 'insensitive' } },
+              { phone: { contains: '984448130' } },
             ],
           },
         }),
       );
+    });
+
+    it('acha "+55 (21) 98444-8130" e também DDD + número sem o 55', async () => {
+      prisma.conversation.findMany.mockResolvedValue([]);
+
+      await service.list({ q: '+55 (21) 98444-8130' });
+      await service.list({ q: '(21) 98444-8130' });
+
+      const wheres = prisma.conversation.findMany.mock.calls.map(
+        ([args]: [{ where: { OR: unknown[] } }]) => args.where.OR.slice(1),
+      );
+      expect(wheres[0]).toEqual([{ phone: { contains: '5521984448130' } }]);
+      expect(wheres[1]).toEqual([
+        { phone: { contains: '21984448130' } },
+        { phone: { contains: '5521984448130' } },
+      ]);
     });
 
     it('ignores a blank search instead of matching everything on an empty string', async () => {

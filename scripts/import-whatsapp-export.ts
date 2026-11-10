@@ -26,6 +26,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { normalizeText } from '../src/common/normalize-text';
+import { normalizePhone } from '../src/common/format-phone';
 
 /**
  * `@prisma/client` is loaded lazily, inside `main`, so that importing the
@@ -254,22 +255,6 @@ export function toMessageRows(
     body: message.body,
     createdAt: message.timestamp,
   }));
-}
-
-/**
- * Normalises to the exact shape the webhook stores: country code and digits,
- * no `+` and no separators (`5521984448130`). This has to match, because
- * `BotEngineService.resolveConversation` finds a conversation by an equality
- * check on `phone` — a number stored as `+55 21 98444-8130` would leave the
- * imported history stranded and the bot creating a second conversation for
- * the same customer on their next message.
- */
-export function normalizePhone(raw: string): string | null {
-  let digits = raw.replace(/\D/g, '');
-  // A number copied straight out of a pt-BR export usually lacks the country
-  // code: `(21) 98444-8130`. DDD + 8 or 9 digits is unambiguous enough.
-  if (/^\d{10,11}$/.test(digits)) digits = `55${digits}`;
-  return /^\d{12,15}$/.test(digits) ? digits : null;
 }
 
 /** `Conversa do WhatsApp com João Silva.txt` -> `João Silva`. */

@@ -18,6 +18,7 @@ import { isForeignKeyViolation } from '../common/prisma-errors';
 import { BOT_ACTIVE_RESET } from './conversation-state';
 import { pageBounds, paginated } from '../common/pagination';
 import { toMoneyOrNull } from '../common/money';
+import { normalizePhone } from '../common/format-phone';
 import { formatMegabytes, type UploadedFileData } from '../common/uploads';
 import {
   ListMessagesDto,
@@ -49,6 +50,21 @@ function toMessageView(message: MessageRow) {
       })),
     },
   };
+}
+
+/**
+ * O banco guarda `5521…`, só dígitos; a busca chega como a operadora digitou
+ * ("98444-8130", "+55 (21) 98444-8130"). Compara só os dígitos, e também a
+ * forma normalizada quando ela existe (DDD + número sem o 55 ganha o 55).
+ * Sem dígito nenhum (busca por nome), não filtra por telefone.
+ */
+function phoneFilters(search: string): Prisma.ConversationWhereInput[] {
+  const digits = search.replace(/\D/g, '');
+  if (!digits) return [];
+  const normalized = normalizePhone(search);
+  return [...new Set([digits, ...(normalized ? [normalized] : [])])].map(
+    (value) => ({ phone: { contains: value } }),
+  );
 }
 
 @Injectable()
@@ -125,7 +141,7 @@ export class ConversationsService {
         ? {
             OR: [
               { name: { contains: search, mode: 'insensitive' } },
-              { phone: { contains: search } },
+              ...phoneFilters(search),
             ],
           }
         : {}),

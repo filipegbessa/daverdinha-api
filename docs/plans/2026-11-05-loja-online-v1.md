@@ -542,6 +542,7 @@ Ordem dentro do `create`, numa transação interativa:
 2. recalcular a cotação dentro da transação; `problems` não vazio → `ConflictException({ message, problems })` (409);
 3. `delivery` sem entrega disponível → `UnprocessableEntityException({ message, reason })` (422); `pickup` com retirada desligada → 422 `pickup_disabled`;
 4. criar `SiteOrder` + itens (snapshot de nome, slug, primeira foto, preço, `leadTimeDays`; zona e área da entrega), `expiresAt = now + 60 min`;
+   - `customerPhone` é gravado passando por `normalizePhone` (`src/common/format-phone.ts`): o site manda 10–11 dígitos sem o `55`, e o banco guarda `5521…`, igual ao telefone das conversas;
 
 Depois da transação (chamada externa não fica dentro do lock):
 
