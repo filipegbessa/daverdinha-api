@@ -1,4 +1,8 @@
-import { ConflictException, Injectable } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { uniqueSlug } from '../common/slug';
 import {
@@ -50,6 +54,7 @@ export class ProductCategoriesService {
 
   /** Nunca recalcula o slug: renomear a categoria não pode mudar a URL dela. */
   async update(id: string, dto: UpdateProductCategoryDto) {
+    await this.findRow(id);
     try {
       return await this.prisma.productCategory.update({
         where: { id },
@@ -61,6 +66,7 @@ export class ProductCategoriesService {
   }
 
   async remove(id: string): Promise<void> {
+    await this.findRow(id);
     try {
       await this.prisma.productCategory.delete({ where: { id } });
     } catch (error) {
@@ -106,6 +112,12 @@ export class ProductCategoriesService {
       ),
     );
     return this.prisma.productCategory.create({ data: { ...dto, slug } });
+  }
+
+  private async findRow(id: string) {
+    const row = await this.prisma.productCategory.findUnique({ where: { id } });
+    if (!row) throw new NotFoundException('Categoria não encontrada.');
+    return row;
   }
 
   private mapDuplicateName(error: unknown) {

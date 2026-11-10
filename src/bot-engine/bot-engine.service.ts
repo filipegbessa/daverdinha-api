@@ -13,6 +13,8 @@ import {
   buildMediaKey,
 } from '../media/media-storage.service';
 import { normalizeText } from '../common/normalize-text';
+import { isUniqueViolation } from '../common/prisma-errors';
+import { BOT_ACTIVE_RESET } from '../conversations/conversation-state';
 import {
   parseIncomingMessage,
   type IncomingMessage,
@@ -86,13 +88,6 @@ function storableMedia(
   }
   return null;
 }
-
-/** The state a conversation is reset to whenever it returns to the bot. */
-const BOT_ACTIVE_RESET = {
-  status: 'bot_active',
-  invalidAttempts: 0,
-  awaitingDeliveryReply: false,
-} as const;
 
 /** Identifies the conversation a webhook call ended up touching. */
 interface HandledMessage {
@@ -466,7 +461,7 @@ export class BotEngineService {
       });
       return false;
     } catch (error) {
-      if ((error as { code?: string }).code === 'P2002') return true;
+      if (isUniqueViolation(error)) return true;
       throw error;
     }
   }

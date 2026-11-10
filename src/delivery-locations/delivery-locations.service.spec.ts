@@ -1,4 +1,5 @@
 import { Test } from '@nestjs/testing';
+import { NotFoundException } from '@nestjs/common';
 import { DeliveryLocationsService } from './delivery-locations.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CepLookupService } from '../cep-lookup/cep-lookup.service';
@@ -10,7 +11,11 @@ describe('DeliveryLocationsService', () => {
 
   beforeEach(async () => {
     prisma = {
-      deliveryLocation: { findMany: jest.fn(), update: jest.fn() },
+      deliveryLocation: {
+        findMany: jest.fn(),
+        findUnique: jest.fn().mockResolvedValue({ id: 'l1' }),
+        update: jest.fn(),
+      },
     };
     cepLookup = { lookup: jest.fn() };
     const moduleRef = await Test.createTestingModule({
@@ -46,6 +51,15 @@ describe('DeliveryLocationsService', () => {
       where: { id: 'l1' },
       data: { covered: false },
     });
+  });
+
+  it('update() responde 404 e não grava quando o bairro não existe', async () => {
+    prisma.deliveryLocation.findUnique.mockResolvedValue(null);
+
+    await expect(service.update('x', { covered: true })).rejects.toThrow(
+      new NotFoundException('Bairro não encontrado.'),
+    );
+    expect(prisma.deliveryLocation.update).not.toHaveBeenCalled();
   });
 
   it('has no create method', () => {

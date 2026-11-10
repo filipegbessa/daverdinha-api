@@ -1,5 +1,5 @@
 import { Test } from '@nestjs/testing';
-import { ForbiddenException } from '@nestjs/common';
+import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { MenuItemsService } from './menu-items.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { BotSettingsService } from '../bot-settings/bot-settings.service';
@@ -17,7 +17,6 @@ describe('MenuItemsService', () => {
         create: jest.fn(),
         update: jest.fn(),
         delete: jest.fn(),
-        findUniqueOrThrow: jest.fn(),
         findFirstOrThrow: jest.fn(),
       },
       $transaction: jest.fn(),
@@ -38,7 +37,9 @@ describe('MenuItemsService', () => {
   it('list() returns every item in menu order', async () => {
     prisma.menuItem.findMany.mockResolvedValue([]);
     await service.list();
-    expect(prisma.menuItem.findMany).toHaveBeenCalledWith({ orderBy: { order: 'asc' } });
+    expect(prisma.menuItem.findMany).toHaveBeenCalledWith({
+      orderBy: { order: 'asc' },
+    });
   });
 
   it('listActive() returns only active items, in menu order', async () => {
@@ -56,12 +57,18 @@ describe('MenuItemsService', () => {
 
     const result = await service.findOne('1');
 
-    expect(prisma.menuItem.findUnique).toHaveBeenCalledWith({ where: { id: '1' } });
+    expect(prisma.menuItem.findUnique).toHaveBeenCalledWith({
+      where: { id: '1' },
+    });
     expect(result).toBe(item);
   });
 
   it('create() persists a new item', async () => {
-    const dto = { topic: 'Bingo de Plantas', reply: 'Todo sábado às 16h!', order: 1 };
+    const dto = {
+      topic: 'Bingo de Plantas',
+      reply: 'Todo sábado às 16h!',
+      order: 1,
+    };
     prisma.menuItem.create.mockResolvedValue({ id: '1', ...dto, active: true });
     const result = await service.create(dto);
     expect(prisma.menuItem.create).toHaveBeenCalledWith({ data: dto });
@@ -81,7 +88,7 @@ describe('MenuItemsService', () => {
   });
 
   it('remove() throws ForbiddenException and does not delete when the item is a system item', async () => {
-    prisma.menuItem.findUniqueOrThrow.mockResolvedValue({ id: '1', isSystem: true });
+    prisma.menuItem.findUnique.mockResolvedValue({ id: '1', isSystem: true });
 
     await expect(service.remove('1')).rejects.toThrow(ForbiddenException);
     expect(prisma.menuItem.delete).not.toHaveBeenCalled();
@@ -89,7 +96,7 @@ describe('MenuItemsService', () => {
   });
 
   it('remove() deletes the item and triggers auto-disable check', async () => {
-    prisma.menuItem.findUniqueOrThrow.mockResolvedValue({ id: '1', isSystem: false });
+    prisma.menuItem.findUnique.mockResolvedValue({ id: '1', isSystem: false });
     prisma.menuItem.delete.mockResolvedValue({ id: '1' });
 
     await service.remove('1');
@@ -98,13 +105,47 @@ describe('MenuItemsService', () => {
     expect(botSettings.autoDisableIfNoActiveMenuItems).toHaveBeenCalled();
   });
 
+  it('findOne() responde 404 quando o item não existe', async () => {
+    prisma.menuItem.findUnique.mockResolvedValue(null);
+
+    await expect(service.findOne('x')).rejects.toThrow(
+      new NotFoundException('Item de menu não encontrado.'),
+    );
+  });
+
+  it('update() transforma o P2025 do Prisma em 404', async () => {
+    prisma.menuItem.update.mockRejectedValue({ code: 'P2025' });
+
+    await expect(service.update('x', { active: false })).rejects.toThrow(
+      NotFoundException,
+    );
+    expect(botSettings.autoDisableIfNoActiveMenuItems).not.toHaveBeenCalled();
+  });
+
+  it('remove() responde 404 e não apaga quando o item não existe', async () => {
+    prisma.menuItem.findUnique.mockResolvedValue(null);
+
+    await expect(service.remove('x')).rejects.toThrow(NotFoundException);
+    expect(prisma.menuItem.delete).not.toHaveBeenCalled();
+  });
+
+  it('reorder() responde 404 quando algum id não existe', async () => {
+    prisma.$transaction.mockRejectedValue({ code: 'P2025' });
+
+    await expect(service.reorder({ orderedIds: ['a', 'x'] })).rejects.toThrow(
+      NotFoundException,
+    );
+  });
+
   it('findSystemDeliveryItem() queries for the one system item', async () => {
     const item = { id: 'sys1', isSystem: true };
     prisma.menuItem.findFirstOrThrow.mockResolvedValue(item);
 
     const result = await service.findSystemDeliveryItem();
 
-    expect(prisma.menuItem.findFirstOrThrow).toHaveBeenCalledWith({ where: { isSystem: true } });
+    expect(prisma.menuItem.findFirstOrThrow).toHaveBeenCalledWith({
+      where: { isSystem: true },
+    });
     expect(result).toBe(item);
   });
 
@@ -113,7 +154,7 @@ describe('MenuItemsService', () => {
 
     await service.update('1', { active: true });
 
-    expect(prisma.menuItem.findUniqueOrThrow).not.toHaveBeenCalled();
+    expect(prisma.menuItem.findUnique).not.toHaveBeenCalled();
     expect(prisma.menuItem.update).toHaveBeenCalledWith({
       where: { id: '1' },
       data: { active: true },

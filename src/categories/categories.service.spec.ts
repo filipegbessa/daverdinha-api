@@ -1,5 +1,5 @@
 import { Test } from '@nestjs/testing';
-import { ConflictException } from '@nestjs/common';
+import { ConflictException, NotFoundException } from '@nestjs/common';
 import { CategoriesService } from './categories.service';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -12,6 +12,7 @@ describe('CategoriesService', () => {
       category: {
         count: jest.fn().mockResolvedValue(0),
         findMany: jest.fn(),
+        findUnique: jest.fn().mockResolvedValue({ id: 'cat1' }),
         create: jest.fn(),
         update: jest.fn(),
         delete: jest.fn(),
@@ -154,5 +155,21 @@ describe('CategoriesService', () => {
     expect(prisma.category.delete).toHaveBeenCalledWith({
       where: { id: 'cat1' },
     });
+  });
+
+  it('update() responde 404 e não grava quando o marcador não existe', async () => {
+    prisma.category.findUnique.mockResolvedValue(null);
+
+    await expect(service.update('x', { name: 'Bingo' })).rejects.toThrow(
+      new NotFoundException('Marcador não encontrado.'),
+    );
+    expect(prisma.category.update).not.toHaveBeenCalled();
+  });
+
+  it('remove() responde 404 e não apaga quando o marcador não existe', async () => {
+    prisma.category.findUnique.mockResolvedValue(null);
+
+    await expect(service.remove('x')).rejects.toThrow(NotFoundException);
+    expect(prisma.category.delete).not.toHaveBeenCalled();
   });
 });

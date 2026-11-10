@@ -24,7 +24,6 @@ describe('ConversationsService', () => {
       conversation: {
         findMany: jest.fn(),
         findUnique: jest.fn(),
-        findUniqueOrThrow: jest.fn(),
         update: jest.fn(),
         count: jest.fn().mockResolvedValue(0),
       },
@@ -318,7 +317,7 @@ describe('ConversationsService', () => {
 
   describe('reply()', () => {
     it('sends the text via WhatsApp, persists it, and marks the conversation read when paused_human', async () => {
-      prisma.conversation.findUniqueOrThrow.mockResolvedValue({
+      prisma.conversation.findUnique.mockResolvedValue({
         id: 'c1',
         phone: '5521999999999',
         status: 'paused_human',
@@ -353,7 +352,7 @@ describe('ConversationsService', () => {
     });
 
     it('rejects with BadRequestException and sends nothing when the conversation is not paused_human', async () => {
-      prisma.conversation.findUniqueOrThrow.mockResolvedValue({
+      prisma.conversation.findUnique.mockResolvedValue({
         id: 'c1',
         phone: '5521999999999',
         status: 'bot_active',
@@ -367,7 +366,7 @@ describe('ConversationsService', () => {
     });
 
     it('forwards replyToMessageId to messenger.sendText as { replyToMessageId }', async () => {
-      prisma.conversation.findUniqueOrThrow.mockResolvedValue({
+      prisma.conversation.findUnique.mockResolvedValue({
         id: 'c1',
         phone: '5521999999999',
         status: 'paused_human',
@@ -396,7 +395,7 @@ describe('ConversationsService', () => {
     });
 
     it('without replyToMessageId, still calls messenger.sendText (third argument omitted/undefined)', async () => {
-      prisma.conversation.findUniqueOrThrow.mockResolvedValue({
+      prisma.conversation.findUnique.mockResolvedValue({
         id: 'c1',
         phone: '5521999999999',
         status: 'paused_human',
@@ -490,7 +489,7 @@ describe('ConversationsService', () => {
     };
 
     beforeEach(() => {
-      prisma.conversation.findUniqueOrThrow.mockResolvedValue({
+      prisma.conversation.findUnique.mockResolvedValue({
         id: 'c1',
         phone: '5521999999999',
         status: 'paused_human',
@@ -510,7 +509,7 @@ describe('ConversationsService', () => {
 
     // Mesma regra do reply de texto: o bot não é interrompido no meio.
     it('refuses while the bot still owns the conversation', async () => {
-      prisma.conversation.findUniqueOrThrow.mockResolvedValue({
+      prisma.conversation.findUnique.mockResolvedValue({
         id: 'c1',
         phone: '5521999999999',
         status: 'bot_active',
@@ -553,7 +552,7 @@ describe('ConversationsService', () => {
     };
 
     beforeEach(() => {
-      prisma.conversation.findUniqueOrThrow.mockResolvedValue({
+      prisma.conversation.findUnique.mockResolvedValue({
         id: 'c1',
         phone: '5521999999999',
         status: 'paused_human',
@@ -572,7 +571,7 @@ describe('ConversationsService', () => {
     });
 
     it('refuses while the bot still owns the conversation', async () => {
-      prisma.conversation.findUniqueOrThrow.mockResolvedValue({
+      prisma.conversation.findUnique.mockResolvedValue({
         id: 'c1',
         status: 'bot_active',
       });
@@ -606,7 +605,7 @@ describe('ConversationsService', () => {
 
   describe('reactivate()', () => {
     it('resets status, invalidAttempts, and both awaiting flags when paused_human', async () => {
-      prisma.conversation.findUniqueOrThrow.mockResolvedValue({
+      prisma.conversation.findUnique.mockResolvedValue({
         id: 'c1',
         status: 'paused_human',
       });
@@ -628,7 +627,7 @@ describe('ConversationsService', () => {
     });
 
     it('rejects with BadRequestException and updates nothing when the conversation is not paused_human', async () => {
-      prisma.conversation.findUniqueOrThrow.mockResolvedValue({
+      prisma.conversation.findUnique.mockResolvedValue({
         id: 'c1',
         status: 'bot_active',
       });
@@ -642,7 +641,7 @@ describe('ConversationsService', () => {
 
   describe('pause()', () => {
     it('sets status to paused_human when the conversation is bot_active', async () => {
-      prisma.conversation.findUniqueOrThrow.mockResolvedValue({
+      prisma.conversation.findUnique.mockResolvedValue({
         id: 'c1',
         status: 'bot_active',
       });
@@ -660,7 +659,7 @@ describe('ConversationsService', () => {
     });
 
     it('rejects with BadRequestException and updates nothing when the conversation is already paused_human', async () => {
-      prisma.conversation.findUniqueOrThrow.mockResolvedValue({
+      prisma.conversation.findUnique.mockResolvedValue({
         id: 'c1',
         status: 'paused_human',
       });
@@ -672,6 +671,10 @@ describe('ConversationsService', () => {
 
   describe('updateName()', () => {
     it('updates the conversation name regardless of status', async () => {
+      prisma.conversation.findUnique.mockResolvedValue({
+        id: 'c1',
+        status: 'bot_active',
+      });
       prisma.conversation.update.mockResolvedValue({ id: 'c1', name: 'Maria' });
 
       await service.updateName('c1', 'Maria');
@@ -680,6 +683,58 @@ describe('ConversationsService', () => {
         where: { id: 'c1' },
         data: { name: 'Maria' },
       });
+    });
+  });
+
+  describe('conversa inexistente', () => {
+    const missing = new NotFoundException('Conversa não encontrada.');
+
+    beforeEach(() => {
+      prisma.conversation.findUnique.mockResolvedValue(null);
+    });
+
+    it('responde 404, não 500, em toda ação sobre ela', async () => {
+      await expect(service.reply('x', 'Oi')).rejects.toThrow(missing);
+      await expect(service.reactivate('x')).rejects.toThrow(missing);
+      await expect(service.pause('x')).rejects.toThrow(missing);
+      await expect(service.updateName('x', 'Maria')).rejects.toThrow(missing);
+      await expect(service.addCategory('x', 'cat1')).rejects.toThrow(missing);
+      expect(prisma.conversation.update).not.toHaveBeenCalled();
+      expect(prisma.conversationCategory.upsert).not.toHaveBeenCalled();
+      expect(whatsapp.sendText).not.toHaveBeenCalled();
+    });
+
+    it('getWithMessages() usa a mesma mensagem, sem o id', async () => {
+      await expect(service.getWithMessages('x')).rejects.toThrow(missing);
+    });
+  });
+
+  describe('addCategory()', () => {
+    beforeEach(() => {
+      prisma.conversation.findUnique.mockResolvedValue({ id: 'c1' });
+    });
+
+    it('liga o marcador à conversa sem duplicar', async () => {
+      await service.addCategory('c1', 'cat1');
+
+      expect(prisma.conversationCategory.upsert).toHaveBeenCalledWith({
+        where: {
+          conversationId_categoryId: {
+            conversationId: 'c1',
+            categoryId: 'cat1',
+          },
+        },
+        update: {},
+        create: { conversationId: 'c1', categoryId: 'cat1' },
+      });
+    });
+
+    it('responde 404 quando o marcador não existe (P2003)', async () => {
+      prisma.conversationCategory.upsert.mockRejectedValue({ code: 'P2003' });
+
+      await expect(service.addCategory('c1', 'x')).rejects.toThrow(
+        new NotFoundException('Marcador não encontrado.'),
+      );
     });
   });
 });

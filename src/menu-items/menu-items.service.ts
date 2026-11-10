@@ -1,9 +1,16 @@
-import { ForbiddenException, Injectable } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { isRecordNotFound } from '../common/prisma-errors';
 import { BotSettingsService } from '../bot-settings/bot-settings.service';
 import { CreateMenuItemDto } from './dto/create-menu-item.dto';
 import { UpdateMenuItemDto } from './dto/update-menu-item.dto';
 import { ReorderMenuItemsDto } from './dto/reorder-menu-items.dto';
+
+const NOT_FOUND = 'Item de menu não encontrado.';
 
 @Injectable()
 export class MenuItemsService {
@@ -12,6 +19,10 @@ export class MenuItemsService {
     private readonly botSettings: BotSettingsService,
   ) {}
 
+  /**
+   * Sem paginação de propósito: são poucos itens (a lista interativa do
+   * WhatsApp mostra no máximo 10), e o admin reordena todos juntos.
+   */
   list() {
     return this.prisma.menuItem.findMany({ orderBy: { order: 'asc' } });
   }
@@ -25,18 +36,22 @@ export class MenuItemsService {
   }
 
   findOne(id: string) {
-    return this.prisma.menuItem.findUnique({ where: { id } });
+    return this.findRow(id);
   }
 
   create(dto: CreateMenuItemDto) {
     return this.prisma.menuItem.create({ data: dto });
   }
 
+  /** Sem `findRow` antes: o P2025 do próprio `update` vira o 404, numa consulta só. */
   async update(id: string, dto: UpdateMenuItemDto) {
-    const result = await this.prisma.menuItem.update({
-      where: { id },
-      data: dto,
-    });
+    const result = await this.prisma.menuItem
+      .update({ where: { id }, data: dto })
+      .catch((error: unknown) => {
+        throw isRecordNotFound(error)
+          ? new NotFoundException(NOT_FOUND)
+          : error;
+      });
     if (dto.active === false) {
       await this.botSettings.autoDisableIfNoActiveMenuItems();
     }
@@ -44,9 +59,7 @@ export class MenuItemsService {
   }
 
   async remove(id: string) {
-    const item = await this.prisma.menuItem.findUniqueOrThrow({
-      where: { id },
-    });
+    const item = await this.findRow(id);
     if (item.isSystem) {
       throw new ForbiddenException(
         'Não é possível excluir um item de sistema.',
@@ -65,10 +78,22 @@ export class MenuItemsService {
     return this.prisma.menuItem.findFirstOrThrow({ where: { isSystem: true } });
   }
 
-  reorder(dto: ReorderMenuItemsDto) {
+  async reorder(dto: ReorderMenuItemsDto) {
     const ops = dto.orderedIds.map((id, index) =>
       this.prisma.menuItem.update({ where: { id }, data: { order: index } }),
     );
-    return this.prisma.$transaction(ops);
+    try {
+      return await this.prisma.$transaction(ops);
+    } catch (error) {
+      // Um id que não existe desfaz a transação inteira: nenhuma ordem muda.
+      if (isRecordNotFound(error)) throw new NotFoundException(NOT_FOUND);
+      throw error;
+    }
+  }
+
+  private async findRow(id: string) {
+    const row = await this.prisma.menuItem.findUnique({ where: { id } });
+    if (!row) throw new NotFoundException(NOT_FOUND);
+    return row;
   }
 }

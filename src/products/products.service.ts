@@ -245,12 +245,14 @@ export class ProductsService {
     return rows.map((row) => toPublic(row, reserved));
   }
 
-  async findActiveBySlug(slug: string): Promise<ProductPublic | null> {
+  /** Produto inativo, arquivado ou de categoria inativa responde 404 como o inexistente. */
+  async findActiveBySlug(slug: string): Promise<ProductPublic> {
     const row = await this.prisma.product.findFirst({
       where: { slug, ...ACTIVE },
       include: WITH_CATEGORY,
     });
-    return row ? toPublic(row, await this.reservedFor([row])) : null;
+    if (!row) throw new NotFoundException('Produto não encontrado.');
+    return toPublic(row, await this.reservedFor([row]));
   }
 
   private async insert(

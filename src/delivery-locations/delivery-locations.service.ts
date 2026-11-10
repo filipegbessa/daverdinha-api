@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CepLookupService } from '../cep-lookup/cep-lookup.service';
 import { normalizeText } from '../common/normalize-text';
@@ -35,6 +35,10 @@ export class DeliveryLocationsService {
     private readonly cepLookup: CepLookupService,
   ) {}
 
+  /**
+   * Sem paginação de propósito: é a lista fixa de bairros do seed (não cresce
+   * com o uso), e o admin liga e desliga a cobertura vendo todos juntos.
+   */
   list() {
     return this.prisma.deliveryLocation.findMany({
       orderBy: [{ zone: 'asc' }, { regionName: 'asc' }],
@@ -102,7 +106,12 @@ export class DeliveryLocationsService {
     return { status: 'not_covered', bairro: lookup.bairro };
   }
 
-  update(id: string, dto: UpdateDeliveryLocationDto) {
+  async update(id: string, dto: UpdateDeliveryLocationDto) {
+    const exists = await this.prisma.deliveryLocation.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+    if (!exists) throw new NotFoundException('Bairro não encontrado.');
     return this.prisma.deliveryLocation.update({ where: { id }, data: dto });
   }
 }

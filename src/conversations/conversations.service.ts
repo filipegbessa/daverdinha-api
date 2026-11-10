@@ -24,11 +24,15 @@ export interface UploadedImage {
   size: number;
 }
 import { ListConversationsDto } from './dto/list-conversations.dto';
+import { isForeignKeyViolation } from '../common/prisma-errors';
+import { BOT_ACTIVE_RESET } from './conversation-state';
 import { pageBounds, paginated } from '../common/pagination';
 import {
   ListMessagesDto,
   DEFAULT_MESSAGES_LIMIT,
 } from './dto/list-messages.dto';
+
+const CONVERSATION_NOT_FOUND = 'Conversa não encontrada.';
 
 const MESSAGE_INCLUDE = {
   order: { include: { items: true } },
@@ -75,7 +79,7 @@ export class ConversationsService {
     // que cobre tanto mensagem de texto quanto imagem já expurgada pela
     // retenção. Distinguir os casos só contaria ao cliente o que existe.
     if (!message?.mediaKey) {
-      throw new NotFoundException('Mídia não encontrada');
+      throw new NotFoundException('Mídia não encontrada.');
     }
 
     const url = await this.mediaStorage.signedUrl(message.mediaKey, {
@@ -156,7 +160,7 @@ export class ConversationsService {
       },
     });
     if (!conversation) {
-      throw new NotFoundException(`Conversa ${id} não encontrada`);
+      throw new NotFoundException(CONVERSATION_NOT_FOUND);
     }
 
     const { categories, messages, ...rest } = conversation;
@@ -203,11 +207,20 @@ export class ConversationsService {
   }
 
   async addCategory(conversationId: string, categoryId: string): Promise<void> {
-    await this.prisma.conversationCategory.upsert({
-      where: { conversationId_categoryId: { conversationId, categoryId } },
-      update: {},
-      create: { conversationId, categoryId },
-    });
+    await this.findRow(conversationId);
+    try {
+      await this.prisma.conversationCategory.upsert({
+        where: { conversationId_categoryId: { conversationId, categoryId } },
+        update: {},
+        create: { conversationId, categoryId },
+      });
+    } catch (error) {
+      // A conversa já foi conferida acima, então a FK que falhou é a do marcador.
+      if (isForeignKeyViolation(error)) {
+        throw new NotFoundException('Marcador não encontrado.');
+      }
+      throw error;
+    }
   }
 
   async removeCategory(
@@ -220,18 +233,11 @@ export class ConversationsService {
   }
 
   async reply(id: string, text: string, replyToMessageId?: string) {
-    const conversation = await this.prisma.conversation.findUniqueOrThrow({
-      where: { id },
-    });
-    if (conversation.status !== 'paused_human') {
-      throw new BadRequestException(
-        'Só é possível responder conversas transferidas pra um atendente.',
-      );
-    }
-    // The messenger marks the conversation read and bumps updatedAt as part
-    // of the same transaction as the message itself. It also validates
-    // replyToMessageId (existence, wamid, same conversation) and throws
-    // BadRequestException on its own when the citation can't be honored.
+    const conversation = await this.findRepliable(id);
+    // O messenger marca a conversa como lida e atualiza o updatedAt na mesma
+    // transação da mensagem. Ele também valida o replyToMessageId (existe, tem
+    // wamid, é da mesma conversa) e lança BadRequestException sozinho quando
+    // a citação não dá pra honrar.
     return this.messenger.sendText(conversation, text, { replyToMessageId });
   }
 
@@ -314,10 +320,16 @@ export class ConversationsService {
     return mimeType;
   }
 
-  private async findRepliable(id: string) {
-    const conversation = await this.prisma.conversation.findUniqueOrThrow({
+  private async findRow(id: string) {
+    const conversation = await this.prisma.conversation.findUnique({
       where: { id },
     });
+    if (!conversation) throw new NotFoundException(CONVERSATION_NOT_FOUND);
+    return conversation;
+  }
+
+  private async findRepliable(id: string) {
+    const conversation = await this.findRow(id);
     if (conversation.status !== 'paused_human') {
       throw new BadRequestException(
         'Só é possível responder conversas transferidas pra um atendente.',
@@ -327,9 +339,7 @@ export class ConversationsService {
   }
 
   async reactivate(id: string) {
-    const conversation = await this.prisma.conversation.findUniqueOrThrow({
-      where: { id },
-    });
+    const conversation = await this.findRow(id);
     if (conversation.status !== 'paused_human') {
       throw new BadRequestException(
         'Só é possível reativar conversas transferidas pra um atendente.',
@@ -337,18 +347,12 @@ export class ConversationsService {
     }
     return this.prisma.conversation.update({
       where: { id },
-      data: {
-        status: 'bot_active',
-        invalidAttempts: 0,
-        awaitingDeliveryReply: false,
-      },
+      data: { ...BOT_ACTIVE_RESET },
     });
   }
 
   async pause(id: string) {
-    const conversation = await this.prisma.conversation.findUniqueOrThrow({
-      where: { id },
-    });
+    const conversation = await this.findRow(id);
     if (conversation.status !== 'bot_active') {
       throw new BadRequestException(
         'Só é possível pausar conversas com o bot ativo.',
@@ -360,7 +364,8 @@ export class ConversationsService {
     });
   }
 
-  updateName(id: string, name: string) {
+  async updateName(id: string, name: string) {
+    await this.findRow(id);
     return this.prisma.conversation.update({ where: { id }, data: { name } });
   }
 }

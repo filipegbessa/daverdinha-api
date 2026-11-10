@@ -1,5 +1,10 @@
-import { ConflictException, Injectable } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { isUniqueViolation } from '../common/prisma-errors';
 import {
   PaginationQueryDto,
   pageBounds,
@@ -46,6 +51,7 @@ export class CategoriesService {
   }
 
   async update(id: string, dto: UpdateCategoryDto) {
+    await this.findRow(id);
     try {
       return await this.prisma.category.update({ where: { id }, data: dto });
     } catch (error) {
@@ -54,11 +60,19 @@ export class CategoriesService {
   }
 
   async remove(id: string): Promise<void> {
+    await this.findRow(id);
     await this.prisma.category.delete({ where: { id } });
   }
 
+  private async findRow(id: string) {
+    const row = await this.prisma.category.findUnique({ where: { id } });
+    if (!row) throw new NotFoundException('Marcador não encontrado.');
+    return row;
+  }
+
+  // `name` é a única chave única além do id, então qualquer P2002 é nome repetido.
   private mapDuplicateNameError(error: unknown) {
-    if ((error as { code?: string }).code === 'P2002') {
+    if (isUniqueViolation(error)) {
       return new ConflictException('Já existe um marcador com esse nome.');
     }
     return error;

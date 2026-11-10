@@ -1,10 +1,4 @@
-import {
-  Controller,
-  Get,
-  NotFoundException,
-  Param,
-  Query,
-} from '@nestjs/common';
+import { Controller, Get, Param, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { ProductsService } from './products.service';
 import { ListActiveProductsQuery } from './dto/list-active-products.query';
@@ -24,9 +18,7 @@ export class PublicProductsController {
   }
 
   @Get('active/:slug')
-  async findBySlug(@Param('slug') slug: string) {
-    const product = await this.service.findActiveBySlug(slug);
-    if (!product) throw new NotFoundException('Produto não encontrado.');
-    return product;
+  findBySlug(@Param('slug') slug: string) {
+    return this.service.findActiveBySlug(slug);
   }
 }

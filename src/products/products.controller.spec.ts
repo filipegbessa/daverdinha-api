@@ -83,10 +83,13 @@ describe('products controllers', () => {
       expect(service.listActive).toHaveBeenLastCalledWith(undefined, true);
     });
 
-    it('GET /products/active/:slug is a 404 for a missing or inactive product', async () => {
+    it('GET /products/active/:slug repassa o 404 do service', async () => {
+      service.findActiveBySlug.mockRejectedValue(new NotFoundException());
+
       await expect(pub.findBySlug('nope')).rejects.toBeInstanceOf(
         NotFoundException,
       );
+      expect(service.findActiveBySlug).toHaveBeenCalledWith('nope');
     });
 
     it('has no auth guard', () => {

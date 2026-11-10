@@ -1,5 +1,5 @@
 import { Test } from '@nestjs/testing';
-import { ConflictException } from '@nestjs/common';
+import { ConflictException, NotFoundException } from '@nestjs/common';
 import { ProductCategoriesService } from './product-categories.service';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -90,7 +90,15 @@ describe('ProductCategoriesService', () => {
     });
   });
 
+  /** Faz a categoria `c1` existir na busca por id (a busca por slug continua livre). */
+  function existing() {
+    prisma.productCategory.findUnique.mockImplementation(({ where }) =>
+      where.id === 'c1' ? { id: 'c1' } : null,
+    );
+  }
+
   it('never touches the slug when the name is updated', async () => {
+    existing();
     await service.update('c1', { name: 'Vasos grandes' });
 
     expect(prisma.productCategory.update).toHaveBeenCalledWith(
@@ -99,6 +107,7 @@ describe('ProductCategoriesService', () => {
   });
 
   it('blocks deleting a category that still has products, with ConflictException', async () => {
+    existing();
     prisma.productCategory.delete.mockRejectedValue(prismaError('P2003'));
 
     await expect(service.remove('c1')).rejects.toThrow(
@@ -107,6 +116,7 @@ describe('ProductCategoriesService', () => {
   });
 
   it('explains the block when only removed products are left in the category', async () => {
+    existing();
     prisma.productCategory.delete.mockRejectedValue(prismaError('P2003'));
     prisma.product.count.mockResolvedValue(0);
 
@@ -114,6 +124,15 @@ describe('ProductCategoriesService', () => {
     expect(prisma.product.count).toHaveBeenCalledWith({
       where: { categoryId: 'c1', archivedAt: null },
     });
+  });
+
+  it('update() e remove() respondem 404 quando a categoria não existe', async () => {
+    await expect(service.update('x', { name: 'Vasos' })).rejects.toThrow(
+      new NotFoundException('Categoria não encontrada.'),
+    );
+    await expect(service.remove('x')).rejects.toThrow(NotFoundException);
+    expect(prisma.productCategory.update).not.toHaveBeenCalled();
+    expect(prisma.productCategory.delete).not.toHaveBeenCalled();
   });
 
   describe('listActive', () => {

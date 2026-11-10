@@ -202,9 +202,15 @@ describe('ProductsService', () => {
       await service.list({ page: 2, perPage: 10 });
 
       expect(prisma.product.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ where: { archivedAt: null }, skip: 10, take: 10 }),
+        expect.objectContaining({
+          where: { archivedAt: null },
+          skip: 10,
+          take: 10,
+        }),
       );
-      expect(prisma.product.count).toHaveBeenCalledWith({ where: { archivedAt: null } });
+      expect(prisma.product.count).toHaveBeenCalledWith({
+        where: { archivedAt: null },
+      });
     });
 
     it('combines name search, category, active and featured, and counts with the same filter', async () => {
@@ -258,7 +264,11 @@ describe('ProductsService', () => {
 
       expect(prisma.product.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { active: true, archivedAt: null, category: { active: true, slug: 'vasos' } },
+          where: {
+            active: true,
+            archivedAt: null,
+            category: { active: true, slug: 'vasos' },
+          },
         }),
       );
     });
@@ -268,7 +278,12 @@ describe('ProductsService', () => {
 
       expect(prisma.product.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { active: true, archivedAt: null, featured: true, category: { active: true } },
+          where: {
+            active: true,
+            archivedAt: null,
+            featured: true,
+            category: { active: true },
+          },
         }),
       );
     });
@@ -402,12 +417,19 @@ describe('ProductsService', () => {
   });
 
   describe('findActiveBySlug', () => {
-    it('only finds an active product of an active category', async () => {
-      await expect(service.findActiveBySlug('x')).resolves.toBeNull();
+    it('only finds an active product of an active category, 404 otherwise', async () => {
+      await expect(service.findActiveBySlug('x')).rejects.toThrow(
+        'Produto não encontrado.',
+      );
 
       expect(prisma.product.findFirst).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { slug: 'x', active: true, archivedAt: null, category: { active: true } },
+          where: {
+            slug: 'x',
+            active: true,
+            archivedAt: null,
+            category: { active: true },
+          },
         }),
       );
     });
