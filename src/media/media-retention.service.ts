@@ -1,9 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { DAY_MS } from '../common/time';
 import { PrismaService } from '../prisma/prisma.service';
 import { MediaStorageService } from './media-storage.service';
 
 /** Uma regra só apaga: idade. Nada é apagado por capacidade — ver bot-engine.service.ts. */
-const RETENTION_MS = 3 * 365 * 24 * 60 * 60 * 1000;
+const RETENTION_MS = 3 * 365 * DAY_MS;
 
 /**
  * O `maxDuration` do `vercel.json` é 30s; este orçamento deixa folga para o

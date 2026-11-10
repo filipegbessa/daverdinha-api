@@ -14,6 +14,9 @@ interface WhatsAppSendResponse {
 
 export type MediaKind = 'image' | 'audio';
 
+/** A versão da Graph API mora num lugar só: subir de versão é mudar aqui. */
+export const GRAPH_API_BASE = 'https://graph.facebook.com/v20.0';
+
 /**
  * Só o que sabemos armazenar e exibir, por tipo de mídia. Vale nos dois
  * sentidos: o que o cliente manda e o que o operador envia de volta. Tipos e
@@ -56,7 +59,7 @@ export type DownloadedMedia =
 
 @Injectable()
 export class WhatsAppClientService {
-  private readonly baseUrl = `https://graph.facebook.com/v20.0/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`;
+  private readonly baseUrl = `${GRAPH_API_BASE}/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`;
 
   async sendText(
     to: string,
@@ -105,7 +108,7 @@ export class WhatsAppClientService {
     const filter = encodeURIComponent(
       JSON.stringify({ retailer_id: { in: retailerIds } }),
     );
-    const url = `https://graph.facebook.com/v20.0/${catalogId}/products?fields=name,retailer_id&filter=${filter}`;
+    const url = `${GRAPH_API_BASE}/${catalogId}/products?fields=name,retailer_id&filter=${filter}`;
 
     const response = await fetch(url, {
       headers: {
@@ -146,15 +149,12 @@ export class WhatsAppClientService {
   ): Promise<DownloadedMedia> {
     const rules = MEDIA_RULES[kind];
 
-    const metadataResponse = await fetch(
-      `https://graph.facebook.com/v20.0/${mediaId}`,
-      {
-        headers: {
-          Authorization: `Bearer ${process.env.WHATSAPP_CLOUD_API_TOKEN}`,
-        },
-        signal: AbortSignal.timeout(METADATA_TIMEOUT_MS),
+    const metadataResponse = await fetch(`${GRAPH_API_BASE}/${mediaId}`, {
+      headers: {
+        Authorization: `Bearer ${process.env.WHATSAPP_CLOUD_API_TOKEN}`,
       },
-    );
+      signal: AbortSignal.timeout(METADATA_TIMEOUT_MS),
+    });
     if (!metadataResponse.ok) {
       throw new Error(
         `WhatsApp media metadata failed (${metadataResponse.status})`,
@@ -230,7 +230,7 @@ export class WhatsAppClientService {
     form.append('file', new Blob([new Uint8Array(buffer)], { type: mimeType }));
 
     const response = await fetch(
-      `https://graph.facebook.com/v20.0/${process.env.WHATSAPP_PHONE_NUMBER_ID}/media`,
+      `${GRAPH_API_BASE}/${process.env.WHATSAPP_PHONE_NUMBER_ID}/media`,
       {
         method: 'POST',
         headers: {
@@ -312,12 +312,14 @@ export class WhatsAppClientService {
     });
 
     if (!response.ok) {
-      const errorBody = await response.json();
+      const errorBody = (await response.json()) as {
+        error?: { message?: string };
+      } | null;
       throw new Error(
         errorBody?.error?.message ?? `WhatsApp API error (${response.status})`,
       );
     }
 
-    return response.json();
+    return (await response.json()) as WhatsAppSendResponse;
   }
 }

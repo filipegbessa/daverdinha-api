@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { DAY_MS } from '../common/time';
 
 export interface CepLookupResult {
   bairro: string;
@@ -25,7 +26,7 @@ const LOOKUP_TIMEOUT_MS = 4000;
  * chamada à BrasilAPI. Em memória, por instância (serverless reinicia e
  * esvazia, o que é ok). Falha não é guardada, pra tentar de novo na próxima.
  */
-const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const CACHE_TTL_MS = DAY_MS;
 const CACHE_MAX_ENTRIES = 1000;
 
 @Injectable()
@@ -48,7 +49,7 @@ export class CepLookupService {
   private remember(cep: string, result: CepLookupResult) {
     // Map guarda a ordem de inserção: o primeiro é o mais antigo.
     if (this.cache.size >= CACHE_MAX_ENTRIES) {
-      const oldest = this.cache.keys().next().value;
+      const [oldest] = this.cache.keys();
       if (oldest !== undefined) this.cache.delete(oldest);
     }
     this.cache.set(cep, { result, expiresAt: Date.now() + CACHE_TTL_MS });

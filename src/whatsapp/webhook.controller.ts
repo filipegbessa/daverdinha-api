@@ -9,6 +9,7 @@ import {
   Query,
   Req,
 } from '@nestjs/common';
+import type { RawBodyRequest } from '@nestjs/common';
 import { ApiExcludeController } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { verifySignature } from './verify-signature';
@@ -43,11 +44,13 @@ export class WebhookController {
 
   @Post()
   @HttpCode(200)
-  async receive(@Req() req: Request, @Body() body: unknown) {
-    const rawBody: Buffer = (req as any).rawBody;
+  async receive(@Req() req: RawBodyRequest<Request>, @Body() body: unknown) {
+    // Preenchido pelo RawBodyMiddleware; sem ele não há o que conferir.
+    const rawBody = req.rawBody;
     const signature = req.headers['x-hub-signature-256'] as string | undefined;
 
     if (
+      !rawBody ||
       !verifySignature(rawBody, signature, process.env.WHATSAPP_APP_SECRET!)
     ) {
       throw new ForbiddenException('Invalid signature');

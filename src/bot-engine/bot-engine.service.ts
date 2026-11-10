@@ -13,6 +13,7 @@ import {
   buildMediaKey,
 } from '../media/media-storage.service';
 import { normalizeText } from '../common/normalize-text';
+import { DAY_MS } from '../common/time';
 import { isUniqueViolation } from '../common/prisma-errors';
 import { BOT_ACTIVE_RESET } from '../conversations/conversation-state';
 import {
@@ -24,7 +25,7 @@ import {
 const MAX_INVALID_ATTEMPTS = 3;
 const MENU_PROMPT = 'Como posso te ajudar hoje?';
 const MENU_BUTTON = 'Ver opções';
-const STALE_HANDOFF_MS = 30 * 24 * 60 * 60 * 1000;
+const STALE_HANDOFF_MS = 30 * DAY_MS;
 
 /**
  * Teto de armazenamento de mídia (Tarefa 11), 2 GB abaixo dos 10 GB
@@ -44,7 +45,7 @@ const MEDIA_STORAGE_CAP_BYTES = 8n * 1024n * 1024n * 1024n;
  * 16 MB cada, ficam numa fração pequena dos 8 GB totais.
  */
 const MAX_MEDIA_PER_CONVERSATION_PER_DAY = 20;
-const CONVERSATION_MEDIA_WINDOW_MS = 24 * 60 * 60 * 1000;
+const CONVERSATION_MEDIA_WINDOW_MS = DAY_MS;
 
 // Typing "menu" is the customer's escape hatch out of any sub-flow, so it's
 // matched before anything else looks at the text.

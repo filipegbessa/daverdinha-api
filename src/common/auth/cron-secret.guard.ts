@@ -5,6 +5,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import * as crypto from 'crypto';
+import type { Request } from 'express';
 
 /**
  * Protege rotas disparadas pelo cron da Vercel. Como o cron não é processo
@@ -23,8 +24,8 @@ export class CronSecretGuard implements CanActivate {
       throw new UnauthorizedException('CRON_SECRET não configurado');
     }
 
-    const request = context.switchToHttp().getRequest();
-    const authHeader: string | undefined = request.headers.authorization;
+    const request = context.switchToHttp().getRequest<Request>();
+    const authHeader = request.headers.authorization;
     if (!authHeader?.startsWith('Bearer ')) {
       throw new UnauthorizedException('Missing bearer token');
     }
