@@ -7,22 +7,7 @@ import {
   S3Client,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-
-/**
- * Só os tipos que o `WhatsAppClientService.downloadMedia` já deixa passar —
- * manter os dois em sincronia é o que impede uma chave sem extensão
- * reconhecível.
- */
-const MIME_EXTENSIONS: Record<string, string> = {
-  'image/jpeg': 'jpg',
-  'image/png': 'png',
-  'image/webp': 'webp',
-  'audio/ogg': 'ogg',
-  'audio/mpeg': 'mp3',
-  'audio/mp4': 'm4a',
-  'audio/aac': 'aac',
-  'audio/amr': 'amr',
-};
+import { extensionFor } from '../common/uploads';
 
 /**
  * Vida curta de propósito: o bucket é privado (comprovante de pagamento
@@ -40,7 +25,7 @@ export function buildMediaKey(
   conversationId: string,
   mimeType: string,
 ): string {
-  const ext = MIME_EXTENSIONS[mimeType] ?? 'bin';
+  const ext = extensionFor(mimeType);
   return `conversations/${conversationId}/${crypto.randomUUID()}.${ext}`;
 }
 

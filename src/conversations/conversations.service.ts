@@ -13,21 +13,12 @@ import {
   type MediaKind,
 } from '../whatsapp/whatsapp-client.service';
 
-/**
- * A forma mínima do arquivo que o multer entrega (imagem ou áudio). Declarada aqui em vez de
- * depender de `@types/multer`, que o projeto não instala — só estes três
- * campos são usados.
- */
-export interface UploadedImage {
-  buffer: Buffer;
-  mimetype: string;
-  size: number;
-}
 import { ListConversationsDto } from './dto/list-conversations.dto';
 import { isForeignKeyViolation } from '../common/prisma-errors';
 import { BOT_ACTIVE_RESET } from './conversation-state';
 import { pageBounds, paginated } from '../common/pagination';
 import { toMoneyOrNull } from '../common/money';
+import { formatMegabytes, type UploadedFileData } from '../common/uploads';
 import {
   ListMessagesDto,
   DEFAULT_MESSAGES_LIMIT,
@@ -270,14 +261,14 @@ export class ConversationsService {
    */
   async replyImage(
     id: string,
-    file: UploadedImage,
+    file: UploadedFileData,
     options: { caption?: string; replyToMessageId?: string },
   ) {
     const mimeType = this.assertUploadable(
       file,
       'image',
       'Só é possível enviar imagem JPEG, PNG ou WebP.',
-      'A imagem excede o limite de 5 MB.',
+      'A imagem excede o limite de',
     );
     const conversation = await this.findRepliable(id);
 
@@ -299,14 +290,14 @@ export class ConversationsService {
    */
   async replyAudio(
     id: string,
-    file: UploadedImage,
+    file: UploadedFileData,
     options: { replyToMessageId?: string },
   ) {
     const mimeType = this.assertUploadable(
       file,
       'audio',
       'Só é possível enviar áudio OGG (opus), MP3, M4A, AAC ou AMR.',
-      'O áudio excede o limite de 16 MB.',
+      'O áudio excede o limite de',
     );
     const conversation = await this.findRepliable(id);
 
@@ -323,10 +314,11 @@ export class ConversationsService {
    * recebem.
    */
   private assertUploadable(
-    file: UploadedImage,
+    file: UploadedFileData,
     kind: MediaKind,
     unsupportedMessage: string,
-    tooLargeMessage: string,
+    /** O começo da frase; o teto em MB sai do próprio `maxBytes`. */
+    tooLargePrefix: string,
   ): string {
     const rules = MEDIA_RULES[kind];
     const mimeType = baseMimeType(file.mimetype);
@@ -337,7 +329,9 @@ export class ConversationsService {
       throw new BadRequestException('Arquivo vazio.');
     }
     if (file.size > rules.maxBytes) {
-      throw new BadRequestException(tooLargeMessage);
+      throw new BadRequestException(
+        `${tooLargePrefix} ${formatMegabytes(rules.maxBytes)}.`,
+      );
     }
     return mimeType;
   }

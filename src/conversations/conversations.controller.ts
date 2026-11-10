@@ -21,7 +21,7 @@ import { ConversationsService } from './conversations.service';
 import { ReplyDto } from './dto/reply.dto';
 import { ReplyImageDto } from './dto/reply-image.dto';
 import { ReplyAudioDto } from './dto/reply-audio.dto';
-import type { UploadedImage } from './conversations.service';
+import type { UploadedFileData } from '../common/uploads';
 import { UpdateConversationDto } from './dto/update-conversation.dto';
 import { ListConversationsDto } from './dto/list-conversations.dto';
 import { ListMessagesDto } from './dto/list-messages.dto';
@@ -101,7 +101,7 @@ export class ConversationsController {
   )
   replyImage(
     @Param('id') id: string,
-    @UploadedFile() file: UploadedImage,
+    @UploadedFile() file: UploadedFileData,
     @Body() dto: ReplyImageDto,
   ) {
     return this.service.replyImage(id, file, {
@@ -133,7 +133,7 @@ export class ConversationsController {
   )
   replyAudio(
     @Param('id') id: string,
-    @UploadedFile() file: UploadedImage,
+    @UploadedFile() file: UploadedFileData,
     @Body() dto: ReplyAudioDto,
   ) {
     return this.service.replyAudio(id, file, {

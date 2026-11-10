@@ -1,13 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import * as crypto from 'crypto';
 import { del, put } from '@vercel/blob';
-
-/** Os únicos tipos que o upload de foto do admin aceita (ver `ProductsController`). */
-const IMAGE_EXTENSIONS: Record<string, string> = {
-  'image/jpeg': 'jpg',
-  'image/png': 'png',
-  'image/webp': 'webp',
-};
+import { extensionFor } from '../common/uploads';
 
 /**
  * Fotos públicas do site (catálogo, e depois a agenda) no Vercel Blob.
@@ -19,7 +13,7 @@ const IMAGE_EXTENSIONS: Record<string, string> = {
 @Injectable()
 export class BlobStorageService {
   async uploadProductImage(buffer: Buffer, mimeType: string): Promise<string> {
-    const ext = IMAGE_EXTENSIONS[mimeType] ?? 'bin';
+    const ext = extensionFor(mimeType);
     const { url } = await put(
       `products/${crypto.randomUUID()}.${ext}`,
       buffer,

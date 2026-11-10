@@ -8,6 +8,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { BlobStorageService } from '../media/blob-storage.service';
 import { pageBounds, paginated } from '../common/pagination';
 import { uniqueSlug } from '../common/slug';
+import type { UploadedFileData } from '../common/uploads';
 import { toDecimal, toMoney } from '../common/money';
 import {
   isForeignKeyViolation,
@@ -23,11 +24,8 @@ import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { ListProductsDto } from './dto/list-products.dto';
 
-/** O que o Multer entrega por foto — só o que o upload usa. */
-export interface UploadedPhoto {
-  buffer: Buffer;
-  mimetype: string;
-}
+/** O que o upload de foto usa do arquivo do Multer. */
+export type UploadedPhoto = Pick<UploadedFileData, 'buffer' | 'mimetype'>;
 
 /** O contrato público, igual a `src/features/site/types/catalog.ts` no site. */
 export interface ProductPublic {

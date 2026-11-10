@@ -1,4 +1,10 @@
 import { Injectable } from '@nestjs/common';
+import {
+  IMAGE_MIME_TYPES,
+  WHATSAPP_AUDIO_MAX_BYTES,
+  WHATSAPP_AUDIO_MIME_TYPES,
+  WHATSAPP_IMAGE_MAX_BYTES,
+} from '../common/uploads';
 
 interface WhatsAppSendResponse {
   messaging_product?: string;
@@ -10,30 +16,17 @@ export type MediaKind = 'image' | 'audio';
 
 /**
  * Só o que sabemos armazenar e exibir, por tipo de mídia. Vale nos dois
- * sentidos: o que o cliente manda e o que o operador envia de volta.
- *
- * Os tetos são os da própria Meta (5 MB imagem, 16 MB áudio), repetidos aqui
- * para não depender dela. Os tipos de áudio são exatamente os que a Cloud API
- * aceita no envio — `audio/webm`, que é o que o Chrome grava por padrão,
- * **não** está entre eles, e a Meta recusaria o upload.
+ * sentidos: o que o cliente manda e o que o operador envia de volta. Tipos e
+ * tetos (os da Meta) moram em `common/uploads.ts`.
  */
 export const MEDIA_RULES: Record<
   MediaKind,
   { mimeTypes: string[]; maxBytes: number }
 > = {
-  image: {
-    mimeTypes: ['image/jpeg', 'image/png', 'image/webp'],
-    maxBytes: 5 * 1024 * 1024,
-  },
+  image: { mimeTypes: IMAGE_MIME_TYPES, maxBytes: WHATSAPP_IMAGE_MAX_BYTES },
   audio: {
-    mimeTypes: [
-      'audio/ogg',
-      'audio/mpeg',
-      'audio/mp4',
-      'audio/aac',
-      'audio/amr',
-    ],
-    maxBytes: 16 * 1024 * 1024,
+    mimeTypes: WHATSAPP_AUDIO_MIME_TYPES,
+    maxBytes: WHATSAPP_AUDIO_MAX_BYTES,
   },
 };
 

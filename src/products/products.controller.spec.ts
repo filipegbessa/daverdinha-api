@@ -1,11 +1,10 @@
 import { Test } from '@nestjs/testing';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { imageFileFilter, ProductsController } from './products.controller';
 import {
-  ALLOWED_IMAGE_MIMETYPES,
-  imageFileFilter,
-  MAX_IMAGE_BYTES,
-  ProductsController,
-} from './products.controller';
+  IMAGE_MIME_TYPES as ALLOWED_IMAGE_MIMETYPES,
+  SITE_IMAGE_MAX_BYTES as MAX_IMAGE_BYTES,
+} from '../common/uploads';
 import { PublicProductsController } from './public-products.controller';
 import { ProductsService } from './products.service';
 

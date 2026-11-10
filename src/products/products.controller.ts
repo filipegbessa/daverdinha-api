@@ -17,18 +17,16 @@ import {
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiBody, ApiConsumes, ApiTags } from '@nestjs/swagger';
 import { ClerkAuthGuard } from '../common/auth/clerk-auth.guard';
-import { ProductsService } from './products.service';
-import type { UploadedPhoto } from './products.service';
+import { ProductsService, type UploadedPhoto } from './products.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { ListProductsDto } from './dto/list-products.dto';
+import {
+  IMAGE_MIME_TYPES,
+  SITE_IMAGE_MAX_BYTES,
+  formatMegabytes,
+} from '../common/uploads';
 
-export const ALLOWED_IMAGE_MIMETYPES = [
-  'image/jpeg',
-  'image/png',
-  'image/webp',
-];
-export const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 export const MAX_IMAGES = 6;
 
 /** Recusa o arquivo errado com 400 antes de qualquer upload pro Blob. */
@@ -37,14 +35,14 @@ export function imageFileFilter(
   file: { mimetype: string },
   cb: (error: Error | null, accept: boolean) => void,
 ): void {
-  if (ALLOWED_IMAGE_MIMETYPES.includes(file.mimetype)) return cb(null, true);
+  if (IMAGE_MIME_TYPES.includes(file.mimetype)) return cb(null, true);
   cb(new BadRequestException('A foto precisa ser JPEG, PNG ou WebP.'), false);
 }
 
 // O teto de tamanho fica no Multer, que corta a leitura ao cruzar o limite
 // (413): uma foto enorme nem chega a ocupar a memória da função.
 const photosInterceptor = FilesInterceptor('images', MAX_IMAGES, {
-  limits: { fileSize: MAX_IMAGE_BYTES },
+  limits: { fileSize: SITE_IMAGE_MAX_BYTES },
   fileFilter: imageFileFilter,
 });
 
@@ -61,10 +59,30 @@ const productFormSchema = (required: string[]) => ({
       categoryId: { type: 'string', format: 'uuid' },
       order: { type: 'integer' },
       active: { type: 'boolean' },
+      featured: {
+        type: 'boolean',
+        description:
+          'Aparece na vitrine da home e nas listas das páginas internas.',
+      },
+      stock: {
+        type: 'integer',
+        minimum: 0,
+        nullable: true,
+        description:
+          'Com número: pronta entrega (0 = esgotado). Vazio: sob encomenda.',
+      },
+      leadTimeDays: {
+        type: 'integer',
+        minimum: 1,
+        maximum: 180,
+        nullable: true,
+        description:
+          'Prazo de confecção em dias; obrigatório quando o produto é sob encomenda.',
+      },
       images: {
         type: 'array',
         items: { type: 'string', format: 'binary' },
-        description: `Até ${MAX_IMAGES} fotos (JPEG, PNG ou WebP, até 5 MB cada). A primeira é a capa. No PATCH, mandar fotos substitui todas.`,
+        description: `Até ${MAX_IMAGES} fotos (JPEG, PNG ou WebP, até ${formatMegabytes(SITE_IMAGE_MAX_BYTES)} cada). A primeira é a capa. No PATCH, mandar fotos substitui todas.`,
       },
     },
   },
