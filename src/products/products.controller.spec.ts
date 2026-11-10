@@ -7,6 +7,7 @@ import {
 } from '../common/uploads';
 import { PublicProductsController } from './public-products.controller';
 import { ProductsService } from './products.service';
+import { ClerkAuthGuard } from '../common/auth/clerk-auth.guard';
 
 describe('products controllers', () => {
   let admin: ProductsController;
@@ -96,5 +97,11 @@ describe('products controllers', () => {
         Reflect.getMetadata('__guards__', PublicProductsController) ?? [],
       ).toHaveLength(0);
     });
+  });
+
+  it('fica atrás do Clerk: o admin de produtos grava e apaga', () => {
+    expect(Reflect.getMetadata('__guards__', ProductsController)).toEqual([
+      ClerkAuthGuard,
+    ]);
   });
 });

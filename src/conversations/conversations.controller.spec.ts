@@ -2,6 +2,7 @@ import { Test } from '@nestjs/testing';
 import { ConversationsController } from './conversations.controller';
 import { ConversationsService } from './conversations.service';
 import { ReplyDto } from './dto/reply.dto';
+import { ClerkAuthGuard } from '../common/auth/clerk-auth.guard';
 
 describe('ConversationsController', () => {
   let controller: ConversationsController;
@@ -100,5 +101,11 @@ describe('ConversationsController', () => {
     expect(service.replyAudio).toHaveBeenCalledWith('conv1', file, {
       replyToMessageId: 'msg9',
     });
+  });
+
+  it('fica atrás do Clerk: conversas têm telefone e mensagens de clientes', () => {
+    expect(Reflect.getMetadata('__guards__', ConversationsController)).toEqual([
+      ClerkAuthGuard,
+    ]);
   });
 });

@@ -1,6 +1,7 @@
 import { Test } from '@nestjs/testing';
 import { CategoriesController } from './categories.controller';
 import { CategoriesService } from './categories.service';
+import { ClerkAuthGuard } from '../common/auth/clerk-auth.guard';
 
 describe('CategoriesController', () => {
   let controller: CategoriesController;
@@ -47,5 +48,11 @@ describe('CategoriesController', () => {
   it('remove() forwards the id', () => {
     controller.remove('cat1');
     expect(service.remove).toHaveBeenCalledWith('cat1');
+  });
+
+  it('fica atrás do Clerk: marcadores são do admin', () => {
+    expect(Reflect.getMetadata('__guards__', CategoriesController)).toEqual([
+      ClerkAuthGuard,
+    ]);
   });
 });

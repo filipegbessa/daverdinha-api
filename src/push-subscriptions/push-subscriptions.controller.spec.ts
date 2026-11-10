@@ -1,6 +1,7 @@
 import { Test } from '@nestjs/testing';
 import { PushSubscriptionsController } from './push-subscriptions.controller';
 import { PushSubscriptionsService } from './push-subscriptions.service';
+import { ClerkAuthGuard } from '../common/auth/clerk-auth.guard';
 
 describe('PushSubscriptionsController', () => {
   let controller: PushSubscriptionsController;
@@ -18,7 +19,10 @@ describe('PushSubscriptionsController', () => {
   });
 
   it('save() reads the Clerk user id off request.auth.sub and forwards the body to the service', () => {
-    const dto = { endpoint: 'https://fcm.googleapis.com/send/xyz', keys: { p256dh: 'a', auth: 'b' } };
+    const dto = {
+      endpoint: 'https://fcm.googleapis.com/send/xyz',
+      keys: { p256dh: 'a', auth: 'b' },
+    };
     const req = { auth: { sub: 'user_abc123' } } as any;
 
     controller.save(req, dto);
@@ -29,6 +33,14 @@ describe('PushSubscriptionsController', () => {
   it('remove() forwards the endpoint to the service', () => {
     controller.remove({ endpoint: 'https://fcm.googleapis.com/send/xyz' });
 
-    expect(service.remove).toHaveBeenCalledWith('https://fcm.googleapis.com/send/xyz');
+    expect(service.remove).toHaveBeenCalledWith(
+      'https://fcm.googleapis.com/send/xyz',
+    );
+  });
+
+  it('fica atrás do Clerk: o save lê o usuário de req.auth, que só o guard preenche', () => {
+    expect(
+      Reflect.getMetadata('__guards__', PushSubscriptionsController),
+    ).toEqual([ClerkAuthGuard]);
   });
 });
