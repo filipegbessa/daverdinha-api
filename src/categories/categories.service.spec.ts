@@ -52,6 +52,7 @@ describe('CategoriesService', () => {
     const result = await service.list();
 
     expect(prisma.category.findMany).toHaveBeenCalledWith({
+      where: {},
       orderBy: { name: 'asc' },
       skip: 0,
       take: 20,
@@ -96,6 +97,18 @@ describe('CategoriesService', () => {
       total: 25,
       totalPages: 3,
     });
+  });
+
+  it('list() filtra pelo nome no banco, sem diferenciar maiúsculas, e conta só o filtrado', async () => {
+    prisma.category.findMany.mockResolvedValue([]);
+
+    await service.list({ q: 'bin' });
+
+    const where = { name: { contains: 'bin', mode: 'insensitive' } };
+    expect(prisma.category.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where }),
+    );
+    expect(prisma.category.count).toHaveBeenCalledWith({ where });
   });
 
   it('create() forwards the dto to Prisma', async () => {
