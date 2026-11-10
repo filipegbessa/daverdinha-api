@@ -275,7 +275,13 @@ export default async () => {
           m18,
           {
             UpdateConversationDto: {
-              name: { required: true, type: () => String },
+              name: {
+                required: true,
+                type: () => String,
+                nullable: true,
+                description:
+                  'Nome do contato no admin. Vazio (ou s\u00F3 espa\u00E7o) apaga o nome (`null`), e a\nconversa volta a aparecer pelo telefone; com nome, ele \u00E9 o principal e o\ntelefone vira secund\u00E1rio.',
+              },
             },
           },
         ],

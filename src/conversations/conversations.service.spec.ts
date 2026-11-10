@@ -753,6 +753,17 @@ describe('ConversationsService', () => {
         data: { name: 'Maria' },
       });
     });
+
+    it('clears the name with null', async () => {
+      prisma.conversation.findUnique.mockResolvedValue({ id: 'c1' });
+
+      await service.updateName('c1', null);
+
+      expect(prisma.conversation.update).toHaveBeenCalledWith({
+        where: { id: 'c1' },
+        data: { name: null },
+      });
+    });
   });
 
   describe('conversa inexistente', () => {

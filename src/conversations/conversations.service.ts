@@ -396,7 +396,8 @@ export class ConversationsService {
     });
   }
 
-  async updateName(id: string, name: string) {
+  /** `null` apaga o nome: a conversa volta a aparecer pelo telefone. */
+  async updateName(id: string, name: string | null) {
     await this.findRow(id);
     return this.prisma.conversation.update({ where: { id }, data: { name } });
   }
