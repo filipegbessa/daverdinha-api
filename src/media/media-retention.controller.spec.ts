@@ -39,10 +39,10 @@ describe('MediaRetentionController', () => {
   });
 
   // BigInt cru quebraria JSON.stringify na resposta HTTP.
-  it('serializes mediaBytesUsed as a string, not a raw bigint', async () => {
+  it('serializes mediaBytesUsed as a number, like GET /bot-settings, not a raw bigint', async () => {
     const result = await controller.run();
 
-    expect(result).toEqual({ purged: 3, mediaBytesUsed: '123456789' });
-    expect(typeof result.mediaBytesUsed).toBe('string');
+    expect(result).toEqual({ purged: 3, mediaBytesUsed: 123456789 });
+    expect(typeof result.mediaBytesUsed).toBe('number');
   });
 });

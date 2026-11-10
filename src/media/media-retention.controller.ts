@@ -22,9 +22,10 @@ export class MediaRetentionController {
   async run() {
     const purge = await this.retention.purgeExpired();
     const reconcile = await this.retention.reconcileUsage();
+    // `number`, como no `GET /bot-settings`: 8 GB cabem com folga num `number`.
     return {
       purged: purge.purged,
-      mediaBytesUsed: reconcile.mediaBytesUsed.toString(),
+      mediaBytesUsed: Number(reconcile.mediaBytesUsed),
     };
   }
 }
