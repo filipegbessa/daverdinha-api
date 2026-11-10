@@ -32,6 +32,10 @@ async function seedDeliveryLocations() {
   for (const { regiao, bairro } of bairros) {
     const location = await prisma.deliveryLocation.upsert({
       where: { regionName: bairro },
+      // De propósito, a exceção ao `update: {}` do resto do seed: a zona vem
+      // do arquivo oficial e o admin não a edita (só liga e desliga
+      // `covered`), então reaplicar mantém a zona em dia com o arquivo sem
+      // desfazer nada que a dona tenha mexido. `covered` nunca é tocado aqui.
       update: { zone: regiao },
       create: {
         zone: regiao,
@@ -189,7 +193,8 @@ const PRODUCTS = [
     category: 'kits',
     price: '89.00',
     featured: true,
-    description: 'Musgo, substrato, barbante e uma muda pra fazer sua kokedama.',
+    description:
+      'Musgo, substrato, barbante e uma muda pra fazer sua kokedama.',
   },
   {
     name: 'Arranjo de Mesa',
@@ -429,7 +434,11 @@ const CONVERSATIONS: SeedConversation[] = [
     unread: true,
     categories: ['Dúvida'],
     messages: [
-      { direction: 'inbound', body: 'Oi, vocês entregam no Leblon?', whatsappMessageId: 'wamid.seed.marina.1' },
+      {
+        direction: 'inbound',
+        body: 'Oi, vocês entregam no Leblon?',
+        whatsappMessageId: 'wamid.seed.marina.1',
+      },
       {
         direction: 'outbound',
         body: 'Oi! Que bom te ver por aqui 🌱 Bem-vinda(o) à Daverdinha — um espaço pra plantar, criar e brindar. Como posso te ajudar hoje?',
@@ -528,7 +537,10 @@ async function seedConversations() {
       let repliedToId: string | undefined;
 
       // If this message replies to another, look up the repliedToId
-      if (message.repliedToWamid && messagesByWamid.has(message.repliedToWamid)) {
+      if (
+        message.repliedToWamid &&
+        messagesByWamid.has(message.repliedToWamid)
+      ) {
         repliedToId = messagesByWamid.get(message.repliedToWamid);
       }
 
@@ -559,6 +571,70 @@ async function seedConversations() {
   }
 }
 
+/**
+ * Um pedido do catálogo do WhatsApp na conversa do João (que entrou pelo
+ * catálogo), pra a tela de pedido na thread aparecer no ambiente local.
+ * Chave natural: o `whatsappMessageId` da mensagem e o `messageId` do pedido
+ * (único); `update: {}` nos dois, então rodar de novo não duplica nem
+ * sobrescreve. Os itens nascem junto com o pedido.
+ */
+const WHATSAPP_ORDER = {
+  phone: '5521999990002',
+  whatsappMessageId: 'wamid.seed.joao.order',
+  catalogId: 'seed-catalog',
+  items: [
+    {
+      productRetailerId: 'vaso-ceramica-m',
+      productName: 'Vaso de cerâmica M',
+      quantity: 2,
+      unitPrice: '35.00',
+      currency: 'BRL',
+    },
+    {
+      productRetailerId: 'terrario-pequeno',
+      productName: 'Terrário pequeno',
+      quantity: 1,
+      unitPrice: '89.90',
+      currency: 'BRL',
+    },
+  ],
+};
+
+async function seedWhatsAppOrder() {
+  const conversation = await prisma.conversation.findFirst({
+    where: { phone: WHATSAPP_ORDER.phone },
+    include: { messages: { orderBy: { createdAt: 'asc' }, take: 1 } },
+  });
+  if (!conversation) return;
+
+  // Um dia antes da primeira mensagem: o pedido abre a conversa, e a
+  // reclamação que já está no seed vem depois dele.
+  const firstAt = conversation.messages[0]?.createdAt ?? new Date();
+  const message = await prisma.message.upsert({
+    where: { whatsappMessageId: WHATSAPP_ORDER.whatsappMessageId },
+    update: {},
+    create: {
+      conversationId: conversation.id,
+      direction: 'inbound',
+      kind: 'order',
+      body: null,
+      whatsappMessageId: WHATSAPP_ORDER.whatsappMessageId,
+      createdAt: new Date(firstAt.getTime() - 24 * 60 * 60 * 1000),
+    },
+  });
+
+  await prisma.order.upsert({
+    where: { messageId: message.id },
+    update: {},
+    create: {
+      conversationId: conversation.id,
+      messageId: message.id,
+      catalogId: WHATSAPP_ORDER.catalogId,
+      items: { create: WHATSAPP_ORDER.items },
+    },
+  });
+}
+
 async function main() {
   await prisma.botSettings.upsert({
     where: { id: 1 },
@@ -579,6 +655,7 @@ async function main() {
   await seedDeliveryLocations();
   await seedCategories();
   await seedConversations();
+  await seedWhatsAppOrder();
   await seedCatalog();
   await seedStoreSettings();
   await seedDeliveryAreas();
