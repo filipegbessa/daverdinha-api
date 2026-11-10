@@ -26,7 +26,10 @@ export class ProductCategoriesService {
   list() {
     return this.prisma.productCategory.findMany({
       orderBy: ORDER,
-      include: { _count: { select: { products: true } } },
+      // Produto removido (arquivado) não conta: o admin não mostra mais ele.
+      include: {
+        _count: { select: { products: { where: { archivedAt: null } } } },
+      },
     });
   }
 
@@ -62,12 +65,24 @@ export class ProductCategoriesService {
       await this.prisma.productCategory.delete({ where: { id } });
     } catch (error) {
       if (isForeignKeyViolation(error)) {
-        throw new ConflictException(
-          'Não é possível excluir uma categoria com produtos cadastrados.',
-        );
+        throw new ConflictException(await this.blockedRemovalMessage(id));
       }
       throw error;
     }
+  }
+
+  /**
+   * Produto removido continua ligado à categoria (pedidos antigos apontam pra
+   * ele), então ela não pode ser apagada; o admin não mostra esses produtos,
+   * e a mensagem explica por que a categoria "vazia" não sai.
+   */
+  private async blockedRemovalMessage(id: string): Promise<string> {
+    const live = await this.prisma.product.count({
+      where: { categoryId: id, archivedAt: null },
+    });
+    return live > 0
+      ? 'Não é possível excluir uma categoria com produtos cadastrados.'
+      : 'Essa categoria tem produtos removidos que aparecem em pedidos antigos, por isso não pode ser excluída. Para escondê-la do site, desligue "Aparece no site".';
   }
 
   /**

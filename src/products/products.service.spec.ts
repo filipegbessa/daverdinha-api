@@ -21,6 +21,7 @@ function row(overrides: Record<string, unknown> = {}) {
     order: 0,
     stock: null as number | null,
     leadTimeDays: 10 as number | null,
+    archivedAt: null as Date | null,
     createdAt: new Date(),
     updatedAt: new Date(),
     ...overrides,
@@ -163,15 +164,37 @@ describe('ProductsService', () => {
     });
   });
 
-  it('remove() deletes the stored photos and the row', async () => {
-    prisma.product.findUnique.mockResolvedValue(
-      row({ images: ['https://blob/a', 'https://blob/b'] }),
-    );
+  describe('remove', () => {
+    it('archives the product, keeping the row and photos for old orders', async () => {
+      prisma.product.findUnique.mockResolvedValue(
+        row({ images: ['https://blob/a'] }),
+      );
 
-    await service.remove('p1');
+      await service.remove('p1');
 
-    expect(blob.deleteImage).toHaveBeenCalledTimes(2);
-    expect(prisma.product.delete).toHaveBeenCalledWith({ where: { id: 'p1' } });
+      expect(prisma.product.update).toHaveBeenCalledWith({
+        where: { id: 'p1' },
+        data: { archivedAt: expect.any(Date), active: false, featured: false },
+      });
+      expect(prisma.product.delete).not.toHaveBeenCalled();
+      expect(blob.deleteImage).not.toHaveBeenCalled();
+    });
+
+    it('treats a removed product as gone', async () => {
+      prisma.product.findUnique.mockResolvedValue(
+        row({ archivedAt: new Date() }),
+      );
+
+      await expect(service.remove('p1')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+      await expect(service.findOne('p1')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+      await expect(service.update('p1', {})).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+    });
   });
 
   describe('list', () => {
@@ -179,9 +202,9 @@ describe('ProductsService', () => {
       await service.list({ page: 2, perPage: 10 });
 
       expect(prisma.product.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ where: {}, skip: 10, take: 10 }),
+        expect.objectContaining({ where: { archivedAt: null }, skip: 10, take: 10 }),
       );
-      expect(prisma.product.count).toHaveBeenCalledWith({ where: {} });
+      expect(prisma.product.count).toHaveBeenCalledWith({ where: { archivedAt: null } });
     });
 
     it('combines name search, category, active and featured, and counts with the same filter', async () => {
@@ -193,6 +216,7 @@ describe('ProductsService', () => {
       });
 
       const where = {
+        archivedAt: null,
         name: { contains: 'vaso', mode: 'insensitive' },
         categoryId: 'c1',
         active: false,
@@ -208,7 +232,7 @@ describe('ProductsService', () => {
       await service.list({ q: '   ' });
 
       expect(prisma.product.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ where: {} }),
+        expect.objectContaining({ where: { archivedAt: null } }),
       );
     });
   });
@@ -223,7 +247,7 @@ describe('ProductsService', () => {
 
       expect(prisma.product.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { active: true, category: { active: true } },
+          where: { active: true, archivedAt: null, category: { active: true } },
           orderBy: [{ order: 'asc' }, { name: 'asc' }],
         }),
       );
@@ -234,7 +258,7 @@ describe('ProductsService', () => {
 
       expect(prisma.product.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { active: true, category: { active: true, slug: 'vasos' } },
+          where: { active: true, archivedAt: null, category: { active: true, slug: 'vasos' } },
         }),
       );
     });
@@ -244,7 +268,7 @@ describe('ProductsService', () => {
 
       expect(prisma.product.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { active: true, featured: true, category: { active: true } },
+          where: { active: true, archivedAt: null, featured: true, category: { active: true } },
         }),
       );
     });
@@ -383,7 +407,7 @@ describe('ProductsService', () => {
 
       expect(prisma.product.findFirst).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { slug: 'x', active: true, category: { active: true } },
+          where: { slug: 'x', active: true, archivedAt: null, category: { active: true } },
         }),
       );
     });

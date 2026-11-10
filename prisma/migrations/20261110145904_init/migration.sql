@@ -216,6 +216,7 @@ CREATE TABLE "products" (
     "order" INTEGER NOT NULL DEFAULT 0,
     "stock" INTEGER,
     "lead_time_days" INTEGER,
+    "archived_at" TIMESTAMP(3),
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
 
@@ -395,3 +396,4 @@ ALTER TABLE "site_order_items" ADD CONSTRAINT "site_order_items_order_id_fkey" F
 
 -- AddForeignKey
 ALTER TABLE "site_order_items" ADD CONSTRAINT "site_order_items_product_id_fkey" FOREIGN KEY ("product_id") REFERENCES "products"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+

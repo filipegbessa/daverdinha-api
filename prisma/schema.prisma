@@ -290,6 +290,9 @@ model Product {
   /// guardado ao voltar pra pronta entrega, pra reaparecer se mudar de novo.
   leadTimeDays Int?            @map("lead_time_days")
   orderItems   SiteOrderItem[]
+  /// Removido no admin: some do site e do admin, mas a linha (e as fotos)
+  /// fica pra os pedidos antigos continuarem apontando pro produto.
+  archivedAt   DateTime?       @map("archived_at")
   createdAt    DateTime        @default(now()) @map("created_at")
   updatedAt    DateTime        @updatedAt @map("updated_at")
 

@@ -9,7 +9,10 @@ function prismaError(code: string, target?: string[]) {
 
 describe('ProductCategoriesService', () => {
   let service: ProductCategoriesService;
-  let prisma: { productCategory: Record<string, jest.Mock> };
+  let prisma: {
+    productCategory: Record<string, jest.Mock>;
+    product: { count: jest.Mock };
+  };
 
   beforeEach(async () => {
     prisma = {
@@ -20,6 +23,7 @@ describe('ProductCategoriesService', () => {
         update: jest.fn(),
         delete: jest.fn(),
       },
+      product: { count: jest.fn().mockResolvedValue(1) },
     };
 
     const moduleRef = await Test.createTestingModule({
@@ -32,11 +36,14 @@ describe('ProductCategoriesService', () => {
     service = moduleRef.get(ProductCategoriesService);
   });
 
-  it('lists ordered by order then name', async () => {
+  it('lists ordered by order then name, counting only products not removed', async () => {
     await service.list();
     expect(prisma.productCategory.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         orderBy: [{ order: 'asc' }, { name: 'asc' }],
+        include: {
+          _count: { select: { products: { where: { archivedAt: null } } } },
+        },
       }),
     );
   });
@@ -97,6 +104,16 @@ describe('ProductCategoriesService', () => {
     await expect(service.remove('c1')).rejects.toThrow(
       'Não é possível excluir uma categoria com produtos cadastrados.',
     );
+  });
+
+  it('explains the block when only removed products are left in the category', async () => {
+    prisma.productCategory.delete.mockRejectedValue(prismaError('P2003'));
+    prisma.product.count.mockResolvedValue(0);
+
+    await expect(service.remove('c1')).rejects.toThrow(/produtos removidos/);
+    expect(prisma.product.count).toHaveBeenCalledWith({
+      where: { categoryId: 'c1', archivedAt: null },
+    });
   });
 
   describe('listActive', () => {

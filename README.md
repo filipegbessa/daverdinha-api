@@ -262,7 +262,8 @@ Produtos e categorias que a cliente cadastra no admin e o site mostra em `/produ
 - **Slug** é gerado do nome na criação (`src/common/slug.ts`, com `-2`, `-3`… em colisão) e **nunca** muda ao renomear: é a URL no site. O slug de produto é único no catálogo inteiro. O site aninha a URL na categoria e redireciona quando ela muda.
 - **Preço** é `Decimal` no banco e sai sempre como `number` no JSON. O `Decimal` do Prisma serializaria como string.
 - **Fotos** vão pro Vercel Blob (`BlobStorageService`, `BLOB_READ_WRITE_TOKEN`), públicas, não pro R2 privado das conversas. Uma falha ao gravar apaga as fotos recém-enviadas, e as antigas só saem depois que a linha nova está salva.
-- Apagar uma categoria que ainda tem produto responde **409**, porque a FK é `RESTRICT`.
+- **Remover produto** (`DELETE /products/:id`) **arquiva**, não apaga: grava `archivedAt`, desliga `active` e `featured` e mantém a linha e as fotos, pra os pedidos antigos continuarem ligados ao produto (e com a foto). Produto arquivado some de todas as listas, do site e do admin (`GET /products`, `GET /products/:id`, `PATCH` e um novo `DELETE` respondem 404), e não conta no `_count` das categorias. Não tem volta pelo admin. O slug continua ocupado.
+- Apagar uma categoria que ainda tem produto responde **409**, porque a FK é `RESTRICT`. Isso vale também pra produto arquivado: quando só sobram arquivados, a mensagem explica que a categoria tem produtos removidos em pedidos antigos e sugere desligar "Aparece no site".
 
 ## Loja online (módulos `checkout` e `site-orders`)
 

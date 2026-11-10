@@ -61,7 +61,11 @@ const WITH_CATEGORY = {
 const ORDER = [{ order: 'asc' as const }, { name: 'asc' as const }];
 
 /** Produto ativo de categoria ativa: tirar a categoria do ar tira os produtos dela junto. */
-const ACTIVE = { active: true, category: { active: true } } as const;
+const ACTIVE = {
+  active: true,
+  archivedAt: null,
+  category: { active: true },
+} as const;
 
 type ProductRow = Prisma.ProductGetPayload<{ include: typeof WITH_CATEGORY }>;
 
@@ -130,6 +134,7 @@ export class ProductsService {
     const { page, perPage, skip, take } = pageBounds(query);
     const search = query.q?.trim();
     const where: Prisma.ProductWhereInput = {
+      archivedAt: null,
       ...(search && { name: { contains: search, mode: 'insensitive' } }),
       ...(query.categoryId && { categoryId: query.categoryId }),
       ...(query.active !== undefined && { active: query.active }),
@@ -206,10 +211,18 @@ export class ProductsService {
     return this.withReservations(updated);
   }
 
+  /**
+   * "Remover" no admin arquiva em vez de apagar: o produto some do site e do
+   * admin, mas a linha e as fotos ficam, pra os pedidos antigos continuarem
+   * ligados a ele. Também sai do ar e do destaque, pra nenhuma consulta que
+   * esqueça o `archivedAt` mostrá-lo. Não tem volta pelo admin.
+   */
   async remove(id: string): Promise<void> {
-    const current = await this.findRow(id);
-    await this.prisma.product.delete({ where: { id } });
-    await this.deleteAll(current.images);
+    await this.findRow(id);
+    await this.prisma.product.update({
+      where: { id },
+      data: { archivedAt: new Date(), active: false, featured: false },
+    });
   }
 
   async listActive(
@@ -280,7 +293,9 @@ export class ProductsService {
       where: { id },
       include: WITH_CATEGORY,
     });
-    if (!row) throw new NotFoundException('Produto não encontrado.');
+    if (!row || row.archivedAt) {
+      throw new NotFoundException('Produto não encontrado.');
+    }
     return row;
   }
 
