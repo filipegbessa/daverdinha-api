@@ -42,6 +42,8 @@ CI (`.github/workflows/ci.yml`) runs `openapi:metadata` and fails on a diff in `
 
 **Pagination.** List endpoints use `src/common/pagination.ts` (`page`/`perPage`, `pageBounds()`, `paginated()`). **Any new list that can grow with use is paginated from day one** (and filterable on the server, e.g. `?q=` by name), because the admin pages it with `usePaginatedResource`. Only fixed or tiny sets return a bare array, on purpose: menu items, delivery locations, product categories. Say so in the service when a list is deliberately unpaginated. Message threads use cursors instead (`?before=` and an inclusive `?since=`, because the bot writes two messages in the same millisecond, and `id` breaks ties).
 
+**Errors.** A missing record is a 404 thrown by the service (a private `findRow()` with `NotFoundException('X não encontrado.')`), never a raw Prisma error, which would surface as a 500. Prisma error codes go through `src/common/prisma-errors.ts`. New code uses 409 (`ConflictException`) when the current state forbids the action, as `site-orders` does. The existing 400s in `conversations` stay, because the admin depends on them.
+
 **Phones** are stored normalized (`5521…`, no `+` or separators; see `src/common/format-phone.ts`), and conversation lookup by phone depends on it.
 
 ## Database migrations — production has real data
