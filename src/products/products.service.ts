@@ -8,6 +8,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { BlobStorageService } from '../media/blob-storage.service';
 import { pageBounds, paginated } from '../common/pagination';
 import { uniqueSlug } from '../common/slug';
+import { toDecimal, toMoney } from '../common/money';
 import {
   isForeignKeyViolation,
   isUniqueViolation,
@@ -72,10 +73,7 @@ type ProductRow = Prisma.ProductGetPayload<{ include: typeof WITH_CATEGORY }>;
 /** Unidades reservadas por pedidos pendentes, por produto (ver `reservedQuantities`). */
 type Reserved = Map<string, number>;
 
-/**
- * Único lugar que converte `price`: o `Decimal` do Prisma vira string no
- * JSON ("89.9"), e o site espera número. Toda leitura passa por aqui.
- */
+/** Toda leitura passa por aqui (e o `price` por `toMoney`, ver `common/money.ts`). */
 function toAdmin(row: ProductRow, reserved: Reserved): ProductAdmin {
   return {
     ...toPublic(row, reserved),
@@ -97,7 +95,7 @@ function toPublic(row: ProductRow, reserved: Reserved): ProductPublic {
     name: row.name,
     slug: row.slug,
     description: row.description,
-    price: new Prisma.Decimal(row.price).toNumber(),
+    price: toMoney(row.price),
     images: row.images,
     category: row.category,
     availability,
@@ -199,7 +197,11 @@ export class ProductsService {
     try {
       updated = await this.prisma.product.update({
         where: { id },
-        data: { ...dto, ...(images && { images }) },
+        data: {
+          ...dto,
+          ...(dto.price !== undefined && { price: toDecimal(dto.price) }),
+          ...(images && { images }),
+        },
         include: WITH_CATEGORY,
       });
     } catch (error) {
@@ -267,7 +269,7 @@ export class ProductsService {
     );
     try {
       return await this.prisma.product.create({
-        data: { ...dto, slug, images },
+        data: { ...dto, price: toDecimal(dto.price), slug, images },
         include: WITH_CATEGORY,
       });
     } catch (error) {

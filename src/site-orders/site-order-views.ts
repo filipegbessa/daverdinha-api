@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { formatOrderCode } from './order-code';
+import { toMoney } from '../common/money';
 import type { StoreSettings } from '../store-settings/store-settings.service';
 
 export type SiteOrderRow = Prisma.SiteOrderGetPayload<{
@@ -9,8 +10,6 @@ export type SiteOrderRow = Prisma.SiteOrderGetPayload<{
 export const WITH_ITEMS = {
   items: { orderBy: { productName: 'asc' } },
 } as const;
-
-const money = (value: Prisma.Decimal) => new Prisma.Decimal(value).toNumber();
 
 /**
  * O que a página pública do pedido (`/pedido/<token>`) mostra. Quem tem o
@@ -93,7 +92,7 @@ function items(row: SiteOrderRow) {
   return row.items.map((item) => ({
     name: item.productName,
     slug: item.productSlug,
-    unitPrice: money(item.unitPrice),
+    unitPrice: toMoney(item.unitPrice),
     quantity: item.quantity,
     imageUrl: item.imageUrl,
     leadTimeDays: item.leadTimeDays,
@@ -115,9 +114,9 @@ export function toPublicOrder(
     items: items(row),
     event: null,
     tickets: [],
-    subtotal: money(row.subtotal),
-    deliveryFee: money(row.deliveryFee),
-    total: money(row.total),
+    subtotal: toMoney(row.subtotal),
+    deliveryFee: toMoney(row.deliveryFee),
+    total: toMoney(row.total),
     deliveryMethod: row.deliveryMethod,
     bairro: row.bairro,
     pickup:
@@ -164,9 +163,9 @@ export function toAdminOrder(row: SiteOrderRow): SiteOrderAdmin {
       productId: row.items[index].productId,
       ...item,
     })),
-    subtotal: money(row.subtotal),
-    deliveryFee: money(row.deliveryFee),
-    total: money(row.total),
+    subtotal: toMoney(row.subtotal),
+    deliveryFee: toMoney(row.deliveryFee),
+    total: toMoney(row.total),
     payment: {
       linkId: row.gatewayLinkId,
       orderId: row.gatewayOrderId,

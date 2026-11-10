@@ -7,6 +7,7 @@ import {
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { isUniqueViolation } from '../common/prisma-errors';
+import { toDecimal, toMoney } from '../common/money';
 import { CreateDeliveryAreaDto } from './dto/create-delivery-area.dto';
 import { UpdateDeliveryAreaDto } from './dto/update-delivery-area.dto';
 
@@ -45,7 +46,7 @@ function toAdmin(row: AreaRow): DeliveryAreaAdmin {
     id: row.id,
     zone: row.zone,
     name: row.name,
-    fee: new Prisma.Decimal(row.fee).toNumber(),
+    fee: toMoney(row.fee),
     locations: row.locations,
   };
 }
@@ -109,7 +110,7 @@ export class DeliveryAreasService {
           data: {
             zone: dto.zone,
             name: dto.name,
-            fee: new Prisma.Decimal(dto.fee),
+            fee: toDecimal(dto.fee),
           },
           include: WITH_LOCATIONS,
         }),
@@ -130,7 +131,7 @@ export class DeliveryAreasService {
           where: { id },
           data: {
             ...(dto.name !== undefined && { name: dto.name }),
-            ...(dto.fee !== undefined && { fee: new Prisma.Decimal(dto.fee) }),
+            ...(dto.fee !== undefined && { fee: toDecimal(dto.fee) }),
           },
           include: WITH_LOCATIONS,
         }),

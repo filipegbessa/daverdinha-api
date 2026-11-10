@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { Test } from '@nestjs/testing';
 import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { ConversationsService } from './conversations.service';
@@ -250,6 +251,44 @@ describe('ConversationsService', () => {
 
       expect(result.hasMoreMessages).toBe(false);
       expect(result.messages).toEqual([{ id: 'm0' }]);
+    });
+  });
+
+  describe('preço do pedido do catálogo', () => {
+    const orderMessage = {
+      id: 'm1',
+      kind: 'order',
+      order: {
+        id: 'o1',
+        items: [
+          { id: 'i1', unitPrice: new Prisma.Decimal('35.00') },
+          { id: 'i2', unitPrice: null },
+        ],
+      },
+    };
+
+    it('getWithMessages() manda unitPrice como number (ou null), não Decimal', async () => {
+      prisma.conversation.findUnique.mockResolvedValue({
+        id: '1',
+        categories: [],
+        messages: [orderMessage, { id: 'm0', order: null }],
+      });
+
+      const result = await service.getWithMessages('1');
+
+      const items = result.messages[1].order?.items;
+      expect(items?.map((i) => i.unitPrice)).toEqual([35, null]);
+      expect(result.messages[0]).toEqual({ id: 'm0', order: null });
+    });
+
+    it('listMessages() também converte, nos dois modos', async () => {
+      prisma.message.findMany.mockResolvedValue([orderMessage]);
+
+      const polled = await service.listMessages('c1', { since: new Date() });
+      const older = await service.listMessages('c1');
+
+      expect(polled[0].order?.items[0].unitPrice).toBe(35);
+      expect(older[0].order?.items[0].unitPrice).toBe(35);
     });
   });
 

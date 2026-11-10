@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma, StoreSettings as StoreSettingsRow } from '@prisma/client';
+import type { StoreSettings as StoreSettingsRow } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { toDecimal, toMoney } from '../common/money';
 import { UpdateStoreSettingsDto } from './dto/update-store-settings.dto';
 
 export interface StoreSettings {
@@ -36,7 +37,7 @@ function toSettings(row: StoreSettingsRow): StoreSettings {
     pickupHours: row.pickupHours,
     pickupInstructions: row.pickupInstructions,
     maxInstallments: row.maxInstallments,
-    minInstallmentValue: new Prisma.Decimal(row.minInstallmentValue).toNumber(),
+    minInstallmentValue: toMoney(row.minInstallmentValue),
     updatedAt: row.updatedAt,
   };
 }
@@ -64,7 +65,7 @@ export class StoreSettingsService {
         data: {
           ...rest,
           ...(minInstallmentValue !== undefined && {
-            minInstallmentValue: new Prisma.Decimal(minInstallmentValue),
+            minInstallmentValue: toDecimal(minInstallmentValue),
           }),
         },
       }),

@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { pageBounds, paginated } from '../common/pagination';
+import { toMoney } from '../common/money';
 import { PrismaService } from '../prisma/prisma.service';
 import { DeliveryLocationsService } from '../delivery-locations/delivery-locations.service';
 import { DeliveryAreasService } from '../delivery-locations/delivery-areas.service';
@@ -371,21 +372,21 @@ function toPublicQuote(details: QuoteDetails): CheckoutQuote {
       productId: line.product.id,
       name: line.product.name,
       slug: line.product.slug,
-      unitPrice: line.unitPrice.toNumber(),
+      unitPrice: toMoney(line.unitPrice),
       quantity: line.quantity,
-      lineTotal: line.lineTotal.toNumber(),
+      lineTotal: toMoney(line.lineTotal),
       imageUrl: line.product.images[0] ?? null,
       availability: line.product.stock === null ? 'made_to_order' : 'in_stock',
       leadTimeDays:
         line.product.stock === null ? line.product.leadTimeDays : null,
     })),
-    subtotal: details.subtotal.toNumber(),
+    subtotal: toMoney(details.subtotal),
     installments: details.installments,
     pickup: details.pickup,
     delivery: details.delivery.available
       ? {
           available: true,
-          fee: details.delivery.fee.toNumber(),
+          fee: toMoney(details.delivery.fee),
           bairro: details.delivery.bairro,
           area: details.delivery.area,
         }

@@ -27,6 +27,7 @@ import { ListConversationsDto } from './dto/list-conversations.dto';
 import { isForeignKeyViolation } from '../common/prisma-errors';
 import { BOT_ACTIVE_RESET } from './conversation-state';
 import { pageBounds, paginated } from '../common/pagination';
+import { toMoneyOrNull } from '../common/money';
 import {
   ListMessagesDto,
   DEFAULT_MESSAGES_LIMIT,
@@ -38,6 +39,26 @@ const MESSAGE_INCLUDE = {
   order: { include: { items: true } },
   repliedTo: { select: { id: true, kind: true, body: true, direction: true } },
 } as const;
+
+type MessageRow = Prisma.MessageGetPayload<{ include: typeof MESSAGE_INCLUDE }>;
+
+/**
+ * A mensagem como sai pro admin: igual à linha, com o `unitPrice` dos itens
+ * do pedido do catálogo em `number` (ou `null`), como todo preço da API.
+ */
+function toMessageView(message: MessageRow) {
+  if (!message.order) return message;
+  return {
+    ...message,
+    order: {
+      ...message.order,
+      items: message.order.items.map((item) => ({
+        ...item,
+        unitPrice: toMoneyOrNull(item.unitPrice),
+      })),
+    },
+  };
+}
 
 @Injectable()
 export class ConversationsService {
@@ -172,7 +193,7 @@ export class ConversationsService {
       categories: categories.map((c) => c.category),
       // Fetched newest-first so the database can stop at `take`; handed back
       // oldest-first because that's the order a transcript reads in.
-      messages: page.reverse(),
+      messages: page.reverse().map(toMessageView),
       hasMoreMessages,
     };
   }
@@ -186,12 +207,13 @@ export class ConversationsService {
     const limit = query.limit ?? DEFAULT_MESSAGES_LIMIT;
 
     if (query.since) {
-      return this.prisma.message.findMany({
+      const recent = await this.prisma.message.findMany({
         where: { conversationId, createdAt: { gte: query.since } },
         orderBy: { createdAt: 'asc' },
         take: limit,
         include: MESSAGE_INCLUDE,
       });
+      return recent.map(toMessageView);
     }
 
     const older = await this.prisma.message.findMany({
@@ -203,7 +225,7 @@ export class ConversationsService {
       take: limit,
       include: MESSAGE_INCLUDE,
     });
-    return older.reverse();
+    return older.reverse().map(toMessageView);
   }
 
   async addCategory(conversationId: string, categoryId: string): Promise<void> {
