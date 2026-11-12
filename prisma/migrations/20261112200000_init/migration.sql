@@ -291,6 +291,27 @@ CREATE TABLE "store_settings" (
     CONSTRAINT "store_settings_pkey" PRIMARY KEY ("id")
 );
 
+-- CreateTable
+CREATE TABLE "events" (
+    "id" TEXT NOT NULL,
+    "title" TEXT NOT NULL,
+    "slug" TEXT NOT NULL,
+    "description" TEXT NOT NULL,
+    "starts_at" TIMESTAMP(3) NOT NULL,
+    "ends_at" TIMESTAMP(3) NOT NULL,
+    "location_name" TEXT,
+    "location_address" TEXT,
+    "price" DECIMAL(10,2),
+    "spots" INTEGER,
+    "image_url" TEXT,
+    "cta_url" TEXT,
+    "published" BOOLEAN NOT NULL DEFAULT false,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "events_pkey" PRIMARY KEY ("id")
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "delivery_locations_region_name_key" ON "delivery_locations"("region_name");
 
@@ -362,6 +383,12 @@ CREATE INDEX "site_order_items_order_id_idx" ON "site_order_items"("order_id");
 
 -- CreateIndex
 CREATE INDEX "site_order_items_product_id_idx" ON "site_order_items"("product_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "events_slug_key" ON "events"("slug");
+
+-- CreateIndex
+CREATE INDEX "events_published_ends_at_idx" ON "events"("published", "ends_at");
 
 -- AddForeignKey
 ALTER TABLE "delivery_locations" ADD CONSTRAINT "delivery_locations_area_id_fkey" FOREIGN KEY ("area_id") REFERENCES "delivery_areas"("id") ON DELETE SET NULL ON UPDATE CASCADE;

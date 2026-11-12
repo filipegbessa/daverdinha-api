@@ -13,6 +13,7 @@ import { MediaRetentionModule } from './media/media-retention.module';
 import { OpenApiModule } from './openapi/openapi.module';
 import { ProductCategoriesModule } from './product-categories/product-categories.module';
 import { ProductsModule } from './products/products.module';
+import { EventsModule } from './events/events.module';
 import { StoreSettingsModule } from './store-settings/store-settings.module';
 import { SiteOrdersModule } from './site-orders/site-orders.module';
 import { CheckoutModule } from './checkout/checkout.module';
@@ -32,6 +33,7 @@ import { CheckoutModule } from './checkout/checkout.module';
     OpenApiModule,
     ProductCategoriesModule,
     ProductsModule,
+    EventsModule,
     StoreSettingsModule,
     SiteOrdersModule,
     CheckoutModule,

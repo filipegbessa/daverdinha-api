@@ -33,28 +33,33 @@ import * as m29 from './store-settings/dto/update-store-settings.dto';
 import * as m30 from './checkout/dto/quote.dto';
 import * as m31 from './site-orders/dto/list-site-orders.dto';
 import * as m32 from './site-orders/dto/update-fulfillment.dto';
-import * as m33 from './app.controller';
-import * as m34 from './bot-settings/bot-settings.controller';
-import * as m35 from './menu-items/menu-items.controller';
-import * as m36 from './delivery-locations/delivery-locations.controller';
-import * as m37 from './delivery-locations/public-delivery-locations.controller';
-import * as m38 from './delivery-locations/delivery-areas.controller';
-import * as m39 from './whatsapp/webhook.controller';
-import * as m40 from './push-subscriptions/push-subscriptions.controller';
-import * as m41 from './conversations/conversations.controller';
-import * as m42 from './categories/categories.controller';
-import * as m43 from './media/media-retention.controller';
-import * as m44 from './openapi/docs-page.controller';
-import * as m45 from './product-categories/product-categories.controller';
-import * as m46 from './product-categories/public-product-categories.controller';
-import * as m47 from './products/products.controller';
-import * as m48 from './products/public-products.controller';
-import * as m49 from './store-settings/store-settings.controller';
-import * as m50 from './store-settings/public-store-settings.controller';
-import * as m51 from './checkout/public-checkout.controller';
-import * as m52 from './site-orders/site-orders.controller';
-import * as m53 from './checkout/pagarme-webhook.controller';
-import * as m54 from './openapi/openapi.controller';
+import * as m33 from './events/dto/create-event.dto';
+import * as m34 from './events/dto/update-event.dto';
+import * as m35 from './events/dto/list-events.dto';
+import * as m36 from './app.controller';
+import * as m37 from './bot-settings/bot-settings.controller';
+import * as m38 from './menu-items/menu-items.controller';
+import * as m39 from './delivery-locations/delivery-locations.controller';
+import * as m40 from './delivery-locations/public-delivery-locations.controller';
+import * as m41 from './delivery-locations/delivery-areas.controller';
+import * as m42 from './whatsapp/webhook.controller';
+import * as m43 from './push-subscriptions/push-subscriptions.controller';
+import * as m44 from './conversations/conversations.controller';
+import * as m45 from './categories/categories.controller';
+import * as m46 from './media/media-retention.controller';
+import * as m47 from './openapi/docs-page.controller';
+import * as m48 from './product-categories/product-categories.controller';
+import * as m49 from './product-categories/public-product-categories.controller';
+import * as m50 from './products/products.controller';
+import * as m51 from './products/public-products.controller';
+import * as m52 from './store-settings/store-settings.controller';
+import * as m53 from './store-settings/public-store-settings.controller';
+import * as m54 from './checkout/public-checkout.controller';
+import * as m55 from './site-orders/site-orders.controller';
+import * as m56 from './checkout/pagarme-webhook.controller';
+import * as m57 from './openapi/openapi.controller';
+import * as m58 from './events/events.controller';
+import * as m59 from './events/public-events.controller';
 
 export default async () => {
   const t = {
@@ -606,11 +611,81 @@ export default async () => {
             },
           },
         ],
-      ],
-      controllers: [
-        [m33, { AppController: { health: {} } }],
+        [
+          m33,
+          {
+            CreateEventDto: {
+              title: { required: true, type: () => String },
+              description: { required: true, type: () => String },
+              startsAt: {
+                required: true,
+                type: () => String,
+                description: 'ISO 8601 com fuso (o admin manda em UTC).',
+              },
+              endsAt: { required: true, type: () => String },
+              locationName: {
+                required: false,
+                type: () => String,
+                nullable: true,
+              },
+              locationAddress: {
+                required: false,
+                type: () => String,
+                nullable: true,
+              },
+              price: {
+                required: false,
+                type: () => Number,
+                nullable: true,
+                minimum: 0,
+              },
+              spots: {
+                required: false,
+                type: () => Number,
+                nullable: true,
+                minimum: 1,
+              },
+              ctaUrl: {
+                required: false,
+                type: () => String,
+                nullable: true,
+                format: 'uri',
+              },
+              published: { required: false, type: () => Boolean },
+            },
+          },
+        ],
         [
           m34,
+          {
+            UpdateEventDto: {
+              removeImage: {
+                required: false,
+                type: () => Boolean,
+                description:
+                  '`true` apaga a foto atual sem mandar outra (o site volta pro placeholder).',
+              },
+            },
+          },
+        ],
+        [
+          m35,
+          {
+            ListEventsDto: {
+              q: {
+                required: false,
+                type: () => String,
+                description:
+                  'Parte do t\u00EDtulo, sem diferenciar mai\u00FAsculas.',
+              },
+            },
+          },
+        ],
+      ],
+      controllers: [
+        [m36, { AppController: { health: {} } }],
+        [
+          m37,
           {
             BotSettingsController: {
               get: { type: Object },
@@ -619,7 +694,7 @@ export default async () => {
           },
         ],
         [
-          m35,
+          m38,
           {
             MenuItemsController: {
               list: { type: Object },
@@ -632,13 +707,13 @@ export default async () => {
           },
         ],
         [
-          m36,
+          m39,
           {
             DeliveryLocationsController: { list: { type: Object }, update: {} },
           },
         ],
         [
-          m37,
+          m40,
           {
             PublicDeliveryLocationsController: {
               listCovered: { type: [Object] },
@@ -651,7 +726,7 @@ export default async () => {
           },
         ],
         [
-          m38,
+          m41,
           {
             DeliveryAreasController: {
               list: { type: [Object] },
@@ -662,10 +737,10 @@ export default async () => {
             },
           },
         ],
-        [m39, { WebhookController: { verify: { type: String }, receive: {} } }],
-        [m40, { PushSubscriptionsController: { save: {}, remove: {} } }],
+        [m42, { WebhookController: { verify: { type: String }, receive: {} } }],
+        [m43, { PushSubscriptionsController: { save: {}, remove: {} } }],
         [
-          m41,
+          m44,
           {
             ConversationsController: {
               list: {},
@@ -693,7 +768,7 @@ export default async () => {
           },
         ],
         [
-          m42,
+          m45,
           {
             CategoriesController: {
               list: {},
@@ -704,7 +779,7 @@ export default async () => {
           },
         ],
         [
-          m43,
+          m46,
           {
             MediaRetentionController: {
               run: {
@@ -714,9 +789,9 @@ export default async () => {
             },
           },
         ],
-        [m44, { DocsPageController: { page: { type: String } } }],
+        [m47, { DocsPageController: { page: { type: String } } }],
         [
-          m45,
+          m48,
           {
             ProductCategoriesController: {
               list: { type: Object },
@@ -727,7 +802,7 @@ export default async () => {
           },
         ],
         [
-          m46,
+          m49,
           {
             PublicProductCategoriesController: {
               listActive: { type: [Object] },
@@ -735,7 +810,7 @@ export default async () => {
           },
         ],
         [
-          m47,
+          m50,
           {
             ProductsController: {
               list: {},
@@ -747,7 +822,7 @@ export default async () => {
           },
         ],
         [
-          m48,
+          m51,
           {
             PublicProductsController: {
               listActive: { type: [Object] },
@@ -756,7 +831,7 @@ export default async () => {
           },
         ],
         [
-          m49,
+          m52,
           {
             StoreSettingsController: {
               get: { type: Object },
@@ -765,11 +840,11 @@ export default async () => {
           },
         ],
         [
-          m50,
+          m53,
           { PublicStoreSettingsController: { getPublic: { type: Object } } },
         ],
         [
-          m51,
+          m54,
           {
             PublicCheckoutController: {
               quote: {
@@ -790,7 +865,7 @@ export default async () => {
           },
         ],
         [
-          m52,
+          m55,
           {
             SiteOrdersController: {
               list: {},
@@ -805,8 +880,28 @@ export default async () => {
             },
           },
         ],
-        [m53, { PagarmeWebhookController: { handle: {} } }],
-        [m54, { OpenApiController: { get: { type: Object } } }],
+        [m56, { PagarmeWebhookController: { handle: {} } }],
+        [m57, { OpenApiController: { get: { type: Object } } }],
+        [
+          m58,
+          {
+            EventsController: {
+              list: {},
+              create: { type: Object },
+              update: { type: Object },
+              remove: {},
+            },
+          },
+        ],
+        [
+          m59,
+          {
+            PublicEventsController: {
+              listUpcoming: { type: [Object] },
+              findBySlug: { type: Object },
+            },
+          },
+        ],
       ],
     },
   };

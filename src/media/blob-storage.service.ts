@@ -12,17 +12,30 @@ import { extensionFor } from '../common/uploads';
  */
 @Injectable()
 export class BlobStorageService {
-  async uploadProductImage(buffer: Buffer, mimeType: string): Promise<string> {
-    const ext = extensionFor(mimeType);
-    const { url } = await put(
-      `products/${crypto.randomUUID()}.${ext}`,
-      buffer,
-      { access: 'public', contentType: mimeType },
-    );
-    return url;
+  uploadProductImage(buffer: Buffer, mimeType: string): Promise<string> {
+    return this.upload('products', buffer, mimeType);
+  }
+
+  /** Capa de evento da agenda. */
+  uploadEventImage(buffer: Buffer, mimeType: string): Promise<string> {
+    return this.upload('events', buffer, mimeType);
   }
 
   async deleteImage(url: string): Promise<void> {
     await del(url);
+  }
+
+  private async upload(
+    prefix: string,
+    buffer: Buffer,
+    mimeType: string,
+  ): Promise<string> {
+    const ext = extensionFor(mimeType);
+    const { url } = await put(
+      `${prefix}/${crypto.randomUUID()}.${ext}`,
+      buffer,
+      { access: 'public', contentType: mimeType },
+    );
+    return url;
   }
 }

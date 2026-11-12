@@ -416,3 +416,32 @@ model StoreSettings {
 
   @@map("store_settings")
 }
+
+/// Evento da agenda do site (oficina, feirinha, aula). Rascunho até
+/// `published`; evento passado sai da lista pública sozinho pelo `endsAt`,
+/// mas a página dele continua no ar.
+model Event {
+  id              String   @id @default(uuid())
+  title           String
+  /// Gerado do título na criação e nunca recalculado: é a URL do evento.
+  slug            String   @unique
+  description     String
+  startsAt        DateTime @map("starts_at")
+  endsAt          DateTime @map("ends_at")
+  /// `null` = no ateliê (o site usa o endereço da loja).
+  locationName    String?  @map("location_name")
+  locationAddress String?  @map("location_address")
+  /// `null` = gratuito.
+  price           Decimal? @db.Decimal(10, 2)
+  /// `null` = sem limite divulgado.
+  spots           Int?
+  imageUrl        String?  @map("image_url")
+  /// `null` = inscrição pelo WhatsApp, com mensagem pronta montada pelo site.
+  ctaUrl          String?  @map("cta_url")
+  published       Boolean  @default(false)
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@index([published, endsAt])
+  @@map("events")
+}

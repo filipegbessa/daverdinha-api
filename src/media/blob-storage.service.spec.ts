@@ -39,6 +39,18 @@ describe('BlobStorageService', () => {
     expect(first).toMatch(/\.png$/);
   });
 
+  it('uploads event images under the events/ prefix', async () => {
+    (put as jest.Mock).mockResolvedValue({ url: 'u' });
+
+    await service.uploadEventImage(Buffer.from('fake'), 'image/webp');
+
+    expect(put).toHaveBeenCalledWith(
+      expect.stringMatching(/^events\/[0-9a-f-]{36}\.webp$/),
+      expect.any(Buffer),
+      expect.objectContaining({ access: 'public', contentType: 'image/webp' }),
+    );
+  });
+
   it('deletes by URL', async () => {
     await service.deleteImage(
       'https://abc.public.blob.vercel-storage.com/products/x.jpg',

@@ -235,6 +235,64 @@ async function seedCatalog() {
   }
 }
 
+/**
+ * Os mesmos eventos de `sampleEvents()` do site (`daverdinha/src/features/site/data/samples.ts`),
+ * com datas relativas a hoje: dois futuros e um passado, pra ver "Este evento
+ * já aconteceu". Por `slug` com `update: {}`, como o catálogo: as datas ficam
+ * as da primeira vez que o seed rodou.
+ */
+function atRio(daysFromNow: number, hour: number): Date {
+  const day = new Date(Date.now() + daysFromNow * 86_400_000);
+  const ymd = day.toISOString().slice(0, 10);
+  return new Date(`${ymd}T${String(hour).padStart(2, '0')}:00:00-03:00`);
+}
+
+const EVENTS = [
+  {
+    title: 'Oficina de terrário',
+    slug: 'oficina-de-terrario',
+    description:
+      'Em duas horas você monta o seu terrário do zero: escolha das plantas, camadas de drenagem e o cuidado depois. Todo o material está incluso e o terrário vai pra casa com você.',
+    startsAt: atRio(5, 10),
+    endsAt: atRio(5, 12),
+    price: 120,
+    spots: 8,
+    published: true,
+  },
+  {
+    title: 'Feirinha verde do Santo Cristo',
+    slug: 'feirinha-verde-do-santo-cristo',
+    description:
+      'A Daverdinha leva mudas, vasos e arranjos pra feira do bairro. Entrada gratuita.',
+    startsAt: atRio(12, 9),
+    endsAt: atRio(12, 15),
+    locationName: 'Praça da Harmonia',
+    locationAddress: 'Praça da Harmonia, Gamboa, Rio de Janeiro',
+    published: true,
+  },
+  {
+    title: 'Plantar e brindar: kokedama',
+    slug: 'plantar-e-brindar-kokedama',
+    description:
+      'Fim de tarde no ateliê fazendo kokedama, com uma bebida pra brindar no final.',
+    startsAt: atRio(-10, 16),
+    endsAt: atRio(-10, 18),
+    price: 150,
+    spots: 10,
+    published: true,
+  },
+];
+
+async function seedEvents() {
+  for (const event of EVENTS) {
+    await prisma.event.upsert({
+      where: { slug: event.slug },
+      update: {},
+      create: event,
+    });
+  }
+}
+
 /** Mesmo endereço de `daverdinha/src/data/business.ts`. */
 const STORE_SETTINGS = {
   // Local abre o site completo; a loja só liga com a chave do Pagar.me (Dashboard).
@@ -659,6 +717,7 @@ async function main() {
   await seedConversations();
   await seedWhatsAppOrder();
   await seedCatalog();
+  await seedEvents();
   await seedStoreSettings();
   await seedDeliveryAreas();
   await seedSiteOrders();
