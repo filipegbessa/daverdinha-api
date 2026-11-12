@@ -6,6 +6,8 @@
 
 > **Atualizado em 2026-11-06 (venda de ingresso):** a agenda vira pré-requisito da venda de ingressos, planejada em `2026-11-05-loja-online-v1.md` (Tarefas 11–13). Este plano não muda: os campos novos (`ticketSales`, `maxTicketsPerOrder`, e no público `spotsLeft`/`soldOut`) e a regra de que `spots` passa a ser lotação de verdade quando a venda está ligada entram por lá, depois das Tarefas 1–5 daqui.
 
+> **Implementado em 2026-11-12:** Tarefas 1–5, mais os campos de ingresso do plano da loja. Diferenças: `findPublishedBySlug` responde 404 em vez de devolver `null`; o filtro de imagem é o `imageFileFilter` do catálogo, importado de `products.controller.ts`. A Tarefa 6 (checagem de CEP) foi feita no plano da loja.
+
 **Goal:** dar à Daverdinha uma agenda de eventos (oficinas, feirinhas, aulas no ateliê) que a cliente cadastra sozinha no admin e o site mostra em `/agenda`, numa página por evento (`/agenda/[slug]`) e na seção "Próximos eventos" da home. Substitui a antiga tela "Destaques" do admin, que nunca foi construída.
 
 **Architecture:** um model novo no Postgres (`Event`) e um módulo NestJS `src/events/` seguindo o mesmo padrão do catálogo (`docs/plans/2026-11-04-catalogo-produtos.md`): service + controller admin protegido por `ClerkAuthGuard` + **controller público separado** (como `PublicDeliveryLocationsController`) + DTOs + testes colocados em `src/`. Foto do evento vai pro mesmo Vercel Blob do catálogo — `BlobStorageService` (Tarefa 3 do plano do catálogo) ganha um método pra prefixo `events/`. Slug reaproveita `uniqueSlug` de `src/common/slug.ts` (Tarefa 2 do plano do catálogo). **Este plano depende dessas duas tarefas do catálogo já estarem no `main`**; se não estiverem, fazê-las primeiro, como estão lá.

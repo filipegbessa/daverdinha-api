@@ -7,6 +7,7 @@
 > - **2026-11-09:** **pagamento pelo Pagar.me (Stone)**, não mais Mercado Pago — decidido; boleto confirmado fora. Produto **sob encomenda** ganha prazo de confecção e selo próprio; esgotado continua esgotado. Frete por **área de entrega** (subdivisão das zonas, com valor próprio) no lugar do valor por zona. **Retirada configurada no admin** (endereço, horário), começando com o endereço do ateliê. **Máximo de ingressos por compra configurável por evento** (padrão 10). **Cartão à vista ou parcelado, sem juros pro comprador**, com número máximo de parcelas e parcela mínima configurados no admin (decisão 19).
 > - **2026-11-09 (docs do Pagar.me lidas):** o checkout passa a ser criado por **link de pagamento** (`POST /paymentlinks`, o fluxo documentado pra checkout hospedado), não por `POST /orders`. A referência lida está em "Referência do Pagar.me", logo abaixo das decisões; o Step 0 da Tarefa 6 ficou só com o que a documentação não responde.
 > - **2026-11-09 (escopo do MVP):** **ingressos ficam fora do MVP** — a primeira entrega é só a venda de produtos. As decisões 12–18 e as Tarefas 11–13 continuam aqui como desenho pronto pra depois; o `SiteOrder` já nasce com `kind`, então ligar os ingressos depois não muda o que vai ao ar agora. A Tarefa 14 fecha só o caminho de produtos.
+> - **2026-11-12 (interruptor dos ingressos):** além da loja (`StoreSettings.storeEnabled`), a venda de ingressos ganha o **próprio interruptor no Dashboard**, "Venda de ingressos" (`StoreSettings.ticketsEnabled`, padrão `false`), independente do da loja (decisão 20). Entra nas Tarefas 11 e 12 e no Step 4 da Tarefa 14.
 
 **Goal:** a cliente final compra pelo site: monta o carrinho, escolhe entrega ou retirada, paga no Pagar.me (checkout hospedado, fora do site) e volta pra uma página do pedido. Também compra ingresso (ou se inscreve, se o evento é gratuito) direto na página do evento. A Daverdinha vê e acompanha os pedidos no mesmo admin das conversas, recebe push de venda nova, cadastra áreas de entrega com valor, retirada, estoque e prazo de encomenda, e tem a lista de presença de cada evento.
 
@@ -21,7 +22,7 @@
 | Checagem de CEP compartilhada (bot + site) | ✅ Tarefa 2 (2026-11-09) |
 | Loja V1 — produtos | ✅ Tarefas 1, 3, 4 e 5 (2026-11-09; delta da Tarefa 1 aplicado na Neon). ✅ Tarefas 6–10 escritas pela documentação e pela skill do Pagar.me, com testes simulados (2026-11-12). ⏳ falta o Step 0 da Tarefa 6 no sandbox (ver "Suposições a conferir no sandbox") e rodar o e2e de concorrência (`test/checkout-create.e2e-spec.ts`) |
 | Fechamento (e2e, docs, produção) | ⏳ Tarefa 14, só produtos |
-| Ingressos (e a agenda da API, `docs/plans/2026-11-04-agenda-eventos.md`, Tarefas 1–5) | ⏸️ fora do MVP (2026-11-09); Tarefas 11–13 ficam como desenho pra depois |
+| Ingressos (e a agenda da API, `docs/plans/2026-11-04-agenda-eventos.md`, Tarefas 1–5) | ✅ agenda e Tarefas 11–13 implementadas em 2026-11-12, com o interruptor `ticketsEnabled` (decisão 20); delta aplicado na Neon (`NEON-agenda-ingressos.md`, migration `20261112200000_init`). Diferenças: o 409 de excluir evento vale pra qualquer ingresso (FK `RESTRICT`), não só vendido; o e2e de concorrência é `test/checkout-tickets.e2e-spec.ts` |
 | V2 — pagamento dentro do site, e-mails, "avise-me" | fora deste plano (ver "Depois da V1") |
 
 **Architecture:** módulos novos seguindo o padrão do catálogo — service + controller admin com `ClerkAuthGuard` + **controller público separado**, registrado antes do admin:
@@ -63,6 +64,7 @@
 | 17 | **Venda fecha quando o evento começa.** `POST /checkout/tickets` depois de `startsAt` → 409 `not_available`; o pedido pendente vence em `min(now + 60 min, startsAt)`. |
 | 18 | **Lista de presença no admin** por evento: participantes de pedidos `paid`, com check-in (marcar/desmarcar presença). O ingresso é a página do pedido (`/pedido/<token>`) com os nomes; QR code fica pra depois. |
 | 19 | **Parcelamento no cartão** (confirmado pela cliente em 2026-11-09). Configurado no admin em `StoreSettings`: `maxInstallments` (1–12, padrão 3) e `minInstallmentValue` (padrão R$ 30). Parcelas oferecidas num pedido = `min(maxInstallments, floor(total / minInstallmentValue))`, no mínimo 1 (à vista). **Sem juros pro comprador**: a taxa do parcelamento fica com a loja (o valor cobrado é sempre o `total`). Se a cliente preferir juros pro comprador, o Pagar.me já suporta no próprio link (`installments_setup.free_installments` menor que o máximo + `interest_rate`): vira mais dois campos em `StoreSettings`, sem mudar o fluxo. Vale pra produtos e ingressos. |
+| 20 | **Interruptor geral da venda de ingressos** (2026-11-12), no Dashboard ao lado de "Site completo" e "Loja do site": `StoreSettings.ticketsEnabled`, padrão `false`. É independente da loja (dá pra vender ingresso com a loja de produtos desligada, e o contrário). Um evento só vende pelo site com **os dois** ligados: o interruptor geral e o `Event.ticketSales` do evento (decisão 13). Desligado, todo evento volta ao comportamento de hoje (`ctaUrl` ou WhatsApp) sem perder o `ticketSales` de cada um, e `POST /checkout/tickets` responde 409 `tickets_closed` (mesma ideia do `store_closed` da loja). Pedidos já criados seguem normais: webhook, reconciliação, página do pedido e lista de presença não olham o interruptor. Não depende da chave do Pagar.me (igual à loja, o Dashboard só avisa se o pagamento não estiver configurado); inscrição gratuita funciona sem ela. |
 
 ## Referência do Pagar.me (lida em 2026-11-09)
 
@@ -668,7 +670,7 @@ O webhook manda JSON normal e não depende do corpo cru — não precisa do `Raw
 
 ## Task 11: Ingressos — schema e vagas
 
-> ⏸️ **Fora do MVP (2026-11-09).** As Tarefas 11–13 ficam como desenho pra depois da loja de produtos no ar.
+> ✅ **Implementadas em 2026-11-12** (eram fora do MVP desde 2026-11-09).
 
 **Pré-requisito:** plano da agenda (`2026-11-04-agenda-eventos.md`), Tarefas 1–5, no `main` (model `Event`, `EventsService`, controllers admin e público).
 
@@ -677,6 +679,8 @@ O webhook manda JSON normal e não depende do corpo cru — não precisa do `Raw
 - Create (fora do git): `NEON-ingressos.md`
 - Create: `src/site-orders/spots.ts` (+ `.spec.ts`)
 - Modify: `src/events/dto/create-event.dto.ts` (`ticketSales`, `maxTicketsPerOrder`), `src/events/events.service.ts` (+ `.spec.ts`) — `SiteEvent` e `EventAdmin` com os campos novos
+- Modify: `src/store-settings/store-settings.service.ts` (+ `.spec.ts`), `src/store-settings/dto/update-store-settings.dto.ts` — `ticketsEnabled` (decisão 20)
+- Modify: `test/delivery-areas.e2e-spec.ts` — chaves do `GET /store-settings/public`
 - Modify: `test/events.e2e-spec.ts`
 
 **Interfaces:**
@@ -690,6 +694,10 @@ O webhook manda JSON normal e não depende do corpo cru — não precisa do `Raw
   maxTicketsPerOrder Int               @default(10) @map("max_tickets_per_order")
   tickets            SiteOrderTicket[]
   orders             SiteOrder[]
+
+// em StoreSettings (decisão 20):
+  /// Interruptor "Venda de ingressos" do Dashboard. Desligado, nenhum evento vende pelo site.
+  ticketsEnabled     Boolean           @default(false) @map("tickets_enabled")
 
 // em SiteOrder:
   /// Só em pedido de ingresso. Restrict: evento com venda não pode ser apagado (a API responde 409).
@@ -719,14 +727,16 @@ model SiteOrderTicket {
   - `spotsLeft(event, taken): number | null` — `null` se `spots` é `null`; senão `max(0, spots − sold − reserved)`.
   - `lockEvent(tx, eventId)` — `SELECT id FROM events WHERE id = $1 FOR UPDATE`.
   - `SiteEvent` ganha `ticketSales`, `maxTicketsPerOrder`, `spotsLeft`, `soldOut` (contrato acima); `EventAdmin` ganha `ticketSales`, `maxTicketsPerOrder`, `sold`, `reserved`.
+  - **No público, `SiteEvent.ticketSales` já vem combinado:** `event.ticketSales && settings.ticketsEnabled`. O site não precisa juntar os dois; com o interruptor geral desligado, `spotsLeft: null` e `soldOut: false` como em evento sem venda. No admin (`EventAdmin`), `ticketSales` é o valor do evento, sem combinar.
+  - `StoreSettings` (admin) e `GET /store-settings/public` ganham `ticketsEnabled`; `PATCH /store-settings` aceita `ticketsEnabled` (booleano).
 
 - [ ] **Step 1: Schema** acima; squash e aplicar local (`migrate dev`, `db seed`, `npm test`).
-- [ ] **Step 2: Seed** — no `seedEvents()` da agenda, ligar `ticketSales` num evento futuro pago (com `spots: 12`, `maxTicketsPerOrder: 4`) e num gratuito (sem `spots`); dois pedidos de ingresso de exemplo (`*@exemplo.com`), um `paid` com 2 participantes e um `pending_payment` vencido, por `customerEmail`, sem duplicar.
+- [ ] **Step 2: Seed** — `STORE_SETTINGS.ticketsEnabled: true` (local, pra testar; produção nasce `false`); no `seedEvents()` da agenda, ligar `ticketSales` num evento futuro pago (com `spots: 12`, `maxTicketsPerOrder: 4`) e num gratuito (sem `spots`); dois pedidos de ingresso de exemplo (`*@exemplo.com`), um `paid` com 2 participantes e um `pending_payment` vencido, por `customerEmail`, sem duplicar.
 - [ ] **Step 3: Testes de `spots.ts`** — sem `spots` → `null`; pagos e pendentes válidos ocupam; pendente vencido, `cancelled`, `expired`, `refunded` não ocupam; nunca negativo (lotação reduzida abaixo do vendido → 0).
-- [ ] **Step 4: Testes do `EventsService`** — `upcoming`/`findBySlug` trazem `spotsLeft`/`soldOut` calculados **numa consulta agrupada** pros eventos da lista (não N+1); `ticketSales: false` → `spotsLeft: null`, `soldOut: false`; `maxTicketsPerOrder` fora de 1–50 → 400; excluir evento com ingresso vendido → 409 "Esse evento tem ingressos vendidos. Despublique em vez de excluir."; reduzir `spots` abaixo do vendido → 400 "Já há N vagas ocupadas.".
+- [ ] **Step 4: Testes do `EventsService`** — `upcoming`/`findBySlug` trazem `spotsLeft`/`soldOut` calculados **numa consulta agrupada** pros eventos da lista (não N+1); `ticketSales: false` → `spotsLeft: null`, `soldOut: false`; `maxTicketsPerOrder` fora de 1–50 → 400; excluir evento com ingresso vendido → 409 "Esse evento tem ingressos vendidos. Despublique em vez de excluir."; reduzir `spots` abaixo do vendido → 400 "Já há N vagas ocupadas."; com `ticketsEnabled: false`, `upcoming`/`findBySlug` devolvem `ticketSales: false` mesmo em evento com venda ligada, e o admin continua vendo o `ticketSales` do evento. `StoreSettingsService`: `ticketsEnabled` gravado pelo `PATCH` e devolvido no público.
 - [ ] **Step 5: DTO** — `ticketSales` com o mesmo `@Transform` de booleano multipart dos outros campos; `maxTicketsPerOrder` `@Type(() => Number) @IsInt() @Min(1) @Max(50)`.
 - [ ] **Step 6: Rodar, `npm run test:e2e`, `npm run openapi:metadata`.**
-- [ ] **Step 7: Delta de produção** em `NEON-ingressos.md` — esperado só `CREATE TABLE "site_order_tickets"`, `ALTER TABLE "events" ADD COLUMN` (`ticket_sales`, `max_tickets_per_order`), `ALTER TABLE "site_orders" ADD COLUMN "event_id"`, índices e FKs. **Não aplicar.**
+- [ ] **Step 7: Delta de produção** em `NEON-ingressos.md` — esperado só `CREATE TABLE "site_order_tickets"`, `ALTER TABLE "events" ADD COLUMN` (`ticket_sales`, `max_tickets_per_order`), `ALTER TABLE "site_orders" ADD COLUMN "event_id"`, `ALTER TABLE "store_settings" ADD COLUMN "tickets_enabled" BOOLEAN NOT NULL DEFAULT false`, índices e FKs. **Não aplicar.**
 - [ ] **Step 8: Commit** — `feat(events): add ticket sales settings and spot counting`
 
 ---
@@ -745,6 +755,7 @@ model SiteOrderTicket {
 
 Ordem dentro do `createTickets`, numa transação interativa:
 
+0. `ticketsEnabled: false` → `ConflictException({ message: 'A venda de ingressos pelo site está fechada.', reason: 'tickets_closed' })`, antes de abrir a transação (decisão 20);
 1. `lockEvent`; evento não publicado, `ticketSales: false` ou `startsAt <= now` → `ConflictException({ message, reason: 'not_available' })`;
 2. participantes acima de `maxTicketsPerOrder` → `ConflictException({ message: 'O máximo por compra é N ingressos.', reason: 'too_many', max })`;
 3. `spotsLeft` < quantidade de participantes → `ConflictException({ message: 'Restam N vagas.', reason: 'sold_out', spotsLeft })`;
@@ -756,7 +767,7 @@ Depois da transação, só no pago: `createCheckout` com um item "Ingresso — <
 
 Push: título "Nova inscrição DV-0043" (gratuito) ou "Ingresso vendido DV-0043" (pago), corpo "Maria · 2 ingressos · Oficina de terrário".
 
-- [ ] **Step 1: Testes do service** — pago: pedido `pending_payment`, 1 ticket por nome, preço do banco congelado, `expiresAt` limitado por `startsAt`, checkout sem item de entrega; gratuito: `paid` direto, sem gateway, push disparado uma vez; `not_available` nos três casos; `too_many` respeitando o limite do evento (não o 10 fixo); `sold_out` com `spotsLeft`; sem limite (`spots: null`) nunca dá `sold_out`; falha do Pagar.me cancela e devolve 503.
+- [ ] **Step 1: Testes do service** — interruptor geral desligado → 409 `tickets_closed` sem criar pedido nem chamar o gateway (pago ou gratuito); pago: pedido `pending_payment`, 1 ticket por nome, preço do banco congelado, `expiresAt` limitado por `startsAt`, checkout sem item de entrega; gratuito: `paid` direto, sem gateway, push disparado uma vez; `not_available` nos três casos; `too_many` respeitando o limite do evento (não o 10 fixo); `sold_out` com `spotsLeft`; sem limite (`spots: null`) nunca dá `sold_out`; falha do Pagar.me cancela e devolve 503.
 - [ ] **Step 2: DTO** — `attendees` `@ArrayMinSize(1) @ArrayMaxSize(50)` (teto técnico; o limite real é o do evento, no service), `name` 2–100 depois de `trim`; `customer` e `notes` com a classe de DTO do `POST /checkout`.
 - [ ] **Step 3: `findPublicByToken`** devolve `event` (título, slug, datas, local) e `tickets` (nome e preço) em pedido de ingresso; `items: []`, `deliveryMethod: null`, `pickup: null`.
 - [ ] **Step 4: e2e de concorrência** — evento com `spots: 1`, dois `POST /checkout/tickets` simultâneos → um 201, um 409 `sold_out`.
@@ -786,7 +797,7 @@ Push: título "Nova inscrição DV-0043" (gratuito) ou "Ingresso vendido DV-0043
 - [ ] **Step 1: e2e** `test/checkout.e2e-spec.ts` (banco real, gateway fake): quote → create → webhook autenticado com o gateway fake devolvendo `paid` → `GET /checkout/orders/:token` mostra `paid` → `GET /site-orders` (sem token → 401). Mesmo caminho pra ingresso pago (`POST /checkout/tickets` → webhook → `paid` → aparece em `GET /events/:id/attendees`) e um gratuito (201 com `paymentUrl: null`, já `paid`). Conferir que o CI continua verde e ajustar as contagens do e2e de seed se os exemplos novos entrarem nelas.
 - [ ] **Step 2: README** — seção "Loja online (módulos checkout, site-orders, pagarme, store-settings)": fluxo de produto e de ingresso, máquina de status, estoque/sob encomenda/vagas, áreas de entrega, variáveis, como testar com o sandbox do Pagar.me e túnel, e o aviso de que estorno é no painel do Pagar.me na V1. Atualizar `CLAUDE.md` (o webhook novo também tem que responder 2xx; `SiteOrder` ≠ `Order`; ingresso é `SiteOrder` com `kind: 'tickets'`; nada do Pagar.me fora de `src/pagarme/`).
 - [ ] **Step 3: Homologação no sandbox do Pagar.me** (manual, documentar o resultado no PR; cartões de teste `4000000000000010` aprovado e `4000000000000028` recusado): cartão aprovado à vista e parcelado (conferir que o comprador paga o total, sem juros); pedido abaixo da parcela mínima só oferece à vista; cartão recusado e depois aprovado no mesmo pedido; Pix pendente que vence; webhook derrubado (URL errada) e a página do pedido reconciliando sozinha; produto sob encomenda com prazo no pedido; entrega numa área e bairro sem área; retirada desligada; ingresso pago até esgotar a última vaga; limite por compra do evento; inscrição gratuita; check-in no admin.
-- [ ] **Step 4: Produção** (usuário executa): aplicar `NEON-loja-v1.md` e depois `NEON-ingressos.md`; cadastrar `PAGARME_SECRET_KEY` **de produção**, `PAGARME_API_URL`, `PAGARME_WEBHOOK_USER`, `PAGARME_WEBHOOK_PASSWORD`, `SITE_URL` na Vercel; configurar o webhook no painel do Pagar.me (URL `https://<api>/webhooks/pagarme`, eventos `charge.paid`, `charge.payment_failed`, `charge.refunded`, `chargeback.received`, com a autenticação definida no Step 0 da Tarefa 6); `FRONTEND_URL` já cobre o domínio do site (CORS). A cliente cadastra áreas de entrega e confere a retirada no admin antes de ligar a loja. Primeira compra real de valor baixo, estornada pelo painel.
+- [ ] **Step 4: Produção** (usuário executa): aplicar `NEON-loja-v1.md` e depois `NEON-ingressos.md`; cadastrar `PAGARME_SECRET_KEY` **de produção**, `PAGARME_API_URL`, `PAGARME_WEBHOOK_USER`, `PAGARME_WEBHOOK_PASSWORD`, `SITE_URL` na Vercel; configurar o webhook no painel do Pagar.me (URL `https://<api>/webhooks/pagarme`, eventos `charge.paid`, `charge.payment_failed`, `charge.refunded`, `chargeback.received`, com a autenticação definida no Step 0 da Tarefa 6); `FRONTEND_URL` já cobre o domínio do site (CORS). A cliente cadastra áreas de entrega e confere a retirada no admin antes de ligar a loja. Nos ingressos: liga "Venda de ingressos" no Dashboard só depois de marcar "Vender ingressos pelo site" nos eventos certos. Primeira compra real de valor baixo, estornada pelo painel.
 - [ ] **Step 5: Commit** — `docs: document the online store`
 
 ---
