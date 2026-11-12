@@ -1,5 +1,4 @@
 import { Test } from '@nestjs/testing';
-import { ConflictException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { StoreSettingsService } from './store-settings.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -69,25 +68,19 @@ describe('StoreSettingsService', () => {
       process.env = { ...env };
     });
 
-    it('refuses to open the store without the Pagar.me key', async () => {
+    it('opens the store even without the Pagar.me key, and says the payment is not configured', async () => {
       delete process.env.PAGARME_SECRET_KEY;
 
-      await expect(service.update({ storeEnabled: true })).rejects.toThrow(
-        ConflictException,
-      );
-      expect(prisma.storeSettings.update).not.toHaveBeenCalled();
+      const settings = await service.update({ storeEnabled: true });
+
+      expect(settings.storeEnabled).toBe(true);
+      expect(settings.paymentConfigured).toBe(false);
     });
 
-    it('opens the store with the key, and always lets it close', async () => {
+    it('reports the payment as configured once the key is set', async () => {
       process.env.PAGARME_SECRET_KEY = 'sk_test_x';
-      expect((await service.update({ storeEnabled: true })).storeEnabled).toBe(
-        true,
-      );
 
-      delete process.env.PAGARME_SECRET_KEY;
-      expect((await service.update({ storeEnabled: false })).storeEnabled).toBe(
-        false,
-      );
+      expect((await service.get()).paymentConfigured).toBe(true);
     });
 
     it('switches the full site on and off', async () => {

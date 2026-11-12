@@ -18,7 +18,7 @@ export class UpdateStoreSettingsDto {
   @IsBoolean()
   siteEnabled?: boolean;
 
-  /** Venda pelo site. Só liga com a chave do Pagar.me configurada (409). */
+  /** Venda pelo site. Liga mesmo sem a chave do Pagar.me (o pagamento é que não inicia). */
   @IsOptional()
   @IsBoolean()
   storeEnabled?: boolean;

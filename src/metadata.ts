@@ -507,7 +507,7 @@ export default async () => {
                 required: false,
                 type: () => Boolean,
                 description:
-                  'Venda pelo site. S\u00F3 liga com a chave do Pagar.me configurada (409).',
+                  'Venda pelo site. Liga mesmo sem a chave do Pagar.me (o pagamento \u00E9 que n\u00E3o inicia).',
               },
               pickupEnabled: {
                 required: false,

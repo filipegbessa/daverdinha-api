@@ -1,4 +1,4 @@
-import { ConflictException, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import type { StoreSettings as StoreSettingsRow } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { toDecimal, toMoney } from '../common/money';
@@ -9,6 +9,11 @@ export interface StoreSettings {
   siteEnabled: boolean;
   /** Venda pelo site (carrinho + Pagar.me); desligada, a compra é pelo WhatsApp. */
   storeEnabled: boolean;
+  /**
+   * A chave do Pagar.me está configurada? Só pro Dashboard avisar: a loja
+   * pode ser ligada sem ela (o layout aparece), mas o pagamento não inicia.
+   */
+  paymentConfigured: boolean;
   pickupEnabled: boolean;
   pickupAddress: string;
   pickupHours: string;
@@ -40,6 +45,7 @@ function toSettings(row: StoreSettingsRow): StoreSettings {
   return {
     siteEnabled: row.siteEnabled,
     storeEnabled: row.storeEnabled,
+    paymentConfigured: Boolean(process.env.PAGARME_SECRET_KEY),
     pickupEnabled: row.pickupEnabled,
     pickupAddress: row.pickupAddress,
     pickupHours: row.pickupHours,
@@ -66,12 +72,6 @@ export class StoreSettingsService {
   }
 
   async update(dto: UpdateStoreSettingsDto): Promise<StoreSettings> {
-    // Loja ligada sem credencial do Pagar.me = todo checkout falhando com 503.
-    if (dto.storeEnabled && !process.env.PAGARME_SECRET_KEY) {
-      throw new ConflictException(
-        'O pagamento ainda não está configurado (chave do Pagar.me). A loja continua desligada.',
-      );
-    }
     await this.row();
     const { minInstallmentValue, ...rest } = dto;
     return toSettings(
