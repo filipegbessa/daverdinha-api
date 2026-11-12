@@ -6,6 +6,7 @@ import { PagarmeModule } from '../pagarme/pagarme.module';
 import { PushNotificationsModule } from '../push-notifications/push-notifications.module';
 import { SiteOrdersService } from './site-orders.service';
 import { SiteOrdersController } from './site-orders.controller';
+import { SiteOrderTicketsController } from './site-order-tickets.controller';
 
 @Module({
   imports: [
@@ -16,7 +17,7 @@ import { SiteOrdersController } from './site-orders.controller';
     PushNotificationsModule,
   ],
   providers: [SiteOrdersService],
-  controllers: [SiteOrdersController],
+  controllers: [SiteOrdersController, SiteOrderTicketsController],
   exports: [SiteOrdersService],
 })
 export class SiteOrdersModule {}

@@ -317,6 +317,9 @@ describe('SiteOrdersService orders', () => {
           leadTimeDays: null,
         },
       ],
+      eventId: null,
+      event: null,
+      tickets: [],
       ...overrides,
     };
   }
@@ -380,6 +383,51 @@ describe('SiteOrdersService orders', () => {
       ]) {
         expect(text).not.toContain(secret);
       }
+    });
+
+    it('shows the event and the attendees of a ticket order, without delivery', async () => {
+      prisma.siteOrder.findUnique.mockResolvedValue(
+        order({
+          kind: 'tickets',
+          deliveryMethod: null,
+          bairro: null,
+          items: [],
+          eventId: 'e1',
+          event: {
+            id: 'e1',
+            title: 'Oficina de terrário',
+            slug: 'oficina-de-terrario',
+            startsAt: new Date('2026-11-21T13:00:00Z'),
+            endsAt: new Date('2026-11-21T15:00:00Z'),
+            locationName: null,
+            locationAddress: null,
+          },
+          tickets: [
+            {
+              id: 't1',
+              attendeeName: 'Maria',
+              unitPrice: new Prisma.Decimal('45.00'),
+              checkedInAt: null,
+            },
+          ],
+        }),
+      );
+
+      const result = await service.findPublicByToken('tok');
+
+      expect(result.event).toEqual({
+        title: 'Oficina de terrário',
+        slug: 'oficina-de-terrario',
+        startsAt: '2026-11-21T13:00:00.000Z',
+        endsAt: '2026-11-21T15:00:00.000Z',
+        locationName: null,
+        locationAddress: null,
+      });
+      expect(result.tickets).toEqual([
+        { attendeeName: 'Maria', unitPrice: 45 },
+      ]);
+      expect(result.items).toEqual([]);
+      expect(result.pickup).toBeNull();
     });
 
     it('is a 404 for an unknown token', async () => {
@@ -818,6 +866,8 @@ describe('SiteOrdersService.create', () => {
             id: `i${i}`,
             ...item,
           })),
+          tickets: [],
+          event: null,
         })),
         update: jest.fn(),
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
@@ -985,6 +1035,305 @@ describe('SiteOrdersService.create', () => {
     expect(prisma.siteOrder.updateMany).toHaveBeenCalledWith({
       where: { id: 'o9', status: 'pending_payment' },
       data: { status: 'cancelled' },
+    });
+  });
+});
+
+describe('SiteOrdersService tickets', () => {
+  let service: SiteOrdersService;
+  let prisma: {
+    event: { findUnique: jest.Mock };
+    siteOrderTicket: Record<string, jest.Mock>;
+    siteOrder: { create: jest.Mock; update: jest.Mock; updateMany: jest.Mock };
+    $queryRaw: jest.Mock;
+    $transaction: jest.Mock;
+  };
+  let storeSettings: { get: jest.Mock };
+  let gateway: { createCheckout: jest.Mock };
+  let push: { notifyNewOrder: jest.Mock };
+  const now = new Date('2026-11-12T12:00:00Z');
+  const startsAt = new Date('2026-11-21T13:00:00Z');
+
+  function event(overrides: Record<string, unknown> = {}) {
+    return {
+      id: '0b9f7c1e-0000-4000-8000-000000000001',
+      title: 'Oficina de terrário',
+      slug: 'oficina-de-terrario',
+      startsAt,
+      endsAt: new Date('2026-11-21T15:00:00Z'),
+      locationName: null,
+      locationAddress: null,
+      price: new Prisma.Decimal('45.00') as Prisma.Decimal | null,
+      spots: 12 as number | null,
+      published: true,
+      ticketSales: true,
+      maxTicketsPerOrder: 4,
+      ...overrides,
+    };
+  }
+
+  const dto = (names = ['Maria', 'João']) => ({
+    eventId: event().id,
+    attendees: names.map((name) => ({ name })),
+    customer: {
+      name: 'Maria Souza',
+      email: 'maria@exemplo.com',
+      phone: '(21) 99999-8888',
+    },
+  });
+
+  /** Pagos e pendentes válidos que o `groupBy` devolve pro evento. */
+  function taken(sold: number, reserved: number) {
+    prisma.siteOrderTicket.groupBy
+      .mockResolvedValueOnce([{ eventId: event().id, _count: { _all: sold } }])
+      .mockResolvedValueOnce([
+        { eventId: event().id, _count: { _all: reserved } },
+      ]);
+  }
+
+  beforeEach(async () => {
+    process.env.SITE_URL = 'https://www.daverdinha.com.br';
+    prisma = {
+      event: { findUnique: jest.fn().mockResolvedValue(event()) },
+      siteOrderTicket: {
+        groupBy: jest.fn().mockResolvedValue([]),
+        findMany: jest.fn().mockResolvedValue([]),
+        findUnique: jest.fn(),
+        count: jest.fn().mockResolvedValue(0),
+        update: jest.fn(),
+      },
+      siteOrder: {
+        create: jest.fn(({ data }) => ({
+          id: 'o9',
+          number: 43,
+          publicToken: 'tok9',
+          status: 'pending_payment',
+          items: [],
+          ...data,
+          event: event(),
+          tickets: data.tickets.create.map((t: object, i: number) => ({
+            id: `t${i}`,
+            ...t,
+          })),
+        })),
+        update: jest.fn(),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      $queryRaw: jest.fn().mockResolvedValue([]),
+      $transaction: jest.fn((fn: (tx: unknown) => unknown) => fn(prisma)),
+    };
+    storeSettings = {
+      get: jest.fn().mockResolvedValue({ ...settings, ticketsEnabled: true }),
+    };
+    gateway = {
+      createCheckout: jest.fn().mockResolvedValue({
+        gatewayLinkId: 'pl_9',
+        paymentUrl: 'https://checkout.pagar.me/pl_9',
+      }),
+    };
+    push = { notifyNewOrder: jest.fn().mockResolvedValue(undefined) };
+    const moduleRef = await Test.createTestingModule({
+      providers: [
+        SiteOrdersService,
+        { provide: PrismaService, useValue: prisma },
+        { provide: DeliveryLocationsService, useValue: {} },
+        { provide: DeliveryAreasService, useValue: {} },
+        { provide: StoreSettingsService, useValue: storeSettings },
+        { provide: PAYMENT_GATEWAY, useValue: gateway },
+        { provide: PushNotificationsService, useValue: push },
+      ],
+    }).compile();
+    service = moduleRef.get(SiteOrdersService);
+    jest.spyOn(service['logger'], 'error').mockImplementation(() => {});
+  });
+
+  describe('createTickets', () => {
+    it('sells paid tickets: one per name, price from the database, reservation capped by the start', async () => {
+      const result = await service.createTickets(
+        dto(),
+        new Date('2026-11-21T12:30:00Z'),
+      );
+
+      expect(prisma.$queryRaw).toHaveBeenCalled(); // lockEvent
+      const { data } = prisma.siteOrder.create.mock.calls[0][0];
+      expect(data).toMatchObject({
+        kind: 'tickets',
+        eventId: event().id,
+        deliveryMethod: null,
+        customerPhone: '5521999998888',
+      });
+      expect(data.total.toString()).toBe('90');
+      expect(data.expiresAt).toEqual(startsAt);
+      expect(
+        data.tickets.create.map(
+          (t: { attendeeName: string }) => t.attendeeName,
+        ),
+      ).toEqual(['Maria', 'João']);
+      expect(data.tickets.create[0].unitPrice.toString()).toBe('45');
+      const input = gateway.createCheckout.mock.calls[0][0];
+      expect(input.items).toEqual([
+        expect.objectContaining({
+          description: 'Ingresso — Oficina de terrário',
+          quantity: 2,
+        }),
+      ]);
+      expect(input.deliveryFee.toString()).toBe('0');
+      expect(result).toEqual({
+        code: 'DV-0043',
+        token: 'tok9',
+        paymentUrl: 'https://checkout.pagar.me/pl_9',
+      });
+      expect(push.notifyNewOrder).not.toHaveBeenCalled();
+    });
+
+    it('confirms a free sign-up right away, without the gateway, and pushes once', async () => {
+      prisma.event.findUnique.mockResolvedValue(event({ price: null }));
+
+      const result = await service.createTickets(dto(['Maria']), now);
+
+      const { data } = prisma.siteOrder.create.mock.calls[0][0];
+      expect(data.status).toBe('paid');
+      expect(data.total.toString()).toBe('0');
+      expect(gateway.createCheckout).not.toHaveBeenCalled();
+      expect(result.paymentUrl).toBeNull();
+      expect(push.notifyNewOrder).toHaveBeenCalledTimes(1);
+      expect(push.notifyNewOrder.mock.calls[0][0].tickets).toEqual({
+        count: 1,
+        eventTitle: 'Oficina de terrário',
+      });
+    });
+
+    it('refuses everything while the Dashboard switch is off', async () => {
+      storeSettings.get.mockResolvedValue({
+        ...settings,
+        ticketsEnabled: false,
+      });
+
+      await expect(service.createTickets(dto(), now)).rejects.toMatchObject({
+        response: { reason: 'tickets_closed' },
+      });
+      expect(prisma.siteOrder.create).not.toHaveBeenCalled();
+      expect(gateway.createCheckout).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['a draft', { published: false }],
+      ['an event without sales', { ticketSales: false }],
+      ['an event that already started', { startsAt: now }],
+    ])('says not_available for %s', async (_label, overrides) => {
+      prisma.event.findUnique.mockResolvedValue(event(overrides));
+
+      await expect(service.createTickets(dto(), now)).rejects.toMatchObject({
+        response: { reason: 'not_available' },
+      });
+    });
+
+    it('enforces the per-order limit of the event', async () => {
+      await expect(
+        service.createTickets(dto(['A1', 'B2', 'C3', 'D4', 'E5']), now),
+      ).rejects.toMatchObject({ response: { reason: 'too_many', max: 4 } });
+    });
+
+    it('says how many spots are left when there are not enough', async () => {
+      taken(10, 1);
+
+      await expect(service.createTickets(dto(), now)).rejects.toMatchObject({
+        response: { reason: 'sold_out', spotsLeft: 1 },
+      });
+    });
+
+    it('never sells out an event without a limit', async () => {
+      prisma.event.findUnique.mockResolvedValue(event({ spots: null }));
+      taken(500, 0);
+
+      await expect(service.createTickets(dto(), now)).resolves.toBeDefined();
+    });
+
+    it('cancels the order and answers 503 when the payment cannot start', async () => {
+      gateway.createCheckout.mockRejectedValue(new Error('down'));
+
+      await expect(service.createTickets(dto(), now)).rejects.toThrow(
+        ServiceUnavailableException,
+      );
+      expect(prisma.siteOrder.updateMany).toHaveBeenCalledWith({
+        where: { id: 'o9', status: 'pending_payment' },
+        data: { status: 'cancelled' },
+      });
+    });
+  });
+
+  describe('attendees', () => {
+    const ticket = (overrides: Record<string, unknown> = {}) => ({
+      id: 't1',
+      attendeeName: 'Maria',
+      checkedInAt: null,
+      order: {
+        id: 'o9',
+        number: 43,
+        status: 'paid',
+        customerName: 'Maria Souza',
+        customerPhone: '5521999998888',
+      },
+      ...overrides,
+    });
+
+    it('lists paid tickets by name, searchable by attendee or buyer, with sold and spots', async () => {
+      prisma.siteOrderTicket.findMany.mockResolvedValue([ticket()]);
+      prisma.siteOrderTicket.count
+        .mockResolvedValueOnce(1)
+        .mockResolvedValueOnce(7);
+
+      const page = await service.listAttendees(event().id, { q: 'mar' });
+
+      const { where, orderBy } =
+        prisma.siteOrderTicket.findMany.mock.calls[0][0];
+      expect(where.order).toEqual({ status: 'paid' });
+      expect(where.OR).toHaveLength(2);
+      expect(orderBy[0]).toEqual({ attendeeName: 'asc' });
+      expect(page).toMatchObject({ total: 1, sold: 7, spots: 12 });
+      expect(page.items[0]).toEqual({
+        id: 't1',
+        attendeeName: 'Maria',
+        checkedInAt: null,
+        order: {
+          id: 'o9',
+          code: 'DV-0043',
+          customerName: 'Maria Souza',
+          customerPhone: '5521999998888',
+        },
+      });
+    });
+
+    it('is a 404 for an unknown event', async () => {
+      prisma.event.findUnique.mockResolvedValue(null);
+
+      await expect(service.listAttendees('nope')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('checks in and out', async () => {
+      prisma.siteOrderTicket.findUnique.mockResolvedValue(ticket());
+      prisma.siteOrderTicket.update.mockImplementation(({ data }) =>
+        ticket(data),
+      );
+
+      const checked = await service.setCheckIn('t1', true, now);
+      expect(checked.checkedInAt).toBe(now.toISOString());
+      await service.setCheckIn('t1', false, now);
+      expect(prisma.siteOrderTicket.update.mock.calls[1][0].data).toEqual({
+        checkedInAt: null,
+      });
+    });
+
+    it('refuses to check in a ticket that is not paid', async () => {
+      prisma.siteOrderTicket.findUnique.mockResolvedValue(
+        ticket({ order: { ...ticket().order, status: 'pending_payment' } }),
+      );
+
+      await expect(service.setCheckIn('t1', true)).rejects.toThrow(
+        ConflictException,
+      );
     });
   });
 });

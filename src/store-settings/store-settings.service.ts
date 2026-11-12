@@ -10,6 +10,11 @@ export interface StoreSettings {
   /** Venda pelo site (carrinho + Pagar.me); desligada, a compra é pelo WhatsApp. */
   storeEnabled: boolean;
   /**
+   * Venda de ingressos pelo site, independente da loja. Um evento só vende
+   * com este ligado e o `ticketSales` dele ligado.
+   */
+  ticketsEnabled: boolean;
+  /**
    * A chave do Pagar.me está configurada? Só pro Dashboard avisar: a loja
    * pode ser ligada sem ela (o layout aparece), mas o pagamento não inicia.
    */
@@ -23,10 +28,11 @@ export interface StoreSettings {
   updatedAt: Date;
 }
 
-/** O que o site pode ler sem login: os dois interruptores e o parcelamento. */
+/** O que o site pode ler sem login: os interruptores e o parcelamento. */
 export interface PublicStoreSettings {
   siteEnabled: boolean;
   storeEnabled: boolean;
+  ticketsEnabled: boolean;
   maxInstallments: number;
   minInstallmentValue: number;
 }
@@ -45,6 +51,7 @@ function toSettings(row: StoreSettingsRow): StoreSettings {
   return {
     siteEnabled: row.siteEnabled,
     storeEnabled: row.storeEnabled,
+    ticketsEnabled: row.ticketsEnabled,
     paymentConfigured: Boolean(process.env.PAGARME_SECRET_KEY),
     pickupEnabled: row.pickupEnabled,
     pickupAddress: row.pickupAddress,
@@ -66,9 +73,20 @@ export class StoreSettingsService {
   }
 
   async getPublic(): Promise<PublicStoreSettings> {
-    const { siteEnabled, storeEnabled, maxInstallments, minInstallmentValue } =
-      await this.get();
-    return { siteEnabled, storeEnabled, maxInstallments, minInstallmentValue };
+    const {
+      siteEnabled,
+      storeEnabled,
+      ticketsEnabled,
+      maxInstallments,
+      minInstallmentValue,
+    } = await this.get();
+    return {
+      siteEnabled,
+      storeEnabled,
+      ticketsEnabled,
+      maxInstallments,
+      minInstallmentValue,
+    };
   }
 
   async update(dto: UpdateStoreSettingsDto): Promise<StoreSettings> {

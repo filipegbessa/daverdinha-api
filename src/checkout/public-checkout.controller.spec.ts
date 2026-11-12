@@ -4,7 +4,7 @@ import { SiteOrdersService } from '../site-orders/site-orders.service';
 
 describe('PublicCheckoutController', () => {
   let controller: PublicCheckoutController;
-  let orders: { quote: jest.Mock; create: jest.Mock };
+  let orders: { quote: jest.Mock; create: jest.Mock; createTickets: jest.Mock };
 
   beforeEach(async () => {
     orders = {
@@ -14,6 +14,9 @@ describe('PublicCheckoutController', () => {
         token: 'tok',
         paymentUrl: 'https://checkout.pagar.me/pl_1',
       }),
+      createTickets: jest
+        .fn()
+        .mockResolvedValue({ code: 'DV-0002', token: 't2', paymentUrl: null }),
     };
     const moduleRef = await Test.createTestingModule({
       controllers: [PublicCheckoutController],
@@ -43,6 +46,21 @@ describe('PublicCheckoutController', () => {
       paymentUrl: 'https://checkout.pagar.me/pl_1',
     });
     expect(orders.create).toHaveBeenCalledWith(dto);
+  });
+
+  it('buys tickets for an event', async () => {
+    const dto = {
+      eventId: 'e1',
+      attendees: [{ name: 'Maria' }],
+      customer: { name: 'Maria', email: 'm@x.com', phone: '21999998888' },
+    };
+
+    expect(await controller.createTickets(dto)).toEqual({
+      code: 'DV-0002',
+      token: 't2',
+      paymentUrl: null,
+    });
+    expect(orders.createTickets).toHaveBeenCalledWith(dto);
   });
 
   it('carries no auth guard: anyone can quote a cart on the site', () => {

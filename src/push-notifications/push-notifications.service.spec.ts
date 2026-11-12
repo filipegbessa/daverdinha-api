@@ -276,4 +276,33 @@ describe('PushNotificationsService', () => {
     const payload = JSON.parse((webpush.sendNotification as jest.Mock).mock.calls[0][1]);
     expect(payload.body).toContain('confira o estoque');
   });
+
+  it('names the event and the ticket count for a ticket order', async () => {
+    subscriptions.listAll.mockResolvedValue([
+      { endpoint: 'https://push.example/1', p256dh: 'p1', auth: 'a1' },
+    ]);
+    (webpush.sendNotification as jest.Mock).mockResolvedValue(undefined);
+
+    await service.notifyNewOrder({
+      id: 'o1',
+      code: 'DV-0043',
+      total: 90,
+      customerName: 'Maria',
+      tickets: { count: 2, eventTitle: 'Oficina de terrário' },
+    });
+    await service.notifyNewOrder({
+      id: 'o2',
+      code: 'DV-0044',
+      total: 0,
+      customerName: 'João',
+      tickets: { count: 1, eventTitle: 'Feirinha' },
+      late: true,
+    });
+
+    const [paid, free] = (webpush.sendNotification as jest.Mock).mock.calls.map((c) => JSON.parse(c[1]));
+    expect(paid.title).toBe('Ingresso vendido DV-0043');
+    expect(paid.body).toBe('Maria · 2 ingressos · Oficina de terrário');
+    expect(free.title).toBe('Nova inscrição DV-0044');
+    expect(free.body).toBe('⚠️ Pago depois de vencer, confira as vagas. João · 1 ingresso · Feirinha');
+  });
 });

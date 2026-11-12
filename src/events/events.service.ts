@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -9,8 +10,13 @@ import { BlobStorageService } from '../media/blob-storage.service';
 import { pageBounds, paginated } from '../common/pagination';
 import { uniqueSlug } from '../common/slug';
 import { toDecimal, toMoneyOrNull } from '../common/money';
-import { isUniqueViolation } from '../common/prisma-errors';
+import {
+  isForeignKeyViolation,
+  isUniqueViolation,
+} from '../common/prisma-errors';
 import type { UploadedFileData } from '../common/uploads';
+import { StoreSettingsService } from '../store-settings/store-settings.service';
+import { spotsLeft, takenSpots, type TakenSpots } from '../site-orders/spots';
 import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
 import { ListEventsDto } from './dto/list-events.dto';
@@ -32,18 +38,41 @@ export interface SiteEvent {
   spots: number | null;
   imageUrl: string | null;
   ctaUrl: string | null;
+  /**
+   * Venda/inscrição pelo site. No público já vem combinada com o interruptor
+   * geral "Venda de ingressos" (`StoreSettings.ticketsEnabled`): o site só
+   * olha este campo. No admin é o valor do próprio evento.
+   */
+  ticketSales: boolean;
+  maxTicketsPerOrder: number;
+  /** `null` = sem limite (`spots` null) ou venda desligada. */
+  spotsLeft: number | null;
+  soldOut: boolean;
 }
 
 export interface EventAdmin extends SiteEvent {
   published: boolean;
   createdAt: string;
   updatedAt: string;
+  /** Ingressos de pedidos pagos. */
+  sold: number;
+  /** Ingressos de pedidos pendentes que ainda não venceram. */
+  reserved: number;
 }
 
 /** Colidiria com a rota `GET /events/upcoming`. */
 const RESERVED_SLUGS = new Set(['upcoming']);
 
-function toSiteEvent(row: EventRow): SiteEvent {
+/**
+ * `selling` decide se as vagas contam: no público é o evento com o interruptor
+ * geral, no admin só o evento.
+ */
+function toSiteEvent(
+  row: EventRow,
+  taken: TakenSpots | undefined,
+  selling: boolean,
+): SiteEvent {
+  const left = selling ? spotsLeft(row.spots, taken) : null;
   return {
     id: row.id,
     title: row.title,
@@ -57,15 +86,21 @@ function toSiteEvent(row: EventRow): SiteEvent {
     spots: row.spots,
     imageUrl: row.imageUrl,
     ctaUrl: row.ctaUrl,
+    ticketSales: selling,
+    maxTicketsPerOrder: row.maxTicketsPerOrder,
+    spotsLeft: left,
+    soldOut: selling && left === 0,
   };
 }
 
-function toEventAdmin(row: EventRow): EventAdmin {
+function toEventAdmin(row: EventRow, taken?: TakenSpots): EventAdmin {
   return {
-    ...toSiteEvent(row),
+    ...toSiteEvent(row, taken, row.ticketSales),
     published: row.published,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
+    sold: taken?.sold ?? 0,
+    reserved: taken?.reserved ?? 0,
   };
 }
 
@@ -103,6 +138,7 @@ export class EventsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly blob: BlobStorageService,
+    private readonly storeSettings: StoreSettingsService,
   ) {}
 
   /** Admin: rascunhos e passados incluídos, o mais recente primeiro. */
@@ -121,7 +157,17 @@ export class EventsService {
       }),
       this.prisma.event.count({ where }),
     ]);
-    return paginated(rows.map(toEventAdmin), total, page, perPage);
+    const taken = await takenSpots(
+      this.prisma,
+      rows.map((row) => row.id),
+      new Date(),
+    );
+    return paginated(
+      rows.map((row) => toEventAdmin(row, taken.get(row.id))),
+      total,
+      page,
+      perPage,
+    );
   }
 
   /**
@@ -155,6 +201,11 @@ export class EventsService {
       dto.startsAt ? new Date(dto.startsAt) : current.startsAt,
       dto.endsAt ? new Date(dto.endsAt) : current.endsAt,
     );
+    const taken = (await takenSpots(this.prisma, [id], new Date())).get(id);
+    const occupied = (taken?.sold ?? 0) + (taken?.reserved ?? 0);
+    if (typeof dto.spots === 'number' && dto.spots < occupied) {
+      throw new BadRequestException(`Já há ${occupied} vagas ocupadas.`);
+    }
     const { removeImage, ...fields } = dto;
     const newImage = file ? await this.upload(file) : undefined;
     const imageUrl =
@@ -177,12 +228,25 @@ export class EventsService {
     if (imageUrl !== undefined && current.imageUrl) {
       await this.blob.deleteImage(current.imageUrl);
     }
-    return toEventAdmin(updated);
+    return toEventAdmin(updated, taken);
   }
 
+  /**
+   * Evento com ingresso (pago, pendente ou cancelado) não sai do banco: os
+   * pedidos apontam pra ele. A cliente despublica em vez de excluir.
+   */
   async remove(id: string): Promise<void> {
     const current = await this.findRow(id);
-    await this.prisma.event.delete({ where: { id } });
+    try {
+      await this.prisma.event.delete({ where: { id } });
+    } catch (error) {
+      if (isForeignKeyViolation(error)) {
+        throw new ConflictException(
+          'Esse evento tem ingressos vendidos. Despublique em vez de excluir.',
+        );
+      }
+      throw error;
+    }
     if (current.imageUrl) await this.blob.deleteImage(current.imageUrl);
   }
 
@@ -194,7 +258,7 @@ export class EventsService {
       where: { published: true, endsAt: { gte: now } },
       orderBy: { startsAt: 'asc' },
     });
-    return rows.map(toSiteEvent);
+    return this.toPublic(rows, now);
   }
 
   /** Qualquer publicado, passado ou futuro. Rascunho responde como inexistente. */
@@ -203,7 +267,23 @@ export class EventsService {
       where: { slug, published: true },
     });
     if (!row) throw new NotFoundException('Evento não encontrado.');
-    return toSiteEvent(row);
+    const [event] = await this.toPublic([row], new Date());
+    return event;
+  }
+
+  /** Vagas contadas numa consulta só pra lista inteira (sem N+1). */
+  private async toPublic(rows: EventRow[], now: Date): Promise<SiteEvent[]> {
+    if (rows.length === 0) return [];
+    const { ticketsEnabled } = await this.storeSettings.get();
+    const selling = rows.filter((row) => ticketsEnabled && row.ticketSales);
+    const taken = await takenSpots(
+      this.prisma,
+      selling.map((row) => row.id),
+      now,
+    );
+    return rows.map((row) =>
+      toSiteEvent(row, taken.get(row.id), ticketsEnabled && row.ticketSales),
+    );
   }
 
   private async findRow(id: string): Promise<EventRow> {

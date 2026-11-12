@@ -20,10 +20,13 @@ import { availableStock, lockProducts } from './stock';
 import { lineTotal, orderTotals, toCents } from './pricing';
 import type { CartItemDto } from '../checkout/dto/cart-item.dto';
 import type { CreateCheckoutDto } from '../checkout/dto/create-checkout.dto';
+import type { CreateTicketCheckoutDto } from '../checkout/dto/create-ticket-checkout.dto';
+import { lockEvent, spotsLeft, takenSpots } from './spots';
 import { formatOrderCode, parseOrderCode } from './order-code';
 import { normalizePhone } from '../common/format-phone';
 import {
   PAYMENT_GATEWAY,
+  type CheckoutInput,
   type GatewayCharge,
   type PaymentGateway,
 } from '../pagarme/payment-gateway';
@@ -31,13 +34,14 @@ import { PushNotificationsService } from '../push-notifications/push-notificatio
 import {
   toAdminOrder,
   toPublicOrder,
-  WITH_ITEMS,
+  WITH_DETAILS,
   type PublicSiteOrder,
   type SiteOrderAdmin,
   type SiteOrderRow,
 } from './site-order-views';
 import type { ListSiteOrdersDto } from './dto/list-site-orders.dto';
 import type { UpdateFulfillmentDto } from './dto/update-fulfillment.dto';
+import type { ListAttendeesDto } from './dto/list-attendees.dto';
 
 /** Cliente do Prisma ou transação: a cotação roda dentro da criação do pedido. */
 type Db = Prisma.TransactionClient;
@@ -48,6 +52,19 @@ export type QuoteProblem = {
   /** Só em `insufficient_stock`: quantas unidades dá pra comprar (0 = esgotado). */
   available?: number;
 };
+
+/** Participante na lista de presença do admin. */
+export interface Attendee {
+  id: string;
+  attendeeName: string;
+  checkedInAt: string | null;
+  order: {
+    id: string;
+    code: string;
+    customerName: string;
+    customerPhone: string;
+  };
+}
 
 export type DeliveryUnavailableReason =
   'no_cep' | 'unresolved' | 'not_covered' | 'no_area';
@@ -332,22 +349,152 @@ export class SiteOrdersService {
             })),
           },
         },
-        include: WITH_ITEMS,
+        include: WITH_DETAILS,
       });
     });
 
+    const paymentUrl = await this.startPayment(
+      order,
+      order.items.map((item) => ({
+        id: item.productId ?? item.id,
+        description: item.productName,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+      })),
+    );
+    return {
+      code: formatOrderCode(order.number),
+      token: order.publicToken,
+      paymentUrl,
+    };
+  }
+
+  /**
+   * Compra de ingresso (ou inscrição gratuita) de um evento. A vaga é contada
+   * com o evento travado, como o estoque na compra de produto, e o preço vem
+   * do banco, congelado em cada ingresso. Gratuito não passa pelo gateway: já
+   * nasce pago e avisa a cliente na hora.
+   */
+  async createTickets(
+    dto: CreateTicketCheckoutDto,
+    now: Date = new Date(),
+  ): Promise<{ code: string; token: string; paymentUrl: string | null }> {
+    if (!(await this.storeSettings.get()).ticketsEnabled) {
+      throw new ConflictException({
+        message: 'A venda de ingressos pelo site está fechada no momento.',
+        reason: 'tickets_closed',
+      });
+    }
+    const phone = normalizePhone(dto.customer.phone);
+    if (!phone) throw new BadRequestException('Telefone inválido.');
+    const quantity = dto.attendees.length;
+
+    const order = await this.prisma.$transaction(async (tx) => {
+      await lockEvent(tx, dto.eventId);
+      const event = await tx.event.findUnique({ where: { id: dto.eventId } });
+      if (
+        !event ||
+        !event.published ||
+        !event.ticketSales ||
+        event.startsAt <= now
+      ) {
+        throw new ConflictException({
+          message: 'As vendas desse evento foram encerradas.',
+          reason: 'not_available',
+        });
+      }
+      if (quantity > event.maxTicketsPerOrder) {
+        throw new ConflictException({
+          message: `O máximo por compra é ${event.maxTicketsPerOrder} ingressos.`,
+          reason: 'too_many',
+          max: event.maxTicketsPerOrder,
+        });
+      }
+      const left = spotsLeft(
+        event.spots,
+        (await takenSpots(tx, [event.id], now)).get(event.id),
+      );
+      if (left !== null && left < quantity) {
+        throw new ConflictException({
+          message: `Restam ${left} vagas.`,
+          reason: 'sold_out',
+          spotsLeft: left,
+        });
+      }
+      // `null` ou 0 = gratuito.
+      const unitPrice = new Prisma.Decimal(event.price ?? 0);
+      const free = unitPrice.isZero();
+      const { subtotal, total } = orderTotals(
+        [lineTotal(unitPrice, quantity)],
+        new Prisma.Decimal(0),
+      );
+      return tx.siteOrder.create({
+        data: {
+          kind: 'tickets',
+          eventId: event.id,
+          customerName: dto.customer.name.trim(),
+          customerEmail: dto.customer.email.trim(),
+          customerPhone: phone,
+          deliveryMethod: null,
+          notes: dto.notes?.trim() || null,
+          subtotal,
+          deliveryFee: new Prisma.Decimal(0),
+          total,
+          ...(free
+            ? { status: 'paid', paidAt: now, expiresAt: now }
+            : {
+                // A reserva não passa do começo do evento.
+                expiresAt: new Date(
+                  Math.min(
+                    now.getTime() + ORDER_TTL_MS,
+                    event.startsAt.getTime(),
+                  ),
+                ),
+              }),
+          tickets: {
+            create: dto.attendees.map((attendee) => ({
+              eventId: event.id,
+              attendeeName: attendee.name.trim(),
+              unitPrice,
+            })),
+          },
+        },
+        include: WITH_DETAILS,
+      });
+    });
+
+    const code = formatOrderCode(order.number);
+    if (order.status === 'paid') {
+      await this.notify(order, code);
+      return { code, token: order.publicToken, paymentUrl: null };
+    }
+    const paymentUrl = await this.startPayment(order, [
+      {
+        id: order.eventId!,
+        description: `Ingresso — ${order.event!.title}`,
+        quantity,
+        unitPrice: order.tickets[0].unitPrice,
+      },
+    ]);
+    return { code, token: order.publicToken, paymentUrl };
+  }
+
+  /**
+   * Cria o link de pagamento de um pedido recém-gravado, fora da transação.
+   * Se o gateway falhar, o pedido é cancelado na hora (a reserva some) e o
+   * site recebe 503.
+   */
+  private async startPayment(
+    order: SiteOrderRow,
+    items: CheckoutInput['items'],
+  ): Promise<string> {
     const code = formatOrderCode(order.number);
     const settings = await this.storeSettings.get();
     try {
       const { gatewayLinkId, paymentUrl } = await this.gateway.createCheckout({
         orderId: order.id,
         code,
-        items: order.items.map((item) => ({
-          id: item.productId ?? item.id,
-          description: item.productName,
-          quantity: item.quantity,
-          unitPrice: item.unitPrice,
-        })),
+        items,
         deliveryFee: order.deliveryFee,
         customer: {
           name: order.customerName,
@@ -362,7 +509,7 @@ export class SiteOrdersService {
         where: { id: order.id },
         data: { gatewayLinkId, paymentUrl },
       });
-      return { code, token: order.publicToken, paymentUrl };
+      return paymentUrl;
     } catch (error) {
       this.logger.error(
         `Falha ao criar o pagamento de ${code}: ${(error as Error).message}`,
@@ -430,17 +577,11 @@ export class SiteOrdersService {
           });
           return;
         }
-        await this.push
-          .notifyNewOrder({
-            id: order.id,
-            code,
-            total: order.total,
-            customerName: order.customerName,
-            late: order.status === 'expired' || order.status === 'cancelled',
-          })
-          .catch((error) =>
-            this.logger.warn(`Push do pedido ${code} falhou: ${error}`),
-          );
+        await this.notify(
+          order,
+          code,
+          order.status === 'expired' || order.status === 'cancelled',
+        );
         return;
       }
       case 'refunded':
@@ -536,7 +677,7 @@ export class SiteOrdersService {
   async findPublicByToken(token: string): Promise<PublicSiteOrder> {
     const row = await this.prisma.siteOrder.findUnique({
       where: { publicToken: token },
-      include: WITH_ITEMS,
+      include: WITH_DETAILS,
     });
     if (!row) throw new NotFoundException('Pedido não encontrado.');
     const [order, settings] = await Promise.all([
@@ -558,6 +699,7 @@ export class SiteOrdersService {
     const where: Prisma.SiteOrderWhereInput = {
       status: query.status ?? 'paid',
       ...(query.kind && { kind: query.kind }),
+      ...(query.eventId && { eventId: query.eventId }),
       ...(search && {
         OR: [
           { customerName: { contains: search, mode: 'insensitive' } },
@@ -568,7 +710,7 @@ export class SiteOrdersService {
     const [rows, total] = await Promise.all([
       this.prisma.siteOrder.findMany({
         where,
-        include: WITH_ITEMS,
+        include: WITH_DETAILS,
         orderBy: { createdAt: 'desc' },
         skip,
         take,
@@ -598,7 +740,7 @@ export class SiteOrdersService {
       await this.prisma.siteOrder.update({
         where: { id },
         data: { fulfillmentStatus: dto.fulfillmentStatus },
-        include: WITH_ITEMS,
+        include: WITH_DETAILS,
       }),
     );
   }
@@ -631,6 +773,97 @@ export class SiteOrdersService {
     return this.findById(id);
   }
 
+  /**
+   * Lista de presença: ingressos de pedidos pagos, por nome do participante.
+   * `q` acha pelo participante ou pelo comprador. Paginada, porque um evento
+   * pode ter muita gente.
+   */
+  async listAttendees(eventId: string, query: ListAttendeesDto = {}) {
+    const event = await this.prisma.event.findUnique({
+      where: { id: eventId },
+      select: { id: true, spots: true },
+    });
+    if (!event) throw new NotFoundException('Evento não encontrado.');
+    const { page, perPage, skip, take } = pageBounds(query);
+    const search = query.q?.trim();
+    const where: Prisma.SiteOrderTicketWhereInput = {
+      eventId,
+      order: { status: 'paid' },
+      ...(search && {
+        OR: [
+          { attendeeName: { contains: search, mode: 'insensitive' } },
+          {
+            order: {
+              customerName: { contains: search, mode: 'insensitive' },
+            },
+          },
+        ],
+      }),
+    };
+    const [rows, total, sold] = await Promise.all([
+      this.prisma.siteOrderTicket.findMany({
+        where,
+        include: WITH_ATTENDEE_ORDER,
+        orderBy: [{ attendeeName: 'asc' }, { id: 'asc' }],
+        skip,
+        take,
+      }),
+      this.prisma.siteOrderTicket.count({ where }),
+      this.prisma.siteOrderTicket.count({
+        where: { eventId, order: { status: 'paid' } },
+      }),
+    ]);
+    return {
+      ...paginated(rows.map(toAttendee), total, page, perPage),
+      sold,
+      spots: event.spots,
+    };
+  }
+
+  /** Marca ou desmarca a presença. Só ingresso de pedido pago tem presença. */
+  async setCheckIn(
+    ticketId: string,
+    checkedIn: boolean,
+    now: Date = new Date(),
+  ): Promise<Attendee> {
+    const ticket = await this.prisma.siteOrderTicket.findUnique({
+      where: { id: ticketId },
+      include: WITH_ATTENDEE_ORDER,
+    });
+    if (!ticket) throw new NotFoundException('Ingresso não encontrado.');
+    if (ticket.order.status !== 'paid') {
+      throw new ConflictException('Esse ingresso não está pago.');
+    }
+    return toAttendee(
+      await this.prisma.siteOrderTicket.update({
+        where: { id: ticketId },
+        data: { checkedInAt: checkedIn ? now : null },
+        include: WITH_ATTENDEE_ORDER,
+      }),
+    );
+  }
+
+  /** Push de venda nova; falha só vira log, nunca derruba o pagamento. */
+  private async notify(order: SiteOrderRow, code: string, late = false) {
+    await this.push
+      .notifyNewOrder({
+        id: order.id,
+        code,
+        total: order.total,
+        customerName: order.customerName,
+        late,
+        ...(order.kind === 'tickets' && {
+          tickets: {
+            count: order.tickets.length,
+            eventTitle: order.event?.title ?? 'evento',
+          },
+        }),
+      })
+      .catch((error) =>
+        this.logger.warn(`Push do pedido ${code} falhou: ${error}`),
+      );
+  }
+
   /** O pedido de uma cobrança: pelo pedido do gateway ou pelo nosso `DV-…`. */
   private async findByCharge(
     charge: GatewayCharge,
@@ -645,14 +878,14 @@ export class SiteOrdersService {
     if (or.length === 0) return null;
     return this.prisma.siteOrder.findFirst({
       where: { OR: or },
-      include: WITH_ITEMS,
+      include: WITH_DETAILS,
     });
   }
 
   private async findRow(id: string): Promise<SiteOrderRow> {
     const row = await this.prisma.siteOrder.findUnique({
       where: { id },
-      include: WITH_ITEMS,
+      include: WITH_DETAILS,
     });
     if (!row) throw new NotFoundException('Pedido não encontrado.');
     return row;
@@ -732,6 +965,36 @@ function toPublicQuote(details: QuoteDetails): CheckoutQuote {
         }
       : details.delivery,
     problems: details.problems,
+  };
+}
+
+const WITH_ATTENDEE_ORDER = {
+  order: {
+    select: {
+      id: true,
+      number: true,
+      status: true,
+      customerName: true,
+      customerPhone: true,
+    },
+  },
+} as const satisfies Prisma.SiteOrderTicketInclude;
+
+function toAttendee(
+  row: Prisma.SiteOrderTicketGetPayload<{
+    include: typeof WITH_ATTENDEE_ORDER;
+  }>,
+): Attendee {
+  return {
+    id: row.id,
+    attendeeName: row.attendeeName,
+    checkedInAt: row.checkedInAt?.toISOString() ?? null,
+    order: {
+      id: row.order.id,
+      code: formatOrderCode(row.order.number),
+      customerName: row.order.customerName,
+      customerPhone: row.order.customerPhone,
+    },
   };
 }
 

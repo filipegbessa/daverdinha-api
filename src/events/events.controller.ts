@@ -65,6 +65,17 @@ const eventFormSchema = (required: string[], update = false) => ({
         description: 'Link de inscrição externo. Vazio = WhatsApp.',
       },
       published: { type: 'boolean' },
+      ticketSales: {
+        type: 'boolean',
+        description:
+          'Vende/inscreve pelo site (com o interruptor "Venda de ingressos" ligado).',
+      },
+      maxTicketsPerOrder: {
+        type: 'integer',
+        minimum: 1,
+        maximum: 50,
+        default: 10,
+      },
       ...(update && {
         removeImage: {
           type: 'boolean',

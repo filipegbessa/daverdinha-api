@@ -367,11 +367,32 @@ model SiteOrder {
   expiresAt         DateTime          @map("expires_at")
   lastSyncedAt      DateTime?         @map("last_synced_at")
   items             SiteOrderItem[]
+  /// Só em pedido de ingresso. Restrict: evento com venda não pode ser apagado.
+  eventId           String?           @map("event_id")
+  event             Event?            @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  tickets           SiteOrderTicket[]
   createdAt         DateTime          @default(now()) @map("created_at")
   updatedAt         DateTime          @updatedAt @map("updated_at")
 
   @@index([kind, status, createdAt])
+  @@index([eventId, status])
   @@map("site_orders")
+}
+
+/// Um ingresso = um participante. Preço congelado no momento da compra.
+model SiteOrderTicket {
+  id           String    @id @default(uuid())
+  orderId      String    @map("order_id")
+  order        SiteOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  eventId      String    @map("event_id")
+  event        Event     @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  attendeeName String    @map("attendee_name")
+  unitPrice    Decimal   @map("unit_price") @db.Decimal(10, 2)
+  checkedInAt  DateTime? @map("checked_in_at")
+
+  @@index([eventId])
+  @@index([orderId])
+  @@map("site_order_tickets")
 }
 
 model SiteOrderItem {
@@ -404,6 +425,9 @@ model StoreSettings {
   /// Liga a venda pelo site (carrinho + Pagar.me). Desligada, o site vende
   /// pelo WhatsApp e o checkout da API recusa pedidos.
   storeEnabled        Boolean  @default(false) @map("store_enabled")
+  /// Liga a venda de ingressos pelo site, independente da loja. Um evento só
+  /// vende com este ligado e o `ticketSales` dele ligado.
+  ticketsEnabled      Boolean  @default(false) @map("tickets_enabled")
   pickupEnabled       Boolean  @default(true) @map("pickup_enabled")
   pickupAddress       String   @map("pickup_address")
   pickupHours         String   @map("pickup_hours")
@@ -421,26 +445,33 @@ model StoreSettings {
 /// `published`; evento passado sai da lista pública sozinho pelo `endsAt`,
 /// mas a página dele continua no ar.
 model Event {
-  id              String   @id @default(uuid())
-  title           String
+  id                 String            @id @default(uuid())
+  title              String
   /// Gerado do título na criação e nunca recalculado: é a URL do evento.
-  slug            String   @unique
-  description     String
-  startsAt        DateTime @map("starts_at")
-  endsAt          DateTime @map("ends_at")
+  slug               String            @unique
+  description        String
+  startsAt           DateTime          @map("starts_at")
+  endsAt             DateTime          @map("ends_at")
   /// `null` = no ateliê (o site usa o endereço da loja).
-  locationName    String?  @map("location_name")
-  locationAddress String?  @map("location_address")
+  locationName       String?           @map("location_name")
+  locationAddress    String?           @map("location_address")
   /// `null` = gratuito.
-  price           Decimal? @db.Decimal(10, 2)
+  price              Decimal?          @db.Decimal(10, 2)
   /// `null` = sem limite divulgado.
-  spots           Int?
-  imageUrl        String?  @map("image_url")
+  spots              Int?
+  imageUrl           String?           @map("image_url")
   /// `null` = inscrição pelo WhatsApp, com mensagem pronta montada pelo site.
-  ctaUrl          String?  @map("cta_url")
-  published       Boolean  @default(false)
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  ctaUrl             String?           @map("cta_url")
+  published          Boolean           @default(false)
+  /// Venda/inscrição pelo site. Desligada, o evento usa `ctaUrl`/WhatsApp.
+  /// Só vale com o interruptor geral `StoreSettings.ticketsEnabled` ligado.
+  ticketSales        Boolean           @default(false) @map("ticket_sales")
+  /// Limite de ingressos por compra, configurado pela cliente (1–50).
+  maxTicketsPerOrder Int               @default(10) @map("max_tickets_per_order")
+  tickets            SiteOrderTicket[]
+  orders             SiteOrder[]
+  createdAt          DateTime          @default(now()) @map("created_at")
+  updatedAt          DateTime          @updatedAt @map("updated_at")
 
   @@index([published, endsAt])
   @@map("events")

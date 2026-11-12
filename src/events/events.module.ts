@@ -1,12 +1,13 @@
 import { Module } from '@nestjs/common';
 import { ClerkAuthModule } from '../common/auth/clerk-auth.module';
 import { BlobStorageModule } from '../media/blob-storage.module';
+import { StoreSettingsModule } from '../store-settings/store-settings.module';
 import { EventsService } from './events.service';
 import { EventsController } from './events.controller';
 import { PublicEventsController } from './public-events.controller';
 
 @Module({
-  imports: [ClerkAuthModule, BlobStorageModule],
+  imports: [ClerkAuthModule, BlobStorageModule, StoreSettingsModule],
   providers: [EventsService],
   // O público vem primeiro, como no catálogo: as rotas `GET /events/...`
   // sem token não podem cair no guard do admin.

@@ -3,13 +3,26 @@ import { formatOrderCode } from './order-code';
 import { toMoney } from '../common/money';
 import type { StoreSettings } from '../store-settings/store-settings.service';
 
-export type SiteOrderRow = Prisma.SiteOrderGetPayload<{
-  include: { items: true };
-}>;
-
-export const WITH_ITEMS = {
+/** Itens (produtos), ingressos e o evento: tudo o que as duas vistas mostram. */
+export const WITH_DETAILS = {
   items: { orderBy: { productName: 'asc' } },
-} as const;
+  tickets: { orderBy: { attendeeName: 'asc' } },
+  event: {
+    select: {
+      id: true,
+      title: true,
+      slug: true,
+      startsAt: true,
+      endsAt: true,
+      locationName: true,
+      locationAddress: true,
+    },
+  },
+} as const satisfies Prisma.SiteOrderInclude;
+
+export type SiteOrderRow = Prisma.SiteOrderGetPayload<{
+  include: typeof WITH_DETAILS;
+}>;
 
 /**
  * O que a página pública do pedido (`/pedido/<token>`) mostra. Quem tem o
@@ -28,7 +41,16 @@ export interface PublicSiteOrder {
     imageUrl: string | null;
     leadTimeDays: number | null;
   }[];
-  event: null;
+  /** Só em pedido de ingresso. */
+  event: {
+    title: string;
+    slug: string;
+    startsAt: string;
+    endsAt: string;
+    locationName: string | null;
+    locationAddress: string | null;
+  } | null;
+  /** Um por participante; `[]` em pedido de produtos. */
   tickets: { attendeeName: string; unitPrice: number }[];
   subtotal: number;
   deliveryFee: number;
@@ -73,6 +95,14 @@ export interface SiteOrderAdmin {
     imageUrl: string | null;
     leadTimeDays: number | null;
   }[];
+  /** Só em pedido de ingresso. */
+  event: { id: string; title: string; slug: string; startsAt: string } | null;
+  tickets: {
+    id: string;
+    attendeeName: string;
+    unitPrice: number;
+    checkedInAt: string | null;
+  }[];
   subtotal: number;
   deliveryFee: number;
   total: number;
@@ -112,8 +142,18 @@ export function toPublicOrder(
     status: row.status,
     fulfillmentStatus: row.fulfillmentStatus,
     items: items(row),
-    event: null,
-    tickets: [],
+    event: row.event && {
+      title: row.event.title,
+      slug: row.event.slug,
+      startsAt: row.event.startsAt.toISOString(),
+      endsAt: row.event.endsAt.toISOString(),
+      locationName: row.event.locationName,
+      locationAddress: row.event.locationAddress,
+    },
+    tickets: row.tickets.map((ticket) => ({
+      attendeeName: ticket.attendeeName,
+      unitPrice: toMoney(ticket.unitPrice),
+    })),
     subtotal: toMoney(row.subtotal),
     deliveryFee: toMoney(row.deliveryFee),
     total: toMoney(row.total),
@@ -162,6 +202,18 @@ export function toAdminOrder(row: SiteOrderRow): SiteOrderAdmin {
     items: items(row).map((item, index) => ({
       productId: row.items[index].productId,
       ...item,
+    })),
+    event: row.event && {
+      id: row.event.id,
+      title: row.event.title,
+      slug: row.event.slug,
+      startsAt: row.event.startsAt.toISOString(),
+    },
+    tickets: row.tickets.map((ticket) => ({
+      id: ticket.id,
+      attendeeName: ticket.attendeeName,
+      unitPrice: toMoney(ticket.unitPrice),
+      checkedInAt: ticket.checkedInAt?.toISOString() ?? null,
     })),
     subtotal: toMoney(row.subtotal),
     deliveryFee: toMoney(row.deliveryFee),

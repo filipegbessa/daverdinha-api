@@ -8,6 +8,7 @@ function row(overrides: Record<string, unknown> = {}) {
     id: 1,
     siteEnabled: false,
     storeEnabled: false,
+    ticketsEnabled: false,
     pickupEnabled: true,
     pickupAddress: 'R. Capiberibe, 32',
     pickupHours: 'Seg a sex, 10h às 18h',
@@ -53,10 +54,11 @@ describe('StoreSettingsService', () => {
     expect(settings.minInstallmentValue).toBe(30);
   });
 
-  it('exposes only the site and store switches and the installments publicly', async () => {
+  it('exposes only the switches and the installments publicly', async () => {
     await expect(service.getPublic()).resolves.toEqual({
       siteEnabled: false,
       storeEnabled: false,
+      ticketsEnabled: false,
       maxInstallments: 3,
       minInstallmentValue: 30,
     });
@@ -81,6 +83,13 @@ describe('StoreSettingsService', () => {
       process.env.PAGARME_SECRET_KEY = 'sk_test_x';
 
       expect((await service.get()).paymentConfigured).toBe(true);
+    });
+
+    it('switches ticket sales on independently of the store', async () => {
+      const settings = await service.update({ ticketsEnabled: true });
+
+      expect(settings.ticketsEnabled).toBe(true);
+      expect(settings.storeEnabled).toBe(false);
     });
 
     it('switches the full site on and off', async () => {

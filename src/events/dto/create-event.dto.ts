@@ -8,6 +8,7 @@ import {
   IsOptional,
   IsString,
   IsUrl,
+  Max,
   Min,
 } from 'class-validator';
 import { emptyToNull, toBoolean, trim } from '../../common/transforms';
@@ -70,4 +71,21 @@ export class CreateEventDto {
   @Transform(toBoolean)
   @IsBoolean()
   published?: boolean;
+
+  /**
+   * Venda/inscrição pelo site ("Comprar ingresso" se pago, "Inscrever-se" se
+   * gratuito). Só vale com o interruptor "Venda de ingressos" do Dashboard.
+   */
+  @IsOptional()
+  @Transform(toBoolean)
+  @IsBoolean()
+  ticketSales?: boolean;
+
+  /** Máximo de ingressos numa compra. */
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) => Number(value))
+  @IsInt()
+  @Min(1)
+  @Max(50)
+  maxTicketsPerOrder?: number;
 }

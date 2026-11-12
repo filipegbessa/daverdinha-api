@@ -87,6 +87,7 @@ describe('Delivery areas and store settings (e2e)', () => {
       'minInstallmentValue',
       'siteEnabled',
       'storeEnabled',
+      'ticketsEnabled',
     ]);
   });
 });

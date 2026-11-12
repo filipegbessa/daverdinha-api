@@ -1,5 +1,5 @@
 import { Transform } from 'class-transformer';
-import { IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsIn, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
 import { PaginationQueryDto } from '../../common/pagination';
 import { trim } from '../../common/transforms';
 
@@ -20,6 +20,11 @@ export class ListSiteOrdersDto extends PaginationQueryDto {
   @IsOptional()
   @IsIn(['products', 'tickets'])
   kind?: 'products' | 'tickets';
+
+  /** Pedidos de ingresso de um evento. */
+  @IsOptional()
+  @IsUUID()
+  eventId?: string;
 
   /** Código (`DV-0042`, `42`) ou nome do comprador. */
   @IsOptional()

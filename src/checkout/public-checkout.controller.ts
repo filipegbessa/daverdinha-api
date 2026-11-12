@@ -11,6 +11,7 @@ import { ApiTags } from '@nestjs/swagger';
 import { SiteOrdersService } from '../site-orders/site-orders.service';
 import { QuoteDto } from './dto/quote.dto';
 import { CreateCheckoutDto } from './dto/create-checkout.dto';
+import { CreateTicketCheckoutDto } from './dto/create-ticket-checkout.dto';
 
 /**
  * A loja do site, sem login. Controller público separado, como os outros:
@@ -36,6 +37,16 @@ export class PublicCheckoutController {
   @Post()
   create(@Body() dto: CreateCheckoutDto) {
     return this.orders.create(dto);
+  }
+
+  /**
+   * Compra de ingresso (ou inscrição gratuita) na página do evento.
+   * `paymentUrl: null` = gratuito, já confirmado. 409 com `reason`:
+   * `tickets_closed`, `not_available`, `sold_out` ou `too_many`.
+   */
+  @Post('tickets')
+  createTickets(@Body() dto: CreateTicketCheckoutDto) {
+    return this.orders.createTickets(dto);
   }
 
   /** A página do pedido, pelo token secreto do link (`/pedido/<token>` no site). */

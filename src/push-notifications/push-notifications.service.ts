@@ -25,6 +25,8 @@ interface NotifiableOrder {
   customerName: string;
   /** Pago depois de vencer ou de ser cancelado: a reserva já tinha sido solta. */
   late?: boolean;
+  /** Só em pedido de ingresso: quantos participantes e de qual evento. */
+  tickets?: { count: number; eventTitle: string };
 }
 
 const MAX_BODY_LENGTH = 120;
@@ -79,14 +81,23 @@ export class PushNotificationsService implements OnModuleInit {
 
   /** Venda paga no site. Pedido criado e abandonado não avisa: é ruído. */
   async notifyNewOrder(order: NotifiableOrder): Promise<void> {
-    const total = brl.format(new Prisma.Decimal(order.total).toNumber());
-    const body = `${order.customerName} · ${total}`;
+    const amount = new Prisma.Decimal(order.total);
+    const { tickets } = order;
+    // Ingresso: "Ingresso vendido" (pago) ou "Nova inscrição" (gratuito), com
+    // o evento no lugar do valor.
+    const title = !tickets
+      ? `Novo pedido ${order.code}`
+      : amount.isZero()
+        ? `Nova inscrição ${order.code}`
+        : `Ingresso vendido ${order.code}`;
+    const body = tickets
+      ? `${order.customerName} · ${tickets.count} ${tickets.count === 1 ? 'ingresso' : 'ingressos'} · ${tickets.eventTitle}`
+      : `${order.customerName} · ${brl.format(amount.toNumber())}`;
+    const warning = tickets ? 'confira as vagas' : 'confira o estoque';
     await this.sendToAll({
-      title: `Novo pedido ${order.code}`,
+      title,
       body: truncateBody(
-        order.late
-          ? `⚠️ Pago depois de vencer, confira o estoque. ${body}`
-          : body,
+        order.late ? `⚠️ Pago depois de vencer, ${warning}. ${body}` : body,
       ),
       url: `/admin/pedidos/${order.id}`,
     });

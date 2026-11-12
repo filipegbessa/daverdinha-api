@@ -256,8 +256,11 @@ const EVENTS = [
     startsAt: atRio(5, 10),
     endsAt: atRio(5, 12),
     price: 120,
-    spots: 8,
+    spots: 12,
     published: true,
+    // Venda pelo site ligada: pago com lotação e limite por compra.
+    ticketSales: true,
+    maxTicketsPerOrder: 4,
   },
   {
     title: 'Feirinha verde do Santo Cristo',
@@ -269,6 +272,8 @@ const EVENTS = [
     locationName: 'Praça da Harmonia',
     locationAddress: 'Praça da Harmonia, Gamboa, Rio de Janeiro',
     published: true,
+    // Inscrição gratuita pelo site, sem limite de vagas.
+    ticketSales: true,
   },
   {
     title: 'Plantar e brindar: kokedama',
@@ -293,10 +298,72 @@ async function seedEvents() {
   }
 }
 
+/**
+ * Pedidos de ingresso de exemplo na oficina: um pago com dois participantes
+ * (aparece na lista de presença) e um pendente vencido (não ocupa vaga). Por
+ * `customerEmail`, como os pedidos de produto: rodar de novo não duplica.
+ */
+const TICKET_ORDERS = [
+  {
+    customerName: 'Carla Exemplo',
+    customerEmail: 'carla.ingresso@exemplo.com',
+    customerPhone: '5521977776666',
+    status: 'paid' as const,
+    attendees: ['Carla Exemplo', 'Bruno Exemplo'],
+  },
+  {
+    customerName: 'Diego Exemplo',
+    customerEmail: 'diego.ingresso@exemplo.com',
+    customerPhone: '5521966665555',
+    status: 'pending_payment' as const,
+    attendees: ['Diego Exemplo'],
+  },
+];
+
+async function seedTicketOrders() {
+  const event = await prisma.event.findUnique({
+    where: { slug: 'oficina-de-terrario' },
+  });
+  if (!event?.price) return;
+  const hourAgo = new Date(Date.now() - 60 * 60 * 1000);
+
+  for (const order of TICKET_ORDERS) {
+    const existing = await prisma.siteOrder.findFirst({
+      where: { customerEmail: order.customerEmail },
+    });
+    if (existing) continue;
+    const total = event.price.mul(order.attendees.length);
+    await prisma.siteOrder.create({
+      data: {
+        kind: 'tickets',
+        eventId: event.id,
+        customerName: order.customerName,
+        customerEmail: order.customerEmail,
+        customerPhone: order.customerPhone,
+        status: order.status,
+        subtotal: total,
+        deliveryFee: 0,
+        total,
+        paidAt: order.status === 'paid' ? hourAgo : null,
+        expiresAt: hourAgo,
+        tickets: {
+          create: order.attendees.map((attendeeName) => ({
+            eventId: event.id,
+            attendeeName,
+            unitPrice: event.price!,
+          })),
+        },
+      },
+    });
+  }
+}
+
 /** Mesmo endereço de `daverdinha/src/data/business.ts`. */
 const STORE_SETTINGS = {
   // Local abre o site completo; a loja só liga com a chave do Pagar.me (Dashboard).
   siteEnabled: true,
+  // Local, pra testar a compra de ingresso; produção nasce desligada.
+  ticketsEnabled: true,
   pickupAddress:
     'R. Capiberibe, 32 - Santo Cristo, Rio de Janeiro - RJ, 20220-030',
   pickupHours: 'Seg a sex, 10h às 18h · Sáb, 10h às 14h',
@@ -721,6 +788,7 @@ async function main() {
   await seedStoreSettings();
   await seedDeliveryAreas();
   await seedSiteOrders();
+  await seedTicketOrders();
 
   const menuItems = [
     {

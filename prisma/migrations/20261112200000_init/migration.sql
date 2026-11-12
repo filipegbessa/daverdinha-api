@@ -254,10 +254,23 @@ CREATE TABLE "site_orders" (
     "paid_at" TIMESTAMP(3),
     "expires_at" TIMESTAMP(3) NOT NULL,
     "last_synced_at" TIMESTAMP(3),
+    "event_id" TEXT,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "site_orders_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "site_order_tickets" (
+    "id" TEXT NOT NULL,
+    "order_id" TEXT NOT NULL,
+    "event_id" TEXT NOT NULL,
+    "attendee_name" TEXT NOT NULL,
+    "unit_price" DECIMAL(10,2) NOT NULL,
+    "checked_in_at" TIMESTAMP(3),
+
+    CONSTRAINT "site_order_tickets_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -280,6 +293,7 @@ CREATE TABLE "store_settings" (
     "id" INTEGER NOT NULL DEFAULT 1,
     "site_enabled" BOOLEAN NOT NULL DEFAULT false,
     "store_enabled" BOOLEAN NOT NULL DEFAULT false,
+    "tickets_enabled" BOOLEAN NOT NULL DEFAULT false,
     "pickup_enabled" BOOLEAN NOT NULL DEFAULT true,
     "pickup_address" TEXT NOT NULL,
     "pickup_hours" TEXT NOT NULL,
@@ -306,6 +320,8 @@ CREATE TABLE "events" (
     "image_url" TEXT,
     "cta_url" TEXT,
     "published" BOOLEAN NOT NULL DEFAULT false,
+    "ticket_sales" BOOLEAN NOT NULL DEFAULT false,
+    "max_tickets_per_order" INTEGER NOT NULL DEFAULT 10,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
 
@@ -379,6 +395,15 @@ CREATE UNIQUE INDEX "site_orders_gateway_order_id_key" ON "site_orders"("gateway
 CREATE INDEX "site_orders_kind_status_created_at_idx" ON "site_orders"("kind", "status", "created_at");
 
 -- CreateIndex
+CREATE INDEX "site_orders_event_id_status_idx" ON "site_orders"("event_id", "status");
+
+-- CreateIndex
+CREATE INDEX "site_order_tickets_event_id_idx" ON "site_order_tickets"("event_id");
+
+-- CreateIndex
+CREATE INDEX "site_order_tickets_order_id_idx" ON "site_order_tickets"("order_id");
+
+-- CreateIndex
 CREATE INDEX "site_order_items_order_id_idx" ON "site_order_items"("order_id");
 
 -- CreateIndex
@@ -419,6 +444,15 @@ ALTER TABLE "conversation_categories" ADD CONSTRAINT "conversation_categories_ca
 
 -- AddForeignKey
 ALTER TABLE "products" ADD CONSTRAINT "products_category_id_fkey" FOREIGN KEY ("category_id") REFERENCES "product_categories"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "site_orders" ADD CONSTRAINT "site_orders_event_id_fkey" FOREIGN KEY ("event_id") REFERENCES "events"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "site_order_tickets" ADD CONSTRAINT "site_order_tickets_order_id_fkey" FOREIGN KEY ("order_id") REFERENCES "site_orders"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "site_order_tickets" ADD CONSTRAINT "site_order_tickets_event_id_fkey" FOREIGN KEY ("event_id") REFERENCES "events"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "site_order_items" ADD CONSTRAINT "site_order_items_order_id_fkey" FOREIGN KEY ("order_id") REFERENCES "site_orders"("id") ON DELETE CASCADE ON UPDATE CASCADE;

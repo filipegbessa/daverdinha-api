@@ -1,9 +1,14 @@
 import { Test } from '@nestjs/testing';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { EventsService } from './events.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { BlobStorageService } from '../media/blob-storage.service';
+import { StoreSettingsService } from '../store-settings/store-settings.service';
 
 function row(overrides: Record<string, unknown> = {}) {
   return {
@@ -20,6 +25,8 @@ function row(overrides: Record<string, unknown> = {}) {
     imageUrl: null as string | null,
     ctaUrl: null,
     published: false,
+    ticketSales: false,
+    maxTicketsPerOrder: 10,
     createdAt: new Date('2026-11-01T00:00:00Z'),
     updatedAt: new Date('2026-11-01T00:00:00Z'),
     ...overrides,
@@ -37,7 +44,17 @@ const cover = { buffer: Buffer.from('img'), mimetype: 'image/webp' };
 
 describe('EventsService', () => {
   let service: EventsService;
-  let prisma: { event: Record<string, jest.Mock> };
+  let prisma: {
+    event: Record<string, jest.Mock>;
+    siteOrderTicket: { groupBy: jest.Mock };
+  };
+  let ticketsEnabled: boolean;
+  /** Ingressos por evento que o `groupBy` devolve: [pagos, pendentes válidos]. */
+  function mockTaken(sold: number, reserved: number, eventId = 'e1') {
+    prisma.siteOrderTicket.groupBy
+      .mockResolvedValueOnce([{ eventId, _count: { _all: sold } }])
+      .mockResolvedValueOnce([{ eventId, _count: { _all: reserved } }]);
+  }
   let blob: { uploadEventImage: jest.Mock; deleteImage: jest.Mock };
 
   beforeEach(async () => {
@@ -51,7 +68,9 @@ describe('EventsService', () => {
         update: jest.fn(({ data }) => row(data)),
         delete: jest.fn(),
       },
+      siteOrderTicket: { groupBy: jest.fn().mockResolvedValue([]) },
     };
+    ticketsEnabled = true;
     blob = {
       uploadEventImage: jest
         .fn()
@@ -63,6 +82,10 @@ describe('EventsService', () => {
         EventsService,
         { provide: PrismaService, useValue: prisma },
         { provide: BlobStorageService, useValue: blob },
+        {
+          provide: StoreSettingsService,
+          useValue: { get: jest.fn(async () => ({ ticketsEnabled })) },
+        },
       ],
     }).compile();
     service = moduleRef.get(EventsService);
@@ -279,6 +302,105 @@ describe('EventsService', () => {
       });
       expect(page.total).toBe(1);
       expect(page.items[0].published).toBe(false);
+    });
+  });
+
+  describe('ticket sales', () => {
+    it('counts the spots left of an event that sells, publicly', async () => {
+      prisma.event.findFirst.mockResolvedValue(
+        row({ published: true, ticketSales: true, spots: 8 }),
+      );
+      mockTaken(5, 1);
+
+      const event = await service.findPublishedBySlug('oficina-de-terrario');
+
+      expect(event).toMatchObject({
+        ticketSales: true,
+        maxTicketsPerOrder: 10,
+        spotsLeft: 2,
+        soldOut: false,
+      });
+    });
+
+    it('is sold out when every spot is taken', async () => {
+      prisma.event.findMany.mockResolvedValue([
+        row({ published: true, ticketSales: true, spots: 8 }),
+      ]);
+      mockTaken(6, 2);
+
+      const [event] = await service.listUpcoming();
+
+      expect(event.spotsLeft).toBe(0);
+      expect(event.soldOut).toBe(true);
+    });
+
+    it('turns every sale off publicly while the Dashboard switch is off, and keeps the event flag in the admin', async () => {
+      ticketsEnabled = false;
+      prisma.event.findMany.mockResolvedValue([
+        row({ published: true, ticketSales: true, spots: 8 }),
+      ]);
+
+      const [event] = await service.listUpcoming();
+
+      expect(event).toMatchObject({
+        ticketSales: false,
+        spotsLeft: null,
+        soldOut: false,
+      });
+      expect(prisma.siteOrderTicket.groupBy).not.toHaveBeenCalled();
+
+      prisma.event.count.mockResolvedValue(1);
+      const page = await service.list();
+      expect(page.items[0].ticketSales).toBe(true);
+    });
+
+    it('has no spot count for an event without sales', async () => {
+      prisma.event.findFirst.mockResolvedValue(row({ published: true }));
+
+      const event = await service.findPublishedBySlug('oficina-de-terrario');
+
+      expect(event.spotsLeft).toBeNull();
+      expect(event.soldOut).toBe(false);
+    });
+
+    it('counts the whole agenda in grouped queries, not one per event', async () => {
+      prisma.event.findMany.mockResolvedValue([
+        row({ id: 'e1', published: true, ticketSales: true }),
+        row({ id: 'e2', published: true, ticketSales: true }),
+        row({ id: 'e3', published: true, ticketSales: true }),
+      ]);
+
+      await service.listUpcoming();
+
+      expect(prisma.siteOrderTicket.groupBy).toHaveBeenCalledTimes(2);
+      expect(
+        prisma.siteOrderTicket.groupBy.mock.calls[0][0].where.eventId,
+      ).toEqual({ in: ['e1', 'e2', 'e3'] });
+    });
+
+    it('shows sold and reserved tickets in the admin list', async () => {
+      prisma.event.findMany.mockResolvedValue([row({ ticketSales: true })]);
+      prisma.event.count.mockResolvedValue(1);
+      mockTaken(3, 1);
+
+      const page = await service.list();
+
+      expect(page.items[0]).toMatchObject({ sold: 3, reserved: 1 });
+    });
+
+    it('does not lower the spots below the taken ones', async () => {
+      mockTaken(5, 1);
+
+      await expect(service.update('e1', { spots: 5 })).rejects.toThrow(
+        'Já há 6 vagas ocupadas.',
+      );
+      expect(prisma.event.update).not.toHaveBeenCalled();
+    });
+
+    it('refuses to delete an event with tickets', async () => {
+      prisma.event.delete.mockRejectedValue({ code: 'P2003' });
+
+      await expect(service.remove('e1')).rejects.toThrow(ConflictException);
     });
   });
 });

@@ -23,6 +23,11 @@ export class UpdateStoreSettingsDto {
   @IsBoolean()
   storeEnabled?: boolean;
 
+  /** Venda de ingressos pelo site, independente da loja. Também liga sem a chave do Pagar.me. */
+  @IsOptional()
+  @IsBoolean()
+  ticketsEnabled?: boolean;
+
   /** Desligada, o checkout não oferece retirada. */
   @IsOptional()
   @IsBoolean()

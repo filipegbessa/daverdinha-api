@@ -3,75 +3,80 @@
 import * as m0 from './checkout/dto/cart-item.dto';
 import * as m1 from './checkout/dto/customer.dto';
 import * as m2 from './checkout/dto/create-checkout.dto';
-import * as m3 from './bot-settings/dto/update-bot-settings.dto';
-import * as m4 from './menu-items/dto/create-menu-item.dto';
-import * as m5 from './menu-items/dto/update-menu-item.dto';
-import * as m6 from './menu-items/dto/reorder-menu-items.dto';
-import * as m7 from './delivery-locations/dto/update-delivery-location.dto';
-import * as m8 from './delivery-locations/dto/create-delivery-area.dto';
-import * as m9 from './delivery-locations/dto/update-delivery-area.dto';
-import * as m10 from './delivery-locations/dto/check-cep.dto';
-import * as m11 from './delivery-locations/dto/set-area-locations.dto';
-import * as m12 from './push-subscriptions/dto/save-push-subscription.dto';
-import * as m13 from './push-subscriptions/dto/remove-push-subscription.dto';
-import * as m14 from './common/pagination';
-import * as m15 from './conversations/dto/list-conversations.dto';
-import * as m16 from './conversations/dto/list-messages.dto';
-import * as m17 from './conversations/dto/reply.dto';
-import * as m18 from './conversations/dto/reply-image.dto';
-import * as m19 from './conversations/dto/reply-audio.dto';
-import * as m20 from './conversations/dto/update-conversation.dto';
-import * as m21 from './categories/dto/list-categories.dto';
-import * as m22 from './categories/dto/create-category.dto';
-import * as m23 from './categories/dto/update-category.dto';
-import * as m24 from './product-categories/dto/create-product-category.dto';
-import * as m25 from './product-categories/dto/update-product-category.dto';
-import * as m26 from './products/dto/create-product.dto';
-import * as m27 from './products/dto/update-product.dto';
-import * as m28 from './products/dto/list-products.dto';
-import * as m29 from './store-settings/dto/update-store-settings.dto';
-import * as m30 from './checkout/dto/quote.dto';
-import * as m31 from './site-orders/dto/list-site-orders.dto';
-import * as m32 from './site-orders/dto/update-fulfillment.dto';
-import * as m33 from './events/dto/create-event.dto';
-import * as m34 from './events/dto/update-event.dto';
-import * as m35 from './events/dto/list-events.dto';
-import * as m36 from './app.controller';
-import * as m37 from './bot-settings/bot-settings.controller';
-import * as m38 from './menu-items/menu-items.controller';
-import * as m39 from './delivery-locations/delivery-locations.controller';
-import * as m40 from './delivery-locations/public-delivery-locations.controller';
-import * as m41 from './delivery-locations/delivery-areas.controller';
-import * as m42 from './whatsapp/webhook.controller';
-import * as m43 from './push-subscriptions/push-subscriptions.controller';
-import * as m44 from './conversations/conversations.controller';
-import * as m45 from './categories/categories.controller';
-import * as m46 from './media/media-retention.controller';
-import * as m47 from './openapi/docs-page.controller';
-import * as m48 from './product-categories/product-categories.controller';
-import * as m49 from './product-categories/public-product-categories.controller';
-import * as m50 from './products/products.controller';
-import * as m51 from './products/public-products.controller';
-import * as m52 from './store-settings/store-settings.controller';
-import * as m53 from './store-settings/public-store-settings.controller';
-import * as m54 from './checkout/public-checkout.controller';
-import * as m55 from './site-orders/site-orders.controller';
-import * as m56 from './checkout/pagarme-webhook.controller';
-import * as m57 from './openapi/openapi.controller';
-import * as m58 from './events/events.controller';
-import * as m59 from './events/public-events.controller';
+import * as m3 from './checkout/dto/create-ticket-checkout.dto';
+import * as m4 from './bot-settings/dto/update-bot-settings.dto';
+import * as m5 from './menu-items/dto/create-menu-item.dto';
+import * as m6 from './menu-items/dto/update-menu-item.dto';
+import * as m7 from './menu-items/dto/reorder-menu-items.dto';
+import * as m8 from './delivery-locations/dto/update-delivery-location.dto';
+import * as m9 from './delivery-locations/dto/create-delivery-area.dto';
+import * as m10 from './delivery-locations/dto/update-delivery-area.dto';
+import * as m11 from './delivery-locations/dto/check-cep.dto';
+import * as m12 from './delivery-locations/dto/set-area-locations.dto';
+import * as m13 from './push-subscriptions/dto/save-push-subscription.dto';
+import * as m14 from './push-subscriptions/dto/remove-push-subscription.dto';
+import * as m15 from './common/pagination';
+import * as m16 from './conversations/dto/list-conversations.dto';
+import * as m17 from './conversations/dto/list-messages.dto';
+import * as m18 from './conversations/dto/reply.dto';
+import * as m19 from './conversations/dto/reply-image.dto';
+import * as m20 from './conversations/dto/reply-audio.dto';
+import * as m21 from './conversations/dto/update-conversation.dto';
+import * as m22 from './categories/dto/list-categories.dto';
+import * as m23 from './categories/dto/create-category.dto';
+import * as m24 from './categories/dto/update-category.dto';
+import * as m25 from './product-categories/dto/create-product-category.dto';
+import * as m26 from './product-categories/dto/update-product-category.dto';
+import * as m27 from './products/dto/create-product.dto';
+import * as m28 from './products/dto/update-product.dto';
+import * as m29 from './products/dto/list-products.dto';
+import * as m30 from './store-settings/dto/update-store-settings.dto';
+import * as m31 from './checkout/dto/quote.dto';
+import * as m32 from './site-orders/dto/list-site-orders.dto';
+import * as m33 from './site-orders/dto/update-fulfillment.dto';
+import * as m34 from './events/dto/create-event.dto';
+import * as m35 from './events/dto/update-event.dto';
+import * as m36 from './events/dto/list-events.dto';
+import * as m37 from './site-orders/dto/list-attendees.dto';
+import * as m38 from './site-orders/dto/check-in.dto';
+import * as m39 from './app.controller';
+import * as m40 from './bot-settings/bot-settings.controller';
+import * as m41 from './menu-items/menu-items.controller';
+import * as m42 from './delivery-locations/delivery-locations.controller';
+import * as m43 from './delivery-locations/public-delivery-locations.controller';
+import * as m44 from './delivery-locations/delivery-areas.controller';
+import * as m45 from './whatsapp/webhook.controller';
+import * as m46 from './push-subscriptions/push-subscriptions.controller';
+import * as m47 from './conversations/conversations.controller';
+import * as m48 from './categories/categories.controller';
+import * as m49 from './media/media-retention.controller';
+import * as m50 from './openapi/docs-page.controller';
+import * as m51 from './product-categories/product-categories.controller';
+import * as m52 from './product-categories/public-product-categories.controller';
+import * as m53 from './products/products.controller';
+import * as m54 from './products/public-products.controller';
+import * as m55 from './store-settings/store-settings.controller';
+import * as m56 from './store-settings/public-store-settings.controller';
+import * as m57 from './checkout/public-checkout.controller';
+import * as m58 from './site-orders/site-orders.controller';
+import * as m59 from './checkout/pagarme-webhook.controller';
+import * as m60 from './events/events.controller';
+import * as m61 from './events/public-events.controller';
+import * as m62 from './site-orders/site-order-tickets.controller';
+import * as m63 from './openapi/openapi.controller';
 
 export default async () => {
   const t = {
     ['./checkout/dto/cart-item.dto']: await m0,
     ['./checkout/dto/customer.dto']: await m1,
     ['./checkout/dto/create-checkout.dto']: await m2,
+    ['./checkout/dto/create-ticket-checkout.dto']: await m3,
   };
   return {
     '@nestjs/swagger': {
       models: [
         [
-          m3,
+          m4,
           {
             UpdateBotSettingsDto: {
               botEnabled: { required: false, type: () => Boolean },
@@ -86,7 +91,7 @@ export default async () => {
           },
         ],
         [
-          m4,
+          m5,
           {
             CreateMenuItemDto: {
               order: { required: true, type: () => Number },
@@ -112,9 +117,9 @@ export default async () => {
             },
           },
         ],
-        [m5, { UpdateMenuItemDto: {} }],
+        [m6, { UpdateMenuItemDto: {} }],
         [
-          m6,
+          m7,
           {
             ReorderMenuItemsDto: {
               orderedIds: {
@@ -129,7 +134,7 @@ export default async () => {
           },
         ],
         [
-          m7,
+          m8,
           {
             UpdateDeliveryLocationDto: {
               covered: { required: true, type: () => Boolean },
@@ -137,7 +142,7 @@ export default async () => {
           },
         ],
         [
-          m8,
+          m9,
           {
             CreateDeliveryAreaDto: {
               zone: {
@@ -158,13 +163,13 @@ export default async () => {
             },
           },
         ],
-        [m9, { UpdateDeliveryAreaDto: {} }],
+        [m10, { UpdateDeliveryAreaDto: {} }],
         [
-          m10,
+          m11,
           { CheckCepDto: { cep: { required: false, type: () => String } } },
         ],
         [
-          m11,
+          m12,
           {
             SetAreaLocationsDto: {
               locationIds: {
@@ -179,7 +184,7 @@ export default async () => {
           },
         ],
         [
-          m12,
+          m13,
           {
             SavePushSubscriptionDto: {
               endpoint: { required: true, type: () => String },
@@ -187,7 +192,7 @@ export default async () => {
           },
         ],
         [
-          m13,
+          m14,
           {
             RemovePushSubscriptionDto: {
               endpoint: { required: true, type: () => String },
@@ -195,7 +200,7 @@ export default async () => {
           },
         ],
         [
-          m14,
+          m15,
           {
             PaginationQueryDto: {
               page: {
@@ -215,7 +220,7 @@ export default async () => {
           },
         ],
         [
-          m15,
+          m16,
           {
             ListConversationsDto: {
               q: {
@@ -234,7 +239,7 @@ export default async () => {
           },
         ],
         [
-          m16,
+          m17,
           {
             ListMessagesDto: {
               since: {
@@ -254,7 +259,7 @@ export default async () => {
           },
         ],
         [
-          m17,
+          m18,
           {
             ReplyDto: {
               text: {
@@ -268,7 +273,7 @@ export default async () => {
           },
         ],
         [
-          m18,
+          m19,
           {
             ReplyImageDto: {
               caption: { required: false, type: () => String },
@@ -277,7 +282,7 @@ export default async () => {
           },
         ],
         [
-          m19,
+          m20,
           {
             ReplyAudioDto: {
               replyToMessageId: { required: false, type: () => String },
@@ -285,7 +290,7 @@ export default async () => {
           },
         ],
         [
-          m20,
+          m21,
           {
             UpdateConversationDto: {
               name: {
@@ -299,7 +304,7 @@ export default async () => {
           },
         ],
         [
-          m21,
+          m22,
           {
             ListCategoriesDto: {
               q: {
@@ -312,7 +317,7 @@ export default async () => {
           },
         ],
         [
-          m22,
+          m23,
           {
             CreateCategoryDto: {
               name: { required: true, type: () => String },
@@ -320,7 +325,7 @@ export default async () => {
             },
           },
         ],
-        [m23, { UpdateCategoryDto: {} }],
+        [m24, { UpdateCategoryDto: {} }],
         [
           m0,
           {
@@ -414,7 +419,38 @@ export default async () => {
           },
         ],
         [
-          m24,
+          m3,
+          {
+            AttendeeDto: {
+              name: {
+                required: true,
+                type: () => String,
+                minLength: 2,
+                maxLength: 100,
+              },
+            },
+            CreateTicketCheckoutDto: {
+              eventId: { required: true, type: () => String, format: 'uuid' },
+              attendees: {
+                required: true,
+                type: () => [
+                  t['./checkout/dto/create-ticket-checkout.dto'].AttendeeDto,
+                ],
+                description:
+                  'Um nome por ingresso. 50 \u00E9 o teto t\u00E9cnico; o limite real \u00E9 o do evento.',
+                minItems: 1,
+                maxItems: 50,
+              },
+              customer: {
+                required: true,
+                type: () => t['./checkout/dto/customer.dto'].CustomerDto,
+              },
+              notes: { required: false, type: () => String, maxLength: 500 },
+            },
+          },
+        ],
+        [
+          m25,
           {
             CreateProductCategoryDto: {
               name: { required: true, type: () => String },
@@ -429,9 +465,9 @@ export default async () => {
             },
           },
         ],
-        [m25, { UpdateProductCategoryDto: {} }],
+        [m26, { UpdateProductCategoryDto: {} }],
         [
-          m26,
+          m27,
           {
             CreateProductDto: {
               name: { required: true, type: () => String },
@@ -470,9 +506,9 @@ export default async () => {
             },
           },
         ],
-        [m27, { UpdateProductDto: {} }],
+        [m28, { UpdateProductDto: {} }],
         [
-          m28,
+          m29,
           {
             ListProductsDto: {
               q: {
@@ -499,7 +535,7 @@ export default async () => {
           },
         ],
         [
-          m29,
+          m30,
           {
             UpdateStoreSettingsDto: {
               siteEnabled: {
@@ -513,6 +549,12 @@ export default async () => {
                 type: () => Boolean,
                 description:
                   'Venda pelo site. Liga mesmo sem a chave do Pagar.me (o pagamento \u00E9 que n\u00E3o inicia).',
+              },
+              ticketsEnabled: {
+                required: false,
+                type: () => Boolean,
+                description:
+                  'Venda de ingressos pelo site, independente da loja. Tamb\u00E9m liga sem a chave do Pagar.me.',
               },
               pickupEnabled: {
                 required: false,
@@ -556,7 +598,7 @@ export default async () => {
           },
         ],
         [
-          m30,
+          m31,
           {
             QuoteDto: {
               items: {
@@ -576,7 +618,7 @@ export default async () => {
           },
         ],
         [
-          m31,
+          m32,
           {
             ListSiteOrdersDto: {
               status: {
@@ -590,6 +632,12 @@ export default async () => {
                 ],
               },
               kind: { required: false, enum: ['products', 'tickets'] },
+              eventId: {
+                required: false,
+                type: () => String,
+                description: 'Pedidos de ingresso de um evento.',
+                format: 'uuid',
+              },
               q: {
                 required: false,
                 type: () => String,
@@ -601,7 +649,7 @@ export default async () => {
           },
         ],
         [
-          m32,
+          m33,
           {
             UpdateFulfillmentDto: {
               fulfillmentStatus: {
@@ -612,7 +660,7 @@ export default async () => {
           },
         ],
         [
-          m33,
+          m34,
           {
             CreateEventDto: {
               title: { required: true, type: () => String },
@@ -652,11 +700,24 @@ export default async () => {
                 format: 'uri',
               },
               published: { required: false, type: () => Boolean },
+              ticketSales: {
+                required: false,
+                type: () => Boolean,
+                description:
+                  'Venda/inscri\u00E7\u00E3o pelo site ("Comprar ingresso" se pago, "Inscrever-se" se\ngratuito). S\u00F3 vale com o interruptor "Venda de ingressos" do Dashboard.',
+              },
+              maxTicketsPerOrder: {
+                required: false,
+                type: () => Number,
+                description: 'M\u00E1ximo de ingressos numa compra.',
+                minimum: 1,
+                maximum: 50,
+              },
             },
           },
         ],
         [
-          m34,
+          m35,
           {
             UpdateEventDto: {
               removeImage: {
@@ -669,7 +730,7 @@ export default async () => {
           },
         ],
         [
-          m35,
+          m36,
           {
             ListEventsDto: {
               q: {
@@ -681,11 +742,37 @@ export default async () => {
             },
           },
         ],
-      ],
-      controllers: [
-        [m36, { AppController: { health: {} } }],
         [
           m37,
+          {
+            ListAttendeesDto: {
+              q: {
+                required: false,
+                type: () => String,
+                description: 'Parte do nome do participante ou do comprador.',
+                maxLength: 100,
+              },
+            },
+          },
+        ],
+        [
+          m38,
+          {
+            CheckInDto: {
+              checkedIn: {
+                required: true,
+                type: () => Boolean,
+                description:
+                  '`true` marca a presen\u00E7a agora; `false` desfaz.',
+              },
+            },
+          },
+        ],
+      ],
+      controllers: [
+        [m39, { AppController: { health: {} } }],
+        [
+          m40,
           {
             BotSettingsController: {
               get: { type: Object },
@@ -694,7 +781,7 @@ export default async () => {
           },
         ],
         [
-          m38,
+          m41,
           {
             MenuItemsController: {
               list: { type: Object },
@@ -707,13 +794,13 @@ export default async () => {
           },
         ],
         [
-          m39,
+          m42,
           {
             DeliveryLocationsController: { list: { type: Object }, update: {} },
           },
         ],
         [
-          m40,
+          m43,
           {
             PublicDeliveryLocationsController: {
               listCovered: { type: [Object] },
@@ -726,7 +813,7 @@ export default async () => {
           },
         ],
         [
-          m41,
+          m44,
           {
             DeliveryAreasController: {
               list: { type: [Object] },
@@ -737,10 +824,10 @@ export default async () => {
             },
           },
         ],
-        [m42, { WebhookController: { verify: { type: String }, receive: {} } }],
-        [m43, { PushSubscriptionsController: { save: {}, remove: {} } }],
+        [m45, { WebhookController: { verify: { type: String }, receive: {} } }],
+        [m46, { PushSubscriptionsController: { save: {}, remove: {} } }],
         [
-          m44,
+          m47,
           {
             ConversationsController: {
               list: {},
@@ -768,7 +855,7 @@ export default async () => {
           },
         ],
         [
-          m45,
+          m48,
           {
             CategoriesController: {
               list: {},
@@ -779,7 +866,7 @@ export default async () => {
           },
         ],
         [
-          m46,
+          m49,
           {
             MediaRetentionController: {
               run: {
@@ -789,9 +876,9 @@ export default async () => {
             },
           },
         ],
-        [m47, { DocsPageController: { page: { type: String } } }],
+        [m50, { DocsPageController: { page: { type: String } } }],
         [
-          m48,
+          m51,
           {
             ProductCategoriesController: {
               list: { type: Object },
@@ -802,7 +889,7 @@ export default async () => {
           },
         ],
         [
-          m49,
+          m52,
           {
             PublicProductCategoriesController: {
               listActive: { type: [Object] },
@@ -810,7 +897,7 @@ export default async () => {
           },
         ],
         [
-          m50,
+          m53,
           {
             ProductsController: {
               list: {},
@@ -822,7 +909,7 @@ export default async () => {
           },
         ],
         [
-          m51,
+          m54,
           {
             PublicProductsController: {
               listActive: { type: [Object] },
@@ -831,7 +918,7 @@ export default async () => {
           },
         ],
         [
-          m52,
+          m55,
           {
             StoreSettingsController: {
               get: { type: Object },
@@ -840,11 +927,11 @@ export default async () => {
           },
         ],
         [
-          m53,
+          m56,
           { PublicStoreSettingsController: { getPublic: { type: Object } } },
         ],
         [
-          m54,
+          m57,
           {
             PublicCheckoutController: {
               quote: {
@@ -856,6 +943,10 @@ export default async () => {
                 summary:
                   'Cria o pedido e devolve o link de pagamento. 409 = carrinho mudou\n(`problems`), 422 = entrega/retirada indispon\u00EDvel (`reason`), 503 = o\npagamento n\u00E3o p\u00F4de ser iniciado.',
               },
+              createTickets: {
+                summary:
+                  'Compra de ingresso (ou inscri\u00E7\u00E3o gratuita) na p\u00E1gina do evento.\n`paymentUrl: null` = gratuito, j\u00E1 confirmado. 409 com `reason`:\n`tickets_closed`, `not_available`, `sold_out` ou `too_many`.',
+              },
               findOrder: {
                 summary:
                   'A p\u00E1gina do pedido, pelo token secreto do link (`/pedido/<token>` no site).',
@@ -865,7 +956,7 @@ export default async () => {
           },
         ],
         [
-          m55,
+          m58,
           {
             SiteOrdersController: {
               list: {},
@@ -880,10 +971,9 @@ export default async () => {
             },
           },
         ],
-        [m56, { PagarmeWebhookController: { handle: {} } }],
-        [m57, { OpenApiController: { get: { type: Object } } }],
+        [m59, { PagarmeWebhookController: { handle: {} } }],
         [
-          m58,
+          m60,
           {
             EventsController: {
               list: {},
@@ -894,7 +984,7 @@ export default async () => {
           },
         ],
         [
-          m59,
+          m61,
           {
             PublicEventsController: {
               listUpcoming: { type: [Object] },
@@ -902,6 +992,19 @@ export default async () => {
             },
           },
         ],
+        [
+          m62,
+          {
+            SiteOrderTicketsController: {
+              listAttendees: {
+                summary:
+                  'Participantes de pedidos pagos, com `sold` e `spots` do evento.',
+              },
+              checkIn: { type: Object },
+            },
+          },
+        ],
+        [m63, { OpenApiController: { get: { type: Object } } }],
       ],
     },
   };
