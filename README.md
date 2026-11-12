@@ -267,7 +267,7 @@ Produtos e categorias que a cliente cadastra no admin e o site mostra em `/produ
 
 ## Agenda de eventos (módulo `events`)
 
-Eventos (oficinas, feirinhas, aulas) que a cliente cadastra no admin e o site mostra em `/agenda`. Plano: `docs/plans/2026-11-04-agenda-eventos.md`.
+Eventos (oficinas, feirinhas, aulas) que a cliente cadastra no admin e o site mostra em `/agenda`.
 
 - **Públicas, sem token** (`PublicEventsController`, registrado antes do admin): `GET /events/upcoming` traz os publicados que ainda não terminaram (evento em andamento continua), do mais próximo ao mais distante, com `now` calculado a cada chamada. `GET /events/:slug` traz qualquer publicado, inclusive passado: o link antigo não vira 404 e o site mostra "Este evento já aconteceu". Rascunho responde 404 nas duas.
 - **Admin** (`ClerkAuthGuard`): `GET /events?q=&page=&perPage=` (paginado, rascunhos e passados incluídos), `POST`/`PATCH /events/:id` (multipart, campo `image` com uma capa JPEG/PNG/WebP de até 5 MB; `removeImage=true` tira a capa) e `DELETE /events/:id`. Não existe `GET /events/:id`, que colidiria com `/events/:slug`: o admin edita a partir da lista.

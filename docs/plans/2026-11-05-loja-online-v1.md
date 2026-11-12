@@ -17,13 +17,15 @@
 
 | Parte | Situação |
 |---|---|
-| Catálogo — API (`src/product-categories`, `src/products`, Blob) | ✅ feito (`docs/plans/2026-11-04-catalogo-produtos.md`) e delta aplicado na Neon. Falta só `npx prisma migrate resolve --applied 20261104204120_init` em produção. |
+| Catálogo — API (`src/product-categories`, `src/products`, Blob) | ✅ feito (plano do catálogo, concluído e removido em 2026-11-12; está no histórico do git) e delta aplicado na Neon. Falta só `npx prisma migrate resolve --applied 20261104204120_init` em produção. |
 | Catálogo — vitrine e cadastro no admin | ✅ feitos (plano irmão, Fase 1); falta a verificação com a API real (Tarefa 4 de lá) |
 | Checagem de CEP compartilhada (bot + site) | ✅ Tarefa 2 (2026-11-09) |
 | Loja V1 — produtos | ✅ Tarefas 1, 3, 4 e 5 (2026-11-09; delta da Tarefa 1 aplicado na Neon). ✅ Tarefas 6–10 escritas pela documentação e pela skill do Pagar.me, com testes simulados (2026-11-12). ⏳ falta o Step 0 da Tarefa 6 no sandbox (ver "Suposições a conferir no sandbox") e rodar o e2e de concorrência (`test/checkout-create.e2e-spec.ts`) |
 | Fechamento (e2e, docs, produção) | ⏳ Tarefa 14, só produtos |
-| Ingressos (e a agenda da API, `docs/plans/2026-11-04-agenda-eventos.md`, Tarefas 1–5) | ✅ agenda e Tarefas 11–13 implementadas em 2026-11-12, com o interruptor `ticketsEnabled` (decisão 20); delta aplicado na Neon (`NEON-agenda-ingressos.md`, migration `20261112200000_init`). Diferenças: o 409 de excluir evento vale pra qualquer ingresso (FK `RESTRICT`), não só vendido; o e2e de concorrência é `test/checkout-tickets.e2e-spec.ts` |
+| Ingressos (e a agenda da API, plano `2026-11-04-agenda-eventos.md`, Tarefas 1–5; concluído e removido em 2026-11-12) | ✅ agenda e Tarefas 11–13 implementadas em 2026-11-12, com o interruptor `ticketsEnabled` (decisão 20); delta aplicado na Neon (migration `20261112200000_init`). Diferenças: o 409 de excluir evento vale pra qualquer ingresso (FK `RESTRICT`), não só vendido; o e2e de concorrência é `test/checkout-tickets.e2e-spec.ts` |
 | V2 — pagamento dentro do site, e-mails, "avise-me" | fora deste plano (ver "Depois da V1") |
+
+Os `NEON-*.md` citados nas tarefas eram o SQL de produção de cada etapa, fora do git; todos foram aplicados e apagados em 2026-11-12.
 
 **Architecture:** módulos novos seguindo o padrão do catálogo — service + controller admin com `ClerkAuthGuard` + **controller público separado**, registrado antes do admin:
 
@@ -380,7 +382,7 @@ git commit -m "feat(site-orders): add site order, delivery area, store settings 
 
 ## Task 2: `resolveCep` compartilhado + `GET /delivery-locations/check`
 
-Movida do plano da agenda (`2026-11-04-agenda-eventos.md`, Tarefa 6), **sem mudança de conteúdo** — seguir os passos de lá. O frete (Tarefa 5) chama `DeliveryLocationsService.resolveCep`, então ela vem antes.
+Movida do plano da agenda (Tarefa 6, hoje só no histórico do git) e feita em 2026-11-09. O frete (Tarefa 5) chama `DeliveryLocationsService.resolveCep`, então ela vem antes.
 
 Acréscimo: o retorno `covered` passa a trazer o que o frete precisa:
 
@@ -672,7 +674,7 @@ O webhook manda JSON normal e não depende do corpo cru — não precisa do `Raw
 
 > ✅ **Implementadas em 2026-11-12** (eram fora do MVP desde 2026-11-09).
 
-**Pré-requisito:** plano da agenda (`2026-11-04-agenda-eventos.md`), Tarefas 1–5, no `main` (model `Event`, `EventsService`, controllers admin e público).
+**Pré-requisito:** plano da agenda (Tarefas 1–5, feito em 2026-11-12), no `main` (model `Event`, `EventsService`, controllers admin e público).
 
 **Files:**
 - Modify: `prisma/schema.prisma`; recriar a migration única; `prisma/seed.ts`
