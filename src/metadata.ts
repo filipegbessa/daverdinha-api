@@ -39,31 +39,33 @@ import * as m35 from './events/dto/update-event.dto';
 import * as m36 from './events/dto/list-events.dto';
 import * as m37 from './site-orders/dto/list-attendees.dto';
 import * as m38 from './site-orders/dto/check-in.dto';
-import * as m39 from './app.controller';
-import * as m40 from './bot-settings/bot-settings.controller';
-import * as m41 from './menu-items/menu-items.controller';
-import * as m42 from './delivery-locations/delivery-locations.controller';
-import * as m43 from './delivery-locations/public-delivery-locations.controller';
-import * as m44 from './delivery-locations/delivery-areas.controller';
-import * as m45 from './whatsapp/webhook.controller';
-import * as m46 from './push-subscriptions/push-subscriptions.controller';
-import * as m47 from './conversations/conversations.controller';
-import * as m48 from './categories/categories.controller';
-import * as m49 from './media/media-retention.controller';
-import * as m50 from './openapi/docs-page.controller';
-import * as m51 from './product-categories/product-categories.controller';
-import * as m52 from './product-categories/public-product-categories.controller';
-import * as m53 from './products/products.controller';
-import * as m54 from './products/public-products.controller';
-import * as m55 from './store-settings/store-settings.controller';
-import * as m56 from './store-settings/public-store-settings.controller';
-import * as m57 from './checkout/public-checkout.controller';
-import * as m58 from './site-orders/site-orders.controller';
-import * as m59 from './checkout/pagarme-webhook.controller';
-import * as m60 from './events/events.controller';
-import * as m61 from './events/public-events.controller';
-import * as m62 from './site-orders/site-order-tickets.controller';
-import * as m63 from './openapi/openapi.controller';
+import * as m39 from './checkout/dto/lookup-orders.dto';
+import * as m40 from './site-orders/dto/check-in-by-code.dto';
+import * as m41 from './app.controller';
+import * as m42 from './bot-settings/bot-settings.controller';
+import * as m43 from './menu-items/menu-items.controller';
+import * as m44 from './delivery-locations/delivery-locations.controller';
+import * as m45 from './delivery-locations/public-delivery-locations.controller';
+import * as m46 from './delivery-locations/delivery-areas.controller';
+import * as m47 from './whatsapp/webhook.controller';
+import * as m48 from './push-subscriptions/push-subscriptions.controller';
+import * as m49 from './conversations/conversations.controller';
+import * as m50 from './categories/categories.controller';
+import * as m51 from './media/media-retention.controller';
+import * as m52 from './openapi/docs-page.controller';
+import * as m53 from './product-categories/product-categories.controller';
+import * as m54 from './product-categories/public-product-categories.controller';
+import * as m55 from './products/products.controller';
+import * as m56 from './products/public-products.controller';
+import * as m57 from './store-settings/store-settings.controller';
+import * as m58 from './store-settings/public-store-settings.controller';
+import * as m59 from './checkout/public-checkout.controller';
+import * as m60 from './site-orders/site-orders.controller';
+import * as m61 from './checkout/pagarme-webhook.controller';
+import * as m62 from './events/events.controller';
+import * as m63 from './events/public-events.controller';
+import * as m64 from './site-orders/site-order-tickets.controller';
+import * as m65 from './openapi/openapi.controller';
 
 export default async () => {
   const t = {
@@ -768,11 +770,46 @@ export default async () => {
             },
           },
         ],
-      ],
-      controllers: [
-        [m39, { AppController: { health: {} } }],
+        [
+          m39,
+          {
+            LookupOrdersDto: {
+              email: {
+                required: true,
+                type: () => String,
+                maxLength: 200,
+                format: 'email',
+              },
+            },
+          },
+        ],
         [
           m40,
+          {
+            CheckInByCodeDto: {
+              eventId: {
+                required: true,
+                type: () => String,
+                description:
+                  'O evento da lista de presen\u00E7a aberta: ingresso de outro evento n\u00E3o entra.',
+                format: 'uuid',
+              },
+              code: {
+                required: true,
+                type: () => String,
+                description:
+                  'O que o leitor leu ou foi digitado (`K7Q2-M9XP`, com ou sem tra\u00E7o).',
+                minLength: 4,
+                maxLength: 20,
+              },
+            },
+          },
+        ],
+      ],
+      controllers: [
+        [m41, { AppController: { health: {} } }],
+        [
+          m42,
           {
             BotSettingsController: {
               get: { type: Object },
@@ -781,7 +818,7 @@ export default async () => {
           },
         ],
         [
-          m41,
+          m43,
           {
             MenuItemsController: {
               list: { type: Object },
@@ -794,13 +831,13 @@ export default async () => {
           },
         ],
         [
-          m42,
+          m44,
           {
             DeliveryLocationsController: { list: { type: Object }, update: {} },
           },
         ],
         [
-          m43,
+          m45,
           {
             PublicDeliveryLocationsController: {
               listCovered: { type: [Object] },
@@ -813,7 +850,7 @@ export default async () => {
           },
         ],
         [
-          m44,
+          m46,
           {
             DeliveryAreasController: {
               list: { type: [Object] },
@@ -824,10 +861,10 @@ export default async () => {
             },
           },
         ],
-        [m45, { WebhookController: { verify: { type: String }, receive: {} } }],
-        [m46, { PushSubscriptionsController: { save: {}, remove: {} } }],
+        [m47, { WebhookController: { verify: { type: String }, receive: {} } }],
+        [m48, { PushSubscriptionsController: { save: {}, remove: {} } }],
         [
-          m47,
+          m49,
           {
             ConversationsController: {
               list: {},
@@ -855,7 +892,7 @@ export default async () => {
           },
         ],
         [
-          m48,
+          m50,
           {
             CategoriesController: {
               list: {},
@@ -866,7 +903,7 @@ export default async () => {
           },
         ],
         [
-          m49,
+          m51,
           {
             MediaRetentionController: {
               run: {
@@ -876,9 +913,9 @@ export default async () => {
             },
           },
         ],
-        [m50, { DocsPageController: { page: { type: String } } }],
+        [m52, { DocsPageController: { page: { type: String } } }],
         [
-          m51,
+          m53,
           {
             ProductCategoriesController: {
               list: { type: Object },
@@ -889,7 +926,7 @@ export default async () => {
           },
         ],
         [
-          m52,
+          m54,
           {
             PublicProductCategoriesController: {
               listActive: { type: [Object] },
@@ -897,7 +934,7 @@ export default async () => {
           },
         ],
         [
-          m53,
+          m55,
           {
             ProductsController: {
               list: {},
@@ -909,7 +946,7 @@ export default async () => {
           },
         ],
         [
-          m54,
+          m56,
           {
             PublicProductsController: {
               listActive: { type: [Object] },
@@ -918,7 +955,7 @@ export default async () => {
           },
         ],
         [
-          m55,
+          m57,
           {
             StoreSettingsController: {
               get: { type: Object },
@@ -927,11 +964,11 @@ export default async () => {
           },
         ],
         [
-          m56,
+          m58,
           { PublicStoreSettingsController: { getPublic: { type: Object } } },
         ],
         [
-          m57,
+          m59,
           {
             PublicCheckoutController: {
               quote: {
@@ -947,6 +984,10 @@ export default async () => {
                 summary:
                   'Compra de ingresso (ou inscri\u00E7\u00E3o gratuita) na p\u00E1gina do evento.\n`paymentUrl: null` = gratuito, j\u00E1 confirmado. 409 com `reason`:\n`tickets_closed`, `not_available`, `sold_out` ou `too_many`.',
               },
+              lookupOrders: {
+                summary:
+                  '"Meus pedidos": manda os links dos pedidos pro e-mail. Responde 202\nigual com ou sem pedido; 429 depois de muitas tentativas.',
+              },
               findOrder: {
                 summary:
                   'A p\u00E1gina do pedido, pelo token secreto do link (`/pedido/<token>` no site).',
@@ -956,13 +997,18 @@ export default async () => {
           },
         ],
         [
-          m58,
+          m60,
           {
             SiteOrdersController: {
               list: {},
               findOne: { type: Object },
               updateFulfillment: { type: Object },
               cancel: { type: Object },
+              resendConfirmation: {
+                summary:
+                  'Manda de novo o e-mail de confirma\u00E7\u00E3o (s\u00F3 pedido pago). 503 sem e-mail configurado.',
+                type: Object,
+              },
               sync: {
                 summary:
                   'Consulta o Pagar.me agora, sem esperar o intervalo de um minuto.',
@@ -971,9 +1017,9 @@ export default async () => {
             },
           },
         ],
-        [m59, { PagarmeWebhookController: { handle: {} } }],
+        [m61, { PagarmeWebhookController: { handle: {} } }],
         [
-          m60,
+          m62,
           {
             EventsController: {
               list: {},
@@ -984,7 +1030,7 @@ export default async () => {
           },
         ],
         [
-          m61,
+          m63,
           {
             PublicEventsController: {
               listUpcoming: { type: [Object] },
@@ -993,18 +1039,23 @@ export default async () => {
           },
         ],
         [
-          m62,
+          m64,
           {
             SiteOrderTicketsController: {
               listAttendees: {
                 summary:
                   'Participantes de pedidos pagos, com `sold` e `spots` do evento.',
               },
+              checkInByCode: {
+                summary:
+                  'Check-in pelo QR. 404 = c\u00F3digo desconhecido; 409 com `reason`:\n`other_event`, `not_paid` ou `already_checked_in` (com `checkedInAt`).',
+                type: Object,
+              },
               checkIn: { type: Object },
             },
           },
         ],
-        [m63, { OpenApiController: { get: { type: Object } } }],
+        [m65, { OpenApiController: { get: { type: Object } } }],
       ],
     },
   };

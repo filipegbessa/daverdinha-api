@@ -1,5 +1,8 @@
 import { Test } from '@nestjs/testing';
-import { PublicCheckoutController } from './public-checkout.controller';
+import {
+  clientIp,
+  PublicCheckoutController,
+} from './public-checkout.controller';
 import { SiteOrdersService } from '../site-orders/site-orders.service';
 
 describe('PublicCheckoutController', () => {
@@ -68,5 +71,15 @@ describe('PublicCheckoutController', () => {
       Reflect.getMetadata('__guards__', PublicCheckoutController),
     ).toBeUndefined();
     expect(Reflect.getMetadata('__guards__', controller.quote)).toBeUndefined();
+  });
+
+  it('reads the caller IP from the Vercel header, falling back to the socket', () => {
+    expect(
+      clientIp({
+        headers: { 'x-forwarded-for': '1.2.3.4, 10.0.0.1' },
+        ip: '9.9.9.9',
+      } as never),
+    ).toBe('1.2.3.4');
+    expect(clientIp({ headers: {}, ip: '9.9.9.9' } as never)).toBe('9.9.9.9');
   });
 });

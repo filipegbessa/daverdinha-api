@@ -331,48 +331,50 @@ enum SiteOrderKind {
 /// Pedido feito no site (carrinho ou ingresso + Pagar.me). Não confundir com
 /// `Order`, que é o pedido de catálogo recebido pelo WhatsApp.
 model SiteOrder {
-  id                String            @id @default(uuid())
+  id                 String            @id @default(uuid())
   /// Vira o código `DV-0001` mostrado pra cliente e pro comprador.
-  number            Int               @unique @default(autoincrement())
+  number             Int               @unique @default(autoincrement())
   /// Vai na URL pública do pedido; o número é sequencial e não pode ser.
-  publicToken       String            @unique @default(uuid()) @map("public_token")
-  kind              SiteOrderKind     @default(products)
-  status            SiteOrderStatus   @default(pending_payment)
-  fulfillmentStatus FulfillmentStatus @default(awaiting) @map("fulfillment_status")
-  customerName      String            @map("customer_name")
-  customerEmail     String            @map("customer_email")
-  customerPhone     String            @map("customer_phone")
+  publicToken        String            @unique @default(uuid()) @map("public_token")
+  kind               SiteOrderKind     @default(products)
+  status             SiteOrderStatus   @default(pending_payment)
+  fulfillmentStatus  FulfillmentStatus @default(awaiting) @map("fulfillment_status")
+  customerName       String            @map("customer_name")
+  customerEmail      String            @map("customer_email")
+  customerPhone      String            @map("customer_phone")
   /// `null` em pedido de ingresso (não tem entrega).
-  deliveryMethod    DeliveryMethod?   @map("delivery_method")
-  cep               String?
-  street            String?
-  streetNumber      String?           @map("street_number")
-  complement        String?
-  bairro            String?
+  deliveryMethod     DeliveryMethod?   @map("delivery_method")
+  cep                String?
+  street             String?
+  streetNumber       String?           @map("street_number")
+  complement         String?
+  bairro             String?
   /// Snapshot do nome da zona e da área no momento do pedido.
-  deliveryZone      String?           @map("delivery_zone")
-  deliveryArea      String?           @map("delivery_area")
-  notes             String?
-  subtotal          Decimal           @db.Decimal(10, 2)
-  deliveryFee       Decimal           @map("delivery_fee") @db.Decimal(10, 2)
-  total             Decimal           @db.Decimal(10, 2)
+  deliveryZone       String?           @map("delivery_zone")
+  deliveryArea       String?           @map("delivery_area")
+  notes              String?
+  subtotal           Decimal           @db.Decimal(10, 2)
+  deliveryFee        Decimal           @map("delivery_fee") @db.Decimal(10, 2)
+  total              Decimal           @db.Decimal(10, 2)
   /// Link de pagamento (`pl_…`), pedido (`or_…`) e cobrança (`ch_…`) no
   /// Pagar.me. Nomes neutros de propósito: só `src/pagarme/` sabe o formato.
-  gatewayLinkId     String?           @unique @map("gateway_link_id")
-  gatewayOrderId    String?           @unique @map("gateway_order_id")
-  gatewayChargeId   String?           @map("gateway_charge_id")
-  gatewayStatus     String?           @map("gateway_status")
-  paymentUrl        String?           @map("payment_url")
-  paidAt            DateTime?         @map("paid_at")
-  expiresAt         DateTime          @map("expires_at")
-  lastSyncedAt      DateTime?         @map("last_synced_at")
-  items             SiteOrderItem[]
+  gatewayLinkId      String?           @unique @map("gateway_link_id")
+  gatewayOrderId     String?           @unique @map("gateway_order_id")
+  gatewayChargeId    String?           @map("gateway_charge_id")
+  gatewayStatus      String?           @map("gateway_status")
+  paymentUrl         String?           @map("payment_url")
+  paidAt             DateTime?         @map("paid_at")
+  expiresAt          DateTime          @map("expires_at")
+  lastSyncedAt       DateTime?         @map("last_synced_at")
+  /// Quando o e-mail de confirmação saiu; garante um e-mail só por pedido.
+  confirmationSentAt DateTime?         @map("confirmation_sent_at")
+  items              SiteOrderItem[]
   /// Só em pedido de ingresso. Restrict: evento com venda não pode ser apagado.
-  eventId           String?           @map("event_id")
-  event             Event?            @relation(fields: [eventId], references: [id], onDelete: Restrict)
-  tickets           SiteOrderTicket[]
-  createdAt         DateTime          @default(now()) @map("created_at")
-  updatedAt         DateTime          @updatedAt @map("updated_at")
+  eventId            String?           @map("event_id")
+  event              Event?            @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  tickets            SiteOrderTicket[]
+  createdAt          DateTime          @default(now()) @map("created_at")
+  updatedAt          DateTime          @updatedAt @map("updated_at")
 
   @@index([kind, status, createdAt])
   @@index([eventId, status])
@@ -387,6 +389,8 @@ model SiteOrderTicket {
   eventId      String    @map("event_id")
   event        Event     @relation(fields: [eventId], references: [id], onDelete: Restrict)
   attendeeName String    @map("attendee_name")
+  /// Código aleatório do ingresso (`K7Q2-M9XP`), o conteúdo do QR lido na entrada.
+  code         String    @unique
   unitPrice    Decimal   @map("unit_price") @db.Decimal(10, 2)
   checkedInAt  DateTime? @map("checked_in_at")
 
@@ -474,4 +478,17 @@ model Event {
 
   @@index([published, endsAt])
   @@map("events")
+}
+
+/// Tentativas do "Meus pedidos" (`POST /checkout/orders/lookup`), pra limitar
+/// por e-mail e por IP sem memória entre chamadas (serverless). Linhas de
+/// mais de um dia são apagadas na própria rota.
+model LookupAttempt {
+  id        String   @id @default(uuid())
+  /// `email:<endereço>` ou `ip:<endereço>`.
+  key       String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([key, createdAt])
+  @@map("lookup_attempts")
 }

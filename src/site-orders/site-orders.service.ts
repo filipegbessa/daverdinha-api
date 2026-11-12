@@ -1,6 +1,8 @@
 import {
   BadRequestException,
   ConflictException,
+  HttpException,
+  HttpStatus,
   Inject,
   Injectable,
   Logger,
@@ -22,6 +24,8 @@ import type { CartItemDto } from '../checkout/dto/cart-item.dto';
 import type { CreateCheckoutDto } from '../checkout/dto/create-checkout.dto';
 import type { CreateTicketCheckoutDto } from '../checkout/dto/create-ticket-checkout.dto';
 import { lockEvent, spotsLeft, takenSpots } from './spots';
+import { generateTicketCode, normalizeTicketCode } from './ticket-code';
+import { isUniqueViolation } from '../common/prisma-errors';
 import { formatOrderCode, parseOrderCode } from './order-code';
 import { normalizePhone } from '../common/format-phone';
 import {
@@ -31,6 +35,9 @@ import {
   type PaymentGateway,
 } from '../pagarme/payment-gateway';
 import { PushNotificationsService } from '../push-notifications/push-notifications.service';
+import { EmailService } from '../email/email.service';
+import { orderConfirmationEmail } from '../email/templates/order-confirmation';
+import { orderLinksEmail } from '../email/templates/order-links';
 import {
   toAdminOrder,
   toPublicOrder,
@@ -138,6 +145,10 @@ function mergeItems(items: CartItemDto[]): Map<string, number> {
   return merged;
 }
 
+/** "Meus pedidos": tentativas por hora, por e-mail e por IP. */
+const LOOKUP_LIMIT_PER_EMAIL = 3;
+const LOOKUP_LIMIT_PER_IP = 20;
+
 /** Quanto tempo o pedido pendente (e o link de pagamento) seguram a reserva. */
 export const ORDER_TTL_MS = 60 * 60 * 1000;
 /** Intervalo mínimo entre duas consultas ao gateway pelo mesmo pedido. */
@@ -156,6 +167,7 @@ export class SiteOrdersService {
     private readonly storeSettings: StoreSettingsService,
     @Inject(PAYMENT_GATEWAY) private readonly gateway: PaymentGateway,
     private readonly push: PushNotificationsService,
+    private readonly email: EmailService,
   ) {}
 
   /**
@@ -389,83 +401,88 @@ export class SiteOrdersService {
     if (!phone) throw new BadRequestException('Telefone inválido.');
     const quantity = dto.attendees.length;
 
-    const order = await this.prisma.$transaction(async (tx) => {
-      await lockEvent(tx, dto.eventId);
-      const event = await tx.event.findUnique({ where: { id: dto.eventId } });
-      if (
-        !event ||
-        !event.published ||
-        !event.ticketSales ||
-        event.startsAt <= now
-      ) {
-        throw new ConflictException({
-          message: 'As vendas desse evento foram encerradas.',
-          reason: 'not_available',
-        });
-      }
-      if (quantity > event.maxTicketsPerOrder) {
-        throw new ConflictException({
-          message: `O máximo por compra é ${event.maxTicketsPerOrder} ingressos.`,
-          reason: 'too_many',
-          max: event.maxTicketsPerOrder,
-        });
-      }
-      const left = spotsLeft(
-        event.spots,
-        (await takenSpots(tx, [event.id], now)).get(event.id),
-      );
-      if (left !== null && left < quantity) {
-        throw new ConflictException({
-          message: `Restam ${left} vagas.`,
-          reason: 'sold_out',
-          spotsLeft: left,
-        });
-      }
-      // `null` ou 0 = gratuito.
-      const unitPrice = new Prisma.Decimal(event.price ?? 0);
-      const free = unitPrice.isZero();
-      const { subtotal, total } = orderTotals(
-        [lineTotal(unitPrice, quantity)],
-        new Prisma.Decimal(0),
-      );
-      return tx.siteOrder.create({
-        data: {
-          kind: 'tickets',
-          eventId: event.id,
-          customerName: dto.customer.name.trim(),
-          customerEmail: dto.customer.email.trim(),
-          customerPhone: phone,
-          deliveryMethod: null,
-          notes: dto.notes?.trim() || null,
-          subtotal,
-          deliveryFee: new Prisma.Decimal(0),
-          total,
-          ...(free
-            ? { status: 'paid', paidAt: now, expiresAt: now }
-            : {
-                // A reserva não passa do começo do evento.
-                expiresAt: new Date(
-                  Math.min(
-                    now.getTime() + ORDER_TTL_MS,
-                    event.startsAt.getTime(),
+    // Código de ingresso repetido (P2002) é quase impossível; se acontecer,
+    // tenta de novo com outros códigos.
+    const order = await retryOnUniqueCode(() =>
+      this.prisma.$transaction(async (tx) => {
+        await lockEvent(tx, dto.eventId);
+        const event = await tx.event.findUnique({ where: { id: dto.eventId } });
+        if (
+          !event ||
+          !event.published ||
+          !event.ticketSales ||
+          event.startsAt <= now
+        ) {
+          throw new ConflictException({
+            message: 'As vendas desse evento foram encerradas.',
+            reason: 'not_available',
+          });
+        }
+        if (quantity > event.maxTicketsPerOrder) {
+          throw new ConflictException({
+            message: `O máximo por compra é ${event.maxTicketsPerOrder} ingressos.`,
+            reason: 'too_many',
+            max: event.maxTicketsPerOrder,
+          });
+        }
+        const left = spotsLeft(
+          event.spots,
+          (await takenSpots(tx, [event.id], now)).get(event.id),
+        );
+        if (left !== null && left < quantity) {
+          throw new ConflictException({
+            message: `Restam ${left} vagas.`,
+            reason: 'sold_out',
+            spotsLeft: left,
+          });
+        }
+        // `null` ou 0 = gratuito.
+        const unitPrice = new Prisma.Decimal(event.price ?? 0);
+        const free = unitPrice.isZero();
+        const { subtotal, total } = orderTotals(
+          [lineTotal(unitPrice, quantity)],
+          new Prisma.Decimal(0),
+        );
+        return tx.siteOrder.create({
+          data: {
+            kind: 'tickets',
+            eventId: event.id,
+            customerName: dto.customer.name.trim(),
+            customerEmail: dto.customer.email.trim(),
+            customerPhone: phone,
+            deliveryMethod: null,
+            notes: dto.notes?.trim() || null,
+            subtotal,
+            deliveryFee: new Prisma.Decimal(0),
+            total,
+            ...(free
+              ? { status: 'paid', paidAt: now, expiresAt: now }
+              : {
+                  // A reserva não passa do começo do evento.
+                  expiresAt: new Date(
+                    Math.min(
+                      now.getTime() + ORDER_TTL_MS,
+                      event.startsAt.getTime(),
+                    ),
                   ),
-                ),
-              }),
-          tickets: {
-            create: dto.attendees.map((attendee) => ({
-              eventId: event.id,
-              attendeeName: attendee.name.trim(),
-              unitPrice,
-            })),
+                }),
+            tickets: {
+              create: dto.attendees.map((attendee) => ({
+                eventId: event.id,
+                attendeeName: attendee.name.trim(),
+                code: generateTicketCode(),
+                unitPrice,
+              })),
+            },
           },
-        },
-        include: WITH_DETAILS,
-      });
-    });
+          include: WITH_DETAILS,
+        });
+      }),
+    );
 
     const code = formatOrderCode(order.number);
     if (order.status === 'paid') {
-      await this.notify(order, code);
+      await this.onPaid(order, code);
       return { code, token: order.publicToken, paymentUrl: null };
     }
     const paymentUrl = await this.startPayment(order, [
@@ -577,7 +594,7 @@ export class SiteOrdersService {
           });
           return;
         }
-        await this.notify(
+        await this.onPaid(
           order,
           code,
           order.status === 'expired' || order.status === 'cancelled',
@@ -843,6 +860,205 @@ export class SiteOrdersService {
     );
   }
 
+  /**
+   * O que acontece quando um pedido acaba de virar pago: push pra cliente e
+   * e-mail de confirmação pro comprador. Nada aqui derruba o pagamento.
+   */
+  private async onPaid(order: SiteOrderRow, code: string, late = false) {
+    await Promise.all([
+      this.notify(order, code, late),
+      this.sendConfirmation(order.id),
+    ]);
+  }
+
+  /**
+   * Manda o e-mail de confirmação uma vez só por pedido. A marca
+   * (`confirmationSentAt`) é gravada antes de enviar, com `updateMany`
+   * condicionado, então dois webhooks ao mesmo tempo não mandam dois e-mails;
+   * se o envio falhar (ou o e-mail não estiver configurado), a marca volta
+   * pra `null` e o admin pode reenviar. `force` é o botão "Reenviar".
+   */
+  private async sendConfirmation(
+    orderId: string,
+    { force = false } = {},
+  ): Promise<boolean> {
+    const now = new Date();
+    const { count } = await this.prisma.siteOrder.updateMany({
+      where: {
+        id: orderId,
+        status: 'paid',
+        ...(!force && { confirmationSentAt: null }),
+      },
+      data: { confirmationSentAt: now },
+    });
+    if (count === 0) return false;
+    const release = () =>
+      this.prisma.siteOrder.updateMany({
+        where: { id: orderId, confirmationSentAt: now },
+        data: { confirmationSentAt: null },
+      });
+    try {
+      const [row, settings] = await Promise.all([
+        this.findRow(orderId),
+        this.storeSettings.get(),
+      ]);
+      const sent = await this.email.send(
+        await orderConfirmationEmail(row, settings, siteUrl()),
+      );
+      if (!sent) await release();
+      return sent;
+    } catch (error) {
+      this.logger.warn(
+        `E-mail de confirmação do pedido ${orderId} falhou: ${(error as Error).message}`,
+      );
+      await release();
+      return false;
+    }
+  }
+
+  /** Botão "Reenviar confirmação" do admin: só pedido pago, mesmo que já tenha saído. */
+  async resendConfirmation(id: string): Promise<SiteOrderAdmin> {
+    const row = await this.findRow(id);
+    if (row.status !== 'paid') {
+      throw new ConflictException(
+        'Só dá pra mandar a confirmação de um pedido pago.',
+      );
+    }
+    if (!this.email.configured) {
+      throw new ServiceUnavailableException(
+        'O envio de e-mail ainda não está configurado.',
+      );
+    }
+    if (!(await this.sendConfirmation(id, { force: true }))) {
+      throw new ServiceUnavailableException(
+        'Não foi possível enviar o e-mail agora. Tente de novo em instantes.',
+      );
+    }
+    return toAdminOrder(await this.findRow(id));
+  }
+
+  /**
+   * Check-in pelo QR do ingresso, na lista de presença de um evento. O
+   * código é conferido contra o evento da tela, o pagamento e uma entrada
+   * anterior; o check-in pelo nome (`setCheckIn`) continua existindo.
+   */
+  async checkInByCode(
+    eventId: string,
+    rawCode: string,
+    now: Date = new Date(),
+  ): Promise<Attendee> {
+    const code = normalizeTicketCode(rawCode);
+    const ticket = await this.prisma.siteOrderTicket.findUnique({
+      where: { code },
+      include: WITH_ATTENDEE_ORDER,
+    });
+    if (!ticket) throw new NotFoundException('Código não encontrado.');
+    if (ticket.eventId !== eventId) {
+      throw new ConflictException({
+        message: 'Esse ingresso é de outro evento.',
+        reason: 'other_event',
+      });
+    }
+    if (ticket.order.status !== 'paid') {
+      throw new ConflictException({
+        message: 'Esse ingresso não está pago.',
+        reason: 'not_paid',
+      });
+    }
+    // Condicional: duas leituras do mesmo QR ao mesmo tempo marcam uma vez só.
+    const { count } = await this.prisma.siteOrderTicket.updateMany({
+      where: { id: ticket.id, checkedInAt: null },
+      data: { checkedInAt: now },
+    });
+    if (count === 0) {
+      const current = await this.prisma.siteOrderTicket.findUniqueOrThrow({
+        where: { id: ticket.id },
+        select: { checkedInAt: true },
+      });
+      throw new ConflictException({
+        message: 'Esse ingresso já entrou.',
+        reason: 'already_checked_in',
+        checkedInAt: current.checkedInAt?.toISOString() ?? null,
+      });
+    }
+    return toAttendee({ ...ticket, checkedInAt: now });
+  }
+
+  /**
+   * "Meus pedidos": manda pro e-mail os links dos pedidos pagos ou pendentes
+   * dos últimos 12 meses. A resposta é sempre a mesma, com ou sem pedido, pra
+   * ninguém descobrir quem comprou; o limite de tentativas (por e-mail e por
+   * IP, numa tabela, porque serverless não guarda memória) segura abuso.
+   */
+  async sendOrderLinks(rawEmail: string, ip: string, now: Date = new Date()) {
+    const email = rawEmail.trim().toLowerCase();
+    const hourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+    const keys = { email: `email:${email}`, ip: `ip:${ip}` };
+    const [byEmail, byIp] = await Promise.all([
+      this.prisma.lookupAttempt.count({
+        where: { key: keys.email, createdAt: { gt: hourAgo } },
+      }),
+      this.prisma.lookupAttempt.count({
+        where: { key: keys.ip, createdAt: { gt: hourAgo } },
+      }),
+    ]);
+    if (byEmail >= LOOKUP_LIMIT_PER_EMAIL || byIp >= LOOKUP_LIMIT_PER_IP) {
+      throw new HttpException(
+        'Muitas tentativas. Tente de novo em uma hora.',
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+    await this.prisma.$transaction([
+      this.prisma.lookupAttempt.createMany({
+        data: [{ key: keys.email }, { key: keys.ip }],
+      }),
+      // Faxina: tentativa com mais de um dia não serve pra nada.
+      this.prisma.lookupAttempt.deleteMany({
+        where: {
+          createdAt: { lt: new Date(now.getTime() - 24 * 60 * 60 * 1000) },
+        },
+      }),
+    ]);
+
+    const orders = await this.prisma.siteOrder.findMany({
+      where: {
+        customerEmail: { equals: email, mode: 'insensitive' },
+        createdAt: { gt: new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000) },
+        OR: [
+          { status: 'paid' },
+          { status: 'pending_payment', expiresAt: { gt: now } },
+        ],
+      },
+      select: {
+        number: true,
+        publicToken: true,
+        kind: true,
+        status: true,
+        total: true,
+        createdAt: true,
+        event: { select: { title: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+    });
+    if (orders.length === 0) return;
+    await this.email
+      .send(
+        orderLinksEmail(
+          email,
+          orders.map((order) => ({
+            ...order,
+            status: order.status as 'paid' | 'pending_payment',
+            eventTitle: order.event?.title ?? null,
+          })),
+          siteUrl(),
+        ),
+      )
+      .catch((error) =>
+        this.logger.warn(`E-mail de "Meus pedidos" falhou: ${error}`),
+      );
+  }
+
   /** Push de venda nova; falha só vira log, nunca derruba o pagamento. */
   private async notify(order: SiteOrderRow, code: string, late = false) {
     await this.push
@@ -966,6 +1182,18 @@ function toPublicQuote(details: QuoteDetails): CheckoutQuote {
       : details.delivery,
     problems: details.problems,
   };
+}
+
+/** Tenta de novo (até 3 vezes) quando um código de ingresso gerado já existia. */
+async function retryOnUniqueCode<T>(run: () => Promise<T>): Promise<T> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await run();
+    } catch (error) {
+      if (attempt < 3 && isUniqueViolation(error, 'code')) continue;
+      throw error;
+    }
+  }
 }
 
 const WITH_ATTENDEE_ORDER = {

@@ -254,6 +254,7 @@ CREATE TABLE "site_orders" (
     "paid_at" TIMESTAMP(3),
     "expires_at" TIMESTAMP(3) NOT NULL,
     "last_synced_at" TIMESTAMP(3),
+    "confirmation_sent_at" TIMESTAMP(3),
     "event_id" TEXT,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
@@ -267,6 +268,7 @@ CREATE TABLE "site_order_tickets" (
     "order_id" TEXT NOT NULL,
     "event_id" TEXT NOT NULL,
     "attendee_name" TEXT NOT NULL,
+    "code" TEXT NOT NULL,
     "unit_price" DECIMAL(10,2) NOT NULL,
     "checked_in_at" TIMESTAMP(3),
 
@@ -325,6 +327,15 @@ CREATE TABLE "events" (
     "updated_at" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "events_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "lookup_attempts" (
+    "id" TEXT NOT NULL,
+    "key" TEXT NOT NULL,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "lookup_attempts_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateIndex
@@ -397,6 +408,9 @@ CREATE INDEX "site_orders_kind_status_created_at_idx" ON "site_orders"("kind", "
 CREATE INDEX "site_orders_event_id_status_idx" ON "site_orders"("event_id", "status");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "site_order_tickets_code_key" ON "site_order_tickets"("code");
+
+-- CreateIndex
 CREATE INDEX "site_order_tickets_event_id_idx" ON "site_order_tickets"("event_id");
 
 -- CreateIndex
@@ -413,6 +427,9 @@ CREATE UNIQUE INDEX "events_slug_key" ON "events"("slug");
 
 -- CreateIndex
 CREATE INDEX "events_published_ends_at_idx" ON "events"("published", "ends_at");
+
+-- CreateIndex
+CREATE INDEX "lookup_attempts_key_created_at_idx" ON "lookup_attempts"("key", "created_at");
 
 -- AddForeignKey
 ALTER TABLE "delivery_locations" ADD CONSTRAINT "delivery_locations_area_id_fkey" FOREIGN KEY ("area_id") REFERENCES "delivery_areas"("id") ON DELETE SET NULL ON UPDATE CASCADE;

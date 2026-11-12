@@ -9,7 +9,11 @@ describe('SiteOrderTicketsController', () => {
   });
 
   it('forwards the attendee list and the check-in', () => {
-    const orders = { listAttendees: jest.fn(), setCheckIn: jest.fn() };
+    const orders = {
+      listAttendees: jest.fn(),
+      setCheckIn: jest.fn(),
+      checkInByCode: jest.fn(),
+    };
     const controller = new SiteOrderTicketsController(orders as never);
 
     controller.listAttendees('e1', { q: 'mar' });
@@ -17,5 +21,8 @@ describe('SiteOrderTicketsController', () => {
 
     expect(orders.listAttendees).toHaveBeenCalledWith('e1', { q: 'mar' });
     expect(orders.setCheckIn).toHaveBeenCalledWith('t1', true);
+
+    controller.checkInByCode({ eventId: 'e1', code: 'K7Q2-M9XP' });
+    expect(orders.checkInByCode).toHaveBeenCalledWith('e1', 'K7Q2-M9XP');
   });
 });

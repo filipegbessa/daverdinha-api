@@ -13,6 +13,7 @@ import { DeliveryAreasService } from '../delivery-locations/delivery-areas.servi
 import { StoreSettingsService } from '../store-settings/store-settings.service';
 import { PAYMENT_GATEWAY } from '../pagarme/payment-gateway';
 import { PushNotificationsService } from '../push-notifications/push-notifications.service';
+import { EmailService } from '../email/email.service';
 
 function product(overrides: Record<string, unknown> = {}) {
   return {
@@ -33,6 +34,11 @@ function product(overrides: Record<string, unknown> = {}) {
     updatedAt: new Date(),
     ...overrides,
   };
+}
+
+/** E-mail desligado por padrão (sem chave); os testes de confirmação trocam. */
+function emailMock() {
+  return { configured: false, send: jest.fn().mockResolvedValue(false) };
 }
 
 const settings = {
@@ -74,6 +80,7 @@ describe('SiteOrdersService.quote', () => {
         { provide: StoreSettingsService, useValue: storeSettings },
         { provide: PAYMENT_GATEWAY, useValue: {} },
         { provide: PushNotificationsService, useValue: {} },
+        { provide: EmailService, useValue: emailMock() },
       ],
     }).compile();
     service = moduleRef.get(SiteOrdersService);
@@ -355,6 +362,7 @@ describe('SiteOrdersService orders', () => {
         },
         { provide: PAYMENT_GATEWAY, useValue: gateway },
         { provide: PushNotificationsService, useValue: push },
+        { provide: EmailService, useValue: emailMock() },
       ],
     }).compile();
     service = moduleRef.get(SiteOrdersService);
@@ -407,6 +415,7 @@ describe('SiteOrdersService orders', () => {
               id: 't1',
               attendeeName: 'Maria',
               unitPrice: new Prisma.Decimal('45.00'),
+              code: 'K7Q2-M9XP',
               checkedInAt: null,
             },
           ],
@@ -424,7 +433,12 @@ describe('SiteOrdersService orders', () => {
         locationAddress: null,
       });
       expect(result.tickets).toEqual([
-        { attendeeName: 'Maria', unitPrice: 45 },
+        {
+          attendeeName: 'Maria',
+          unitPrice: 45,
+          code: 'K7Q2-M9XP',
+          checkedIn: false,
+        },
       ]);
       expect(result.items).toEqual([]);
       expect(result.pickup).toBeNull();
@@ -904,6 +918,7 @@ describe('SiteOrdersService.create', () => {
         { provide: StoreSettingsService, useValue: storeSettings },
         { provide: PAYMENT_GATEWAY, useValue: gateway },
         { provide: PushNotificationsService, useValue: {} },
+        { provide: EmailService, useValue: emailMock() },
       ],
     }).compile();
     service = moduleRef.get(SiteOrdersService);
@@ -1141,6 +1156,7 @@ describe('SiteOrdersService tickets', () => {
         { provide: StoreSettingsService, useValue: storeSettings },
         { provide: PAYMENT_GATEWAY, useValue: gateway },
         { provide: PushNotificationsService, useValue: push },
+        { provide: EmailService, useValue: emailMock() },
       ],
     }).compile();
     service = moduleRef.get(SiteOrdersService);
@@ -1334,6 +1350,279 @@ describe('SiteOrdersService tickets', () => {
       await expect(service.setCheckIn('t1', true)).rejects.toThrow(
         ConflictException,
       );
+    });
+  });
+});
+
+describe('SiteOrdersService post-sale', () => {
+  let service: SiteOrdersService;
+  let prisma: {
+    siteOrder: Record<string, jest.Mock>;
+    siteOrderTicket: Record<string, jest.Mock>;
+    lookupAttempt: Record<string, jest.Mock>;
+    $transaction: jest.Mock;
+  };
+  let email: { configured: boolean; send: jest.Mock };
+  const eventId = '0b9f7c1e-0000-4000-8000-000000000001';
+
+  const paidTicketOrder = (overrides: Record<string, unknown> = {}) => ({
+    id: 'o9',
+    number: 43,
+    publicToken: 'tok9',
+    kind: 'tickets',
+    status: 'paid',
+    customerName: 'Maria Souza',
+    customerEmail: 'maria@exemplo.com',
+    customerPhone: '5521999998888',
+    deliveryMethod: null,
+    bairro: null,
+    subtotal: new Prisma.Decimal('90'),
+    deliveryFee: new Prisma.Decimal('0'),
+    total: new Prisma.Decimal('90'),
+    items: [],
+    eventId,
+    event: {
+      id: eventId,
+      title: 'Oficina de terrário',
+      slug: 'oficina-de-terrario',
+      startsAt: new Date('2026-11-21T13:00:00Z'),
+      endsAt: null,
+      locationName: null,
+      locationAddress: null,
+    },
+    tickets: [
+      {
+        id: 't1',
+        attendeeName: 'Maria Souza',
+        unitPrice: new Prisma.Decimal('45'),
+        code: 'K7Q2-M9XP',
+        checkedInAt: null,
+      },
+      {
+        id: 't2',
+        attendeeName: 'Bruno Lima',
+        unitPrice: new Prisma.Decimal('45'),
+        code: 'A2B3-C4D5',
+        checkedInAt: null,
+      },
+    ],
+    confirmationSentAt: null,
+    fulfillmentStatus: 'awaiting',
+    notes: null,
+    paidAt: new Date(),
+    expiresAt: new Date(),
+    createdAt: new Date(),
+    ...overrides,
+  });
+
+  const ticket = (overrides: Record<string, unknown> = {}) => ({
+    id: 't1',
+    eventId,
+    attendeeName: 'Maria Souza',
+    checkedInAt: null,
+    code: 'K7Q2-M9XP',
+    order: {
+      id: 'o9',
+      number: 43,
+      status: 'paid',
+      customerName: 'Maria Souza',
+      customerPhone: '5521999998888',
+    },
+    ...overrides,
+  });
+
+  beforeEach(async () => {
+    process.env.SITE_URL = 'https://www.daverdinha.com.br';
+    prisma = {
+      siteOrder: {
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        findUnique: jest.fn().mockResolvedValue(paidTicketOrder()),
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+      siteOrderTicket: {
+        findUnique: jest.fn().mockResolvedValue(ticket()),
+        findUniqueOrThrow: jest.fn(),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      lookupAttempt: {
+        count: jest.fn().mockResolvedValue(0),
+        createMany: jest.fn(),
+        deleteMany: jest.fn(),
+      },
+      $transaction: jest.fn(async (ops: unknown) =>
+        Array.isArray(ops) ? Promise.all(ops) : undefined,
+      ),
+    };
+    email = { configured: true, send: jest.fn().mockResolvedValue(true) };
+    const moduleRef = await Test.createTestingModule({
+      providers: [
+        SiteOrdersService,
+        { provide: PrismaService, useValue: prisma },
+        { provide: DeliveryLocationsService, useValue: {} },
+        { provide: DeliveryAreasService, useValue: {} },
+        {
+          provide: StoreSettingsService,
+          useValue: { get: jest.fn().mockResolvedValue(settings) },
+        },
+        { provide: PAYMENT_GATEWAY, useValue: {} },
+        { provide: PushNotificationsService, useValue: {} },
+        { provide: EmailService, useValue: email },
+      ],
+    }).compile();
+    service = moduleRef.get(SiteOrdersService);
+    jest.spyOn(service['logger'], 'warn').mockImplementation(() => {});
+  });
+
+  describe('confirmation email', () => {
+    const send = () => service['sendConfirmation']('o9');
+
+    it('claims the order before sending, so a repeated webhook sends one email', async () => {
+      expect(await send()).toBe(true);
+      expect(prisma.siteOrder.updateMany).toHaveBeenCalledWith({
+        where: { id: 'o9', status: 'paid', confirmationSentAt: null },
+        data: { confirmationSentAt: expect.any(Date) },
+      });
+      const sent = email.send.mock.calls[0][0];
+      expect(sent.to).toBe('maria@exemplo.com');
+      expect(sent.subject).toContain('Ingresso confirmado!');
+      expect(sent.images).toHaveLength(2);
+
+      prisma.siteOrder.updateMany.mockResolvedValue({ count: 0 });
+      expect(await send()).toBe(false);
+      expect(email.send).toHaveBeenCalledTimes(1);
+    });
+
+    it('releases the claim when sending fails or email is off, so it can be resent', async () => {
+      email.send.mockRejectedValueOnce(new Error('resend down'));
+      expect(await send()).toBe(false);
+      email.send.mockResolvedValueOnce(false);
+      expect(await send()).toBe(false);
+
+      const releases = prisma.siteOrder.updateMany.mock.calls.filter(
+        (c) => c[0].data.confirmationSentAt === null,
+      );
+      expect(releases).toHaveLength(2);
+    });
+
+    it('resends only paid orders, and says when email is not set up', async () => {
+      prisma.siteOrder.findUnique.mockResolvedValueOnce(
+        paidTicketOrder({ status: 'pending_payment' }),
+      );
+      await expect(service.resendConfirmation('o9')).rejects.toThrow(
+        ConflictException,
+      );
+
+      email.configured = false;
+      await expect(service.resendConfirmation('o9')).rejects.toThrow(
+        ServiceUnavailableException,
+      );
+
+      email.configured = true;
+      await service.resendConfirmation('o9');
+      expect(prisma.siteOrder.updateMany.mock.calls[0][0].where).toEqual({
+        id: 'o9',
+        status: 'paid',
+      });
+    });
+  });
+
+  describe('checkInByCode', () => {
+    it('checks a paid ticket of this event in, once, accepting the code typed in any form', async () => {
+      const attendee = await service.checkInByCode(eventId, 'k7q2 m9xp');
+
+      expect(prisma.siteOrderTicket.findUnique).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { code: 'K7Q2-M9XP' } }),
+      );
+      expect(prisma.siteOrderTicket.updateMany).toHaveBeenCalledWith({
+        where: { id: 't1', checkedInAt: null },
+        data: { checkedInAt: expect.any(Date) },
+      });
+      expect(attendee.checkedInAt).not.toBeNull();
+    });
+
+    it('is a 404 for an unknown code', async () => {
+      prisma.siteOrderTicket.findUnique.mockResolvedValue(null);
+
+      await expect(service.checkInByCode(eventId, 'ZZZZ-ZZZZ')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it.each([
+      ['other_event', ticket({ eventId: 'outro' })],
+      [
+        'not_paid',
+        ticket({ order: { ...ticket().order, status: 'pending_payment' } }),
+      ],
+    ])('refuses with %s', async (reason, row) => {
+      prisma.siteOrderTicket.findUnique.mockResolvedValue(row);
+
+      await expect(
+        service.checkInByCode(eventId, 'K7Q2-M9XP'),
+      ).rejects.toMatchObject({ response: { reason } });
+    });
+
+    it('says when the ticket already got in', async () => {
+      const at = new Date('2026-11-21T22:42:00Z');
+      prisma.siteOrderTicket.updateMany.mockResolvedValue({ count: 0 });
+      prisma.siteOrderTicket.findUniqueOrThrow.mockResolvedValue({
+        checkedInAt: at,
+      });
+
+      await expect(
+        service.checkInByCode(eventId, 'K7Q2-M9XP'),
+      ).rejects.toMatchObject({
+        response: {
+          reason: 'already_checked_in',
+          checkedInAt: at.toISOString(),
+        },
+      });
+    });
+  });
+
+  describe('sendOrderLinks', () => {
+    it('emails the links of the recent paid or pending orders of that address', async () => {
+      prisma.siteOrder.findMany.mockResolvedValue([
+        {
+          number: 43,
+          publicToken: 'tok9',
+          kind: 'tickets',
+          status: 'paid',
+          total: new Prisma.Decimal('90'),
+          createdAt: new Date('2026-11-12T12:00:00Z'),
+          event: { title: 'Oficina de terrário' },
+        },
+      ]);
+
+      await service.sendOrderLinks(' Maria@Exemplo.com ', '1.2.3.4');
+
+      const { where } = prisma.siteOrder.findMany.mock.calls[0][0];
+      expect(where.customerEmail).toEqual({
+        equals: 'maria@exemplo.com',
+        mode: 'insensitive',
+      });
+      const sent = email.send.mock.calls[0][0];
+      expect(sent.to).toBe('maria@exemplo.com');
+      expect(sent.text).toContain('https://www.daverdinha.com.br/pedido/tok9');
+      expect(prisma.lookupAttempt.createMany).toHaveBeenCalledWith({
+        data: [{ key: 'email:maria@exemplo.com' }, { key: 'ip:1.2.3.4' }],
+      });
+    });
+
+    it('sends nothing, and answers the same, when there is no order', async () => {
+      await expect(
+        service.sendOrderLinks('ninguem@exemplo.com', '1.2.3.4'),
+      ).resolves.toBeUndefined();
+      expect(email.send).not.toHaveBeenCalled();
+    });
+
+    it('stops after too many attempts in an hour', async () => {
+      prisma.lookupAttempt.count.mockResolvedValueOnce(3);
+
+      await expect(
+        service.sendOrderLinks('maria@exemplo.com', '1.2.3.4'),
+      ).rejects.toMatchObject({ status: 429 });
+      expect(prisma.siteOrder.findMany).not.toHaveBeenCalled();
     });
   });
 });

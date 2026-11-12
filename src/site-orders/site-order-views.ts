@@ -50,8 +50,13 @@ export interface PublicSiteOrder {
     locationName: string | null;
     locationAddress: string | null;
   } | null;
-  /** Um por participante; `[]` em pedido de produtos. */
-  tickets: { attendeeName: string; unitPrice: number }[];
+  /** Um por participante; `[]` em pedido de produtos. `code` é o conteúdo do QR. */
+  tickets: {
+    attendeeName: string;
+    unitPrice: number;
+    code: string;
+    checkedIn: boolean;
+  }[];
   subtotal: number;
   deliveryFee: number;
   total: number;
@@ -101,8 +106,11 @@ export interface SiteOrderAdmin {
     id: string;
     attendeeName: string;
     unitPrice: number;
+    code: string;
     checkedInAt: string | null;
   }[];
+  /** Quando o e-mail de confirmação saiu; `null` = ainda não saiu. */
+  confirmationSentAt: string | null;
   subtotal: number;
   deliveryFee: number;
   total: number;
@@ -153,6 +161,8 @@ export function toPublicOrder(
     tickets: row.tickets.map((ticket) => ({
       attendeeName: ticket.attendeeName,
       unitPrice: toMoney(ticket.unitPrice),
+      code: ticket.code,
+      checkedIn: ticket.checkedInAt !== null,
     })),
     subtotal: toMoney(row.subtotal),
     deliveryFee: toMoney(row.deliveryFee),
@@ -213,8 +223,10 @@ export function toAdminOrder(row: SiteOrderRow): SiteOrderAdmin {
       id: ticket.id,
       attendeeName: ticket.attendeeName,
       unitPrice: toMoney(ticket.unitPrice),
+      code: ticket.code,
       checkedInAt: ticket.checkedInAt?.toISOString() ?? null,
     })),
+    confirmationSentAt: row.confirmationSentAt?.toISOString() ?? null,
     subtotal: toMoney(row.subtotal),
     deliveryFee: toMoney(row.deliveryFee),
     total: toMoney(row.total),

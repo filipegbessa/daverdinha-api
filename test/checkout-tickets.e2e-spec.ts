@@ -138,6 +138,10 @@ describe('Checkout tickets (e2e)', () => {
       event: { slug: 'e2e-ingresso-gratuito' },
     });
     expect(order.body.tickets).toHaveLength(2);
+    // Cada participante tem o código do QR, diferente um do outro.
+    const codes = (order.body.tickets as { code: string }[]).map((t) => t.code);
+    expect(new Set(codes).size).toBe(2);
+    codes.forEach((code) => expect(code).toMatch(/^[2-9A-Z]{4}-[2-9A-Z]{4}$/));
     // A lista de presença é do admin.
     await request(app.getHttpServer())
       .get(`/events/${ids.free}/attendees`)
@@ -156,5 +160,30 @@ describe('Checkout tickets (e2e)', () => {
     } finally {
       await setTicketsEnabled(true);
     }
+  });
+
+  it('answers "Meus pedidos" the same way with or without orders', async () => {
+    const withOrders = await request(app.getHttpServer())
+      .post('/checkout/orders/lookup')
+      .set('x-forwarded-for', '203.0.113.7')
+      .send({ email })
+      .expect(202);
+    const without = await request(app.getHttpServer())
+      .post('/checkout/orders/lookup')
+      .set('x-forwarded-for', '203.0.113.7')
+      .send({ email: 'ninguem-e2e@exemplo.com' })
+      .expect(202);
+    expect(withOrders.body).toEqual(without.body);
+    await prisma.lookupAttempt.deleteMany({
+      where: {
+        key: {
+          in: [
+            `email:${email}`,
+            'email:ninguem-e2e@exemplo.com',
+            'ip:203.0.113.7',
+          ],
+        },
+      },
+    });
   });
 });

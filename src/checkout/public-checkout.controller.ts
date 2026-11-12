@@ -6,12 +6,15 @@ import {
   HttpStatus,
   Param,
   Post,
+  Req,
 } from '@nestjs/common';
+import type { Request } from 'express';
 import { ApiTags } from '@nestjs/swagger';
 import { SiteOrdersService } from '../site-orders/site-orders.service';
 import { QuoteDto } from './dto/quote.dto';
 import { CreateCheckoutDto } from './dto/create-checkout.dto';
 import { CreateTicketCheckoutDto } from './dto/create-ticket-checkout.dto';
+import { LookupOrdersDto } from './dto/lookup-orders.dto';
 
 /**
  * A loja do site, sem login. Controller público separado, como os outros:
@@ -49,9 +52,29 @@ export class PublicCheckoutController {
     return this.orders.createTickets(dto);
   }
 
+  /**
+   * "Meus pedidos": manda os links dos pedidos pro e-mail. Responde 202
+   * igual com ou sem pedido; 429 depois de muitas tentativas.
+   */
+  @Post('orders/lookup')
+  @HttpCode(HttpStatus.ACCEPTED)
+  async lookupOrders(@Body() dto: LookupOrdersDto, @Req() req: Request) {
+    await this.orders.sendOrderLinks(dto.email, clientIp(req));
+    return { message: 'Se houver pedidos nesse e-mail, mandamos os links.' };
+  }
+
   /** A página do pedido, pelo token secreto do link (`/pedido/<token>` no site). */
   @Get('orders/:token')
   findOrder(@Param('token') token: string) {
     return this.orders.findPublicByToken(token);
   }
+}
+
+/** O IP de quem chamou: na Vercel vem no `x-forwarded-for` (o primeiro da lista). */
+export function clientIp(req: Pick<Request, 'headers' | 'ip'>): string {
+  const forwarded = req.headers['x-forwarded-for'];
+  const first = (Array.isArray(forwarded) ? forwarded[0] : forwarded)
+    ?.split(',')[0]
+    ?.trim();
+  return first || req.ip || 'unknown';
 }

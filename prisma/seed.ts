@@ -3,6 +3,7 @@ import { Prisma, PrismaClient } from '@prisma/client';
 import * as fs from 'fs';
 import * as path from 'path';
 import { normalizeText } from '../src/common/normalize-text';
+import { generateTicketCode } from '../src/site-orders/ticket-code';
 
 const prisma = new PrismaClient();
 
@@ -350,6 +351,7 @@ async function seedTicketOrders() {
           create: order.attendees.map((attendeeName) => ({
             eventId: event.id,
             attendeeName,
+            code: generateTicketCode(),
             unitPrice: event.price!,
           })),
         },

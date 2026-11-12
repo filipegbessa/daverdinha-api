@@ -808,6 +808,8 @@ Push: título "Nova inscrição DV-0043" (gratuito) ou "Ingresso vendido DV-0043
 
 ## Depois da V1 (fora deste plano)
 
+> **Pós-venda** (e-mail de confirmação, "Meus pedidos", QR code dos ingressos e leitor no admin) tem plano próprio: `docs/plans/2026-11-12-pos-venda.md`. O item de e-mail abaixo continua como referência do Resend.
+
 - **V2 — pagamento dentro do site (checkout transparente do Pagar.me):** o cartão é tokenizado no navegador com a chave pública (`pk_…`) e a API cria o pedido no Pagar.me com `credit_card` ou `pix` direto (o QR do Pix aparece no próprio site). Troca só a Tarefa 6/7 e a tela de pagamento do site; pedido, webhook, status e admin ficam iguais. Estimativa: 16–24 h.
 - Estorno pela API no botão de cancelar.
 - **E-mail próprio** (confirmação do pedido, "pedido pronto/saiu pra entrega", ingresso): serviço de envio transacional recomendado é o **Resend** (plano grátis de 3.000 e-mails/mês e 100/dia, SDK pra Node), num módulo `src/email/` com a mesma regra de "nada do provedor fora do módulo". Antes de enviar o primeiro, configurar o domínio `daverdinha.com.br` no DNS (SPF, DKIM e DMARC), senão cai no spam. Variáveis: `RESEND_API_KEY`, `EMAIL_FROM`. A caixa de entrada da cliente (`contato@`) é outra coisa: Google Workspace, Zoho Mail grátis ou redirecionamento da Cloudflare.

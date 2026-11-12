@@ -47,6 +47,13 @@ export class SiteOrdersController {
     return this.orders.cancel(id);
   }
 
+  /** Manda de novo o e-mail de confirmação (só pedido pago). 503 sem e-mail configurado. */
+  @Post(':id/resend-confirmation')
+  @HttpCode(HttpStatus.OK)
+  resendConfirmation(@Param('id') id: string) {
+    return this.orders.resendConfirmation(id);
+  }
+
   /** Consulta o Pagar.me agora, sem esperar o intervalo de um minuto. */
   @Post(':id/sync')
   @HttpCode(HttpStatus.OK)
