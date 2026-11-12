@@ -42,6 +42,14 @@ describe('Public agenda (e2e)', () => {
         endsAt: new Date(now - 2 * hour),
         published: true,
       },
+      // Sem horário de fim, começou agora: fica na lista até o fim do dia.
+      {
+        title: 'E2E Sem fim',
+        slug: 'e2e-sem-fim',
+        startsAt: new Date(now),
+        endsAt: null,
+        published: true,
+      },
       {
         title: 'E2E Rascunho',
         slug: 'e2e-rascunho',
@@ -69,6 +77,7 @@ describe('Public agenda (e2e)', () => {
 
     const slugs = (res.body as { slug: string }[]).map((e) => e.slug);
     expect(slugs).toContain('e2e-em-andamento');
+    expect(slugs).toContain('e2e-sem-fim');
     expect(slugs).not.toContain('e2e-passado');
     expect(slugs).not.toContain('e2e-rascunho');
     const ongoing = (res.body as { slug: string; price: unknown }[]).find(

@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { EventsService } from './events.service';
+import { EventsService, startOfDayInRio } from './events.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { BlobStorageService } from '../media/blob-storage.service';
 import { StoreSettingsService } from '../store-settings/store-settings.service';
@@ -23,7 +23,6 @@ function row(overrides: Record<string, unknown> = {}) {
     price: new Prisma.Decimal('120.00') as Prisma.Decimal | null,
     spots: 8 as number | null,
     imageUrl: null as string | null,
-    ctaUrl: null,
     published: false,
     ticketSales: false,
     maxTicketsPerOrder: 10,
@@ -152,6 +151,34 @@ describe('EventsService', () => {
     });
   });
 
+  describe('without an end time', () => {
+    it('creates an event with no end', async () => {
+      const event = await service.create({ ...dto, endsAt: null });
+
+      expect(prisma.event.create.mock.calls[0][0].data.endsAt).toBeNull();
+      expect(event.endsAt).toBeNull();
+    });
+
+    it('clears the end on an update, and only checks the dates that exist', async () => {
+      await service.update('e1', {
+        endsAt: null,
+        startsAt: '2026-11-22T13:00:00Z',
+      });
+
+      expect(prisma.event.update.mock.calls[0][0].data.endsAt).toBeNull();
+    });
+
+    it('keeps an event without an end in the list until the end of its day in Rio', () => {
+      // 02:30 UTC do dia 21 ainda é dia 20 no Rio (23:30).
+      expect(
+        startOfDayInRio(new Date('2026-11-21T02:30:00Z')).toISOString(),
+      ).toBe('2026-11-20T03:00:00.000Z');
+      expect(
+        startOfDayInRio(new Date('2026-11-21T12:00:00Z')).toISOString(),
+      ).toBe('2026-11-21T03:00:00.000Z');
+    });
+  });
+
   describe('update', () => {
     it('keeps the slug when the title changes', async () => {
       await service.update('e1', { title: 'Outro nome' });
@@ -166,12 +193,16 @@ describe('EventsService', () => {
     });
 
     it('stores null when an optional field is cleared', async () => {
-      await service.update('e1', { price: null, spots: null, ctaUrl: null });
+      await service.update('e1', {
+        price: null,
+        spots: null,
+        locationName: null,
+      });
 
       const { data } = prisma.event.update.mock.calls[0][0];
       expect(data.price).toBeNull();
       expect(data.spots).toBeNull();
-      expect(data.ctaUrl).toBeNull();
+      expect(data.locationName).toBeNull();
     });
 
     it('replaces the cover and deletes the old one after saving', async () => {
@@ -237,7 +268,13 @@ describe('EventsService', () => {
       await service.listUpcoming();
 
       expect(prisma.event.findMany).toHaveBeenCalledWith({
-        where: { published: true, endsAt: { gte: expect.any(Date) } },
+        where: {
+          published: true,
+          OR: [
+            { endsAt: { gte: expect.any(Date) } },
+            { endsAt: null, startsAt: { gte: expect.any(Date) } },
+          ],
+        },
         orderBy: { startsAt: 'asc' },
       });
     });
@@ -249,7 +286,7 @@ describe('EventsService', () => {
       await service.listUpcoming();
 
       const [first, second] = prisma.event.findMany.mock.calls.map(
-        (c) => c[0].where.endsAt.gte as Date,
+        (c) => c[0].where.OR[0].endsAt.gte as Date,
       );
       expect(second.getTime() - first.getTime()).toBe(60 * 60 * 1000);
     });

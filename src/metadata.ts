@@ -670,7 +670,13 @@ export default async () => {
                 type: () => String,
                 description: 'ISO 8601 com fuso (o admin manda em UTC).',
               },
-              endsAt: { required: true, type: () => String },
+              endsAt: {
+                required: false,
+                type: () => String,
+                nullable: true,
+                description:
+                  'Opcional: sem fim, o evento sai da lista no fim do dia em que come\u00E7a.',
+              },
               locationName: {
                 required: false,
                 type: () => String,
@@ -692,12 +698,6 @@ export default async () => {
                 type: () => Number,
                 nullable: true,
                 minimum: 1,
-              },
-              ctaUrl: {
-                required: false,
-                type: () => String,
-                nullable: true,
-                format: 'uri',
               },
               published: { required: false, type: () => Boolean },
               ticketSales: {

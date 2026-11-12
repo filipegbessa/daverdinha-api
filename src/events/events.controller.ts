@@ -39,7 +39,13 @@ const eventFormSchema = (required: string[], update = false) => ({
       title: { type: 'string' },
       description: { type: 'string' },
       startsAt: { type: 'string', format: 'date-time' },
-      endsAt: { type: 'string', format: 'date-time' },
+      endsAt: {
+        type: 'string',
+        format: 'date-time',
+        nullable: true,
+        description:
+          'Opcional. Sem fim, o evento sai da lista no fim do dia em que começa.',
+      },
       locationName: {
         type: 'string',
         nullable: true,
@@ -57,12 +63,6 @@ const eventFormSchema = (required: string[], update = false) => ({
         minimum: 1,
         nullable: true,
         description: 'Vazio = sem limite divulgado.',
-      },
-      ctaUrl: {
-        type: 'string',
-        format: 'uri',
-        nullable: true,
-        description: 'Link de inscrição externo. Vazio = WhatsApp.',
       },
       published: { type: 'boolean' },
       ticketSales: {
@@ -110,7 +110,7 @@ export class EventsController {
 
   @Post()
   @ApiConsumes('multipart/form-data')
-  @ApiBody(eventFormSchema(['title', 'description', 'startsAt', 'endsAt']))
+  @ApiBody(eventFormSchema(['title', 'description', 'startsAt']))
   @UseInterceptors(coverInterceptor)
   create(@Body() dto: CreateEventDto, @UploadedFile() file?: UploadedCover) {
     return this.service.create(dto, file);

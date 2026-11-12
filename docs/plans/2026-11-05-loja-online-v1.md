@@ -9,6 +9,8 @@
 > - **2026-11-09 (escopo do MVP):** **ingressos ficam fora do MVP** — a primeira entrega é só a venda de produtos. As decisões 12–18 e as Tarefas 11–13 continuam aqui como desenho pronto pra depois; o `SiteOrder` já nasce com `kind`, então ligar os ingressos depois não muda o que vai ao ar agora. A Tarefa 14 fecha só o caminho de produtos.
 > - **2026-11-12 (interruptor dos ingressos):** além da loja (`StoreSettings.storeEnabled`), a venda de ingressos ganha o **próprio interruptor no Dashboard**, "Venda de ingressos" (`StoreSettings.ticketsEnabled`, padrão `false`), independente do da loja (decisão 20). Entra nas Tarefas 11 e 12 e no Step 4 da Tarefa 14.
 
+> **Atualizado em 2026-11-12 (agenda):** não existe mais link de inscrição externo (`ctaUrl` saiu do cadastro, da API e do banco): sem venda pelo site, a inscrição é pelo WhatsApp. O horário de fim do evento é opcional; sem ele, o evento sai da agenda no fim do dia em que começa. As citações a `ctaUrl` abaixo são do desenho original.
+
 **Goal:** a cliente final compra pelo site: monta o carrinho, escolhe entrega ou retirada, paga no Pagar.me (checkout hospedado, fora do site) e volta pra uma página do pedido. Também compra ingresso (ou se inscreve, se o evento é gratuito) direto na página do evento. A Daverdinha vê e acompanha os pedidos no mesmo admin das conversas, recebe push de venda nova, cadastra áreas de entrega com valor, retirada, estoque e prazo de encomenda, e tem a lista de presença de cada evento.
 
 **Plano irmão:** `daverdinha/docs/plans/2026-11-05-loja-online-v1.md` (telas do admin, carrinho, checkout, página do pedido, ingresso na página do evento). Os contratos de API abaixo são a fonte da verdade pros dois.
@@ -22,7 +24,7 @@
 | Checagem de CEP compartilhada (bot + site) | ✅ Tarefa 2 (2026-11-09) |
 | Loja V1 — produtos | ✅ Tarefas 1, 3, 4 e 5 (2026-11-09; delta da Tarefa 1 aplicado na Neon). ✅ Tarefas 6–10 escritas pela documentação e pela skill do Pagar.me, com testes simulados (2026-11-12). ⏳ falta o Step 0 da Tarefa 6 no sandbox (ver "Suposições a conferir no sandbox") e rodar o e2e de concorrência (`test/checkout-create.e2e-spec.ts`) |
 | Fechamento (e2e, docs, produção) | ⏳ Tarefa 14, só produtos |
-| Ingressos (e a agenda da API, plano `2026-11-04-agenda-eventos.md`, Tarefas 1–5; concluído e removido em 2026-11-12) | ✅ agenda e Tarefas 11–13 implementadas em 2026-11-12, com o interruptor `ticketsEnabled` (decisão 20); delta aplicado na Neon (migration `20261112200000_init`). Diferenças: o 409 de excluir evento vale pra qualquer ingresso (FK `RESTRICT`), não só vendido; o e2e de concorrência é `test/checkout-tickets.e2e-spec.ts` |
+| Ingressos (e a agenda da API, plano `2026-11-04-agenda-eventos.md`, Tarefas 1–5; concluído e removido em 2026-11-12) | ✅ agenda e Tarefas 11–13 implementadas em 2026-11-12, com o interruptor `ticketsEnabled` (decisão 20); delta aplicado na Neon (migration hoje `20261112210000_init`). Diferenças: o 409 de excluir evento vale pra qualquer ingresso (FK `RESTRICT`), não só vendido; o e2e de concorrência é `test/checkout-tickets.e2e-spec.ts` |
 | V2 — pagamento dentro do site, e-mails, "avise-me" | fora deste plano (ver "Depois da V1") |
 
 Os `NEON-*.md` citados nas tarefas eram o SQL de produção de cada etapa, fora do git; todos foram aplicados e apagados em 2026-11-12.

@@ -46,7 +46,7 @@ export interface PublicSiteOrder {
     title: string;
     slug: string;
     startsAt: string;
-    endsAt: string;
+    endsAt: string | null;
     locationName: string | null;
     locationAddress: string | null;
   } | null;
@@ -146,7 +146,7 @@ export function toPublicOrder(
       title: row.event.title,
       slug: row.event.slug,
       startsAt: row.event.startsAt.toISOString(),
-      endsAt: row.event.endsAt.toISOString(),
+      endsAt: row.event.endsAt?.toISOString() ?? null,
       locationName: row.event.locationName,
       locationAddress: row.event.locationAddress,
     },

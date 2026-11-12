@@ -7,7 +7,6 @@ import {
   IsNumber,
   IsOptional,
   IsString,
-  IsUrl,
   Max,
   Min,
 } from 'class-validator';
@@ -21,7 +20,7 @@ const toNullableNumber = ({ value }: { value: unknown }) =>
  * Chega como `multipart/form-data` (por causa da foto), então tudo vem como
  * string. Campo opcional enviado vazio vira `null`, e `null` tem significado
  * (decisão 5 do plano da agenda): `price` = gratuito, `spots` = sem limite,
- * `locationName` = no ateliê, `ctaUrl` = inscrição pelo WhatsApp.
+ * `locationName` = no ateliê.
  */
 export class CreateEventDto {
   @Transform(trim)
@@ -37,8 +36,11 @@ export class CreateEventDto {
   @IsISO8601({ strict: true })
   startsAt: string;
 
+  /** Opcional: sem fim, o evento sai da lista no fim do dia em que começa. */
+  @IsOptional()
+  @Transform(emptyToNull)
   @IsISO8601({ strict: true })
-  endsAt: string;
+  endsAt?: string | null;
 
   @IsOptional()
   @Transform(emptyToNull)
@@ -61,11 +63,6 @@ export class CreateEventDto {
   @IsInt()
   @Min(1)
   spots?: number | null;
-
-  @IsOptional()
-  @Transform(emptyToNull)
-  @IsUrl({ protocols: ['https'], require_protocol: true })
-  ctaUrl?: string | null;
 
   @IsOptional()
   @Transform(toBoolean)

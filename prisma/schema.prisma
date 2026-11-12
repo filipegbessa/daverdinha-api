@@ -451,7 +451,8 @@ model Event {
   slug               String            @unique
   description        String
   startsAt           DateTime          @map("starts_at")
-  endsAt             DateTime          @map("ends_at")
+  /// Opcional: sem fim, o evento sai da lista no fim do dia em que começa.
+  endsAt             DateTime?         @map("ends_at")
   /// `null` = no ateliê (o site usa o endereço da loja).
   locationName       String?           @map("location_name")
   locationAddress    String?           @map("location_address")
@@ -460,10 +461,8 @@ model Event {
   /// `null` = sem limite divulgado.
   spots              Int?
   imageUrl           String?           @map("image_url")
-  /// `null` = inscrição pelo WhatsApp, com mensagem pronta montada pelo site.
-  ctaUrl             String?           @map("cta_url")
   published          Boolean           @default(false)
-  /// Venda/inscrição pelo site. Desligada, o evento usa `ctaUrl`/WhatsApp.
+  /// Venda/inscrição pelo site. Desligada, a inscrição é pelo WhatsApp.
   /// Só vale com o interruptor geral `StoreSettings.ticketsEnabled` ligado.
   ticketSales        Boolean           @default(false) @map("ticket_sales")
   /// Limite de ingressos por compra, configurado pela cliente (1–50).

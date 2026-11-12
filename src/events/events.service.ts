@@ -31,13 +31,13 @@ export interface SiteEvent {
   slug: string;
   description: string;
   startsAt: string;
-  endsAt: string;
+  /** `null` = sem horário de fim. */
+  endsAt: string | null;
   locationName: string | null;
   locationAddress: string | null;
   price: number | null;
   spots: number | null;
   imageUrl: string | null;
-  ctaUrl: string | null;
   /**
    * Venda/inscrição pelo site. No público já vem combinada com o interruptor
    * geral "Venda de ingressos" (`StoreSettings.ticketsEnabled`): o site só
@@ -60,6 +60,15 @@ export interface EventAdmin extends SiteEvent {
   reserved: number;
 }
 
+/**
+ * Meia-noite do dia de hoje no Rio, em UTC. O Brasil não tem horário de verão
+ * desde 2019, então o fuso é sempre -03:00.
+ */
+export function startOfDayInRio(now: Date): Date {
+  const rio = new Date(now.getTime() - 3 * 60 * 60 * 1000);
+  return new Date(`${rio.toISOString().slice(0, 10)}T00:00:00-03:00`);
+}
+
 /** Colidiria com a rota `GET /events/upcoming`. */
 const RESERVED_SLUGS = new Set(['upcoming']);
 
@@ -79,13 +88,12 @@ function toSiteEvent(
     slug: row.slug,
     description: row.description,
     startsAt: row.startsAt.toISOString(),
-    endsAt: row.endsAt.toISOString(),
+    endsAt: row.endsAt?.toISOString() ?? null,
     locationName: row.locationName,
     locationAddress: row.locationAddress,
     price: toMoneyOrNull(row.price),
     spots: row.spots,
     imageUrl: row.imageUrl,
-    ctaUrl: row.ctaUrl,
     ticketSales: selling,
     maxTicketsPerOrder: row.maxTicketsPerOrder,
     spotsLeft: left,
@@ -104,8 +112,9 @@ function toEventAdmin(row: EventRow, taken?: TakenSpots): EventAdmin {
   };
 }
 
-function assertDates(startsAt: Date, endsAt: Date) {
-  if (endsAt < startsAt) {
+/** Sem fim (`null`) não tem o que conferir. */
+function assertDates(startsAt: Date, endsAt: Date | null) {
+  if (endsAt && endsAt < startsAt) {
     throw new BadRequestException(
       'O evento não pode terminar antes de começar.',
     );
@@ -121,7 +130,9 @@ function toData(dto: UpdateEventDto) {
   return {
     ...rest,
     ...(startsAt !== undefined && { startsAt: new Date(startsAt) }),
-    ...(endsAt !== undefined && { endsAt: new Date(endsAt) }),
+    ...(endsAt !== undefined && {
+      endsAt: endsAt === null ? null : new Date(endsAt),
+    }),
     ...(price !== undefined && {
       price: price === null ? null : toDecimal(price),
     }),
@@ -175,7 +186,10 @@ export class EventsService {
    * se a gravação falhar, pra não deixar arquivo órfão.
    */
   async create(dto: CreateEventDto, file?: UploadedCover): Promise<EventAdmin> {
-    assertDates(new Date(dto.startsAt), new Date(dto.endsAt));
+    assertDates(
+      new Date(dto.startsAt),
+      dto.endsAt ? new Date(dto.endsAt) : null,
+    );
     const imageUrl = file ? await this.upload(file) : null;
     try {
       return toEventAdmin(await this.insert(dto, imageUrl));
@@ -199,7 +213,11 @@ export class EventsService {
     const current = await this.findRow(id);
     assertDates(
       dto.startsAt ? new Date(dto.startsAt) : current.startsAt,
-      dto.endsAt ? new Date(dto.endsAt) : current.endsAt,
+      dto.endsAt === undefined
+        ? current.endsAt
+        : dto.endsAt === null
+          ? null
+          : new Date(dto.endsAt),
     );
     const taken = (await takenSpots(this.prisma, [id], new Date())).get(id);
     const occupied = (taken?.sold ?? 0) + (taken?.reserved ?? 0);
@@ -250,12 +268,21 @@ export class EventsService {
     if (current.imageUrl) await this.blob.deleteImage(current.imageUrl);
   }
 
-  /** Publicados que ainda não terminaram (em andamento continuam), pela data. */
+  /**
+   * Publicados que ainda não terminaram (em andamento continuam), pela data.
+   * Sem horário de fim, o evento fica na lista até o fim do dia em que começa.
+   */
   async listUpcoming(): Promise<SiteEvent[]> {
     // `now` por chamada: a instância serverless vive vários minutos.
     const now = new Date();
     const rows = await this.prisma.event.findMany({
-      where: { published: true, endsAt: { gte: now } },
+      where: {
+        published: true,
+        OR: [
+          { endsAt: { gte: now } },
+          { endsAt: null, startsAt: { gte: startOfDayInRio(now) } },
+        ],
+      },
       orderBy: { startsAt: 'asc' },
     });
     return this.toPublic(rows, now);
