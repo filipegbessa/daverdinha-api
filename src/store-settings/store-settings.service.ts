@@ -1,10 +1,14 @@
-import { Injectable } from '@nestjs/common';
+import { ConflictException, Injectable } from '@nestjs/common';
 import type { StoreSettings as StoreSettingsRow } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { toDecimal, toMoney } from '../common/money';
 import { UpdateStoreSettingsDto } from './dto/update-store-settings.dto';
 
 export interface StoreSettings {
+  /** Site completo em `/`; desligado, `/` é a página "em breve". */
+  siteEnabled: boolean;
+  /** Venda pelo site (carrinho + Pagar.me); desligada, a compra é pelo WhatsApp. */
+  storeEnabled: boolean;
   pickupEnabled: boolean;
   pickupAddress: string;
   pickupHours: string;
@@ -14,8 +18,10 @@ export interface StoreSettings {
   updatedAt: Date;
 }
 
-/** O que o site pode ler sem login: só o necessário pra mostrar o parcelamento. */
+/** O que o site pode ler sem login: os dois interruptores e o parcelamento. */
 export interface PublicStoreSettings {
+  siteEnabled: boolean;
+  storeEnabled: boolean;
   maxInstallments: number;
   minInstallmentValue: number;
 }
@@ -32,6 +38,8 @@ const DEFAULTS = {
 
 function toSettings(row: StoreSettingsRow): StoreSettings {
   return {
+    siteEnabled: row.siteEnabled,
+    storeEnabled: row.storeEnabled,
     pickupEnabled: row.pickupEnabled,
     pickupAddress: row.pickupAddress,
     pickupHours: row.pickupHours,
@@ -52,11 +60,18 @@ export class StoreSettingsService {
   }
 
   async getPublic(): Promise<PublicStoreSettings> {
-    const { maxInstallments, minInstallmentValue } = await this.get();
-    return { maxInstallments, minInstallmentValue };
+    const { siteEnabled, storeEnabled, maxInstallments, minInstallmentValue } =
+      await this.get();
+    return { siteEnabled, storeEnabled, maxInstallments, minInstallmentValue };
   }
 
   async update(dto: UpdateStoreSettingsDto): Promise<StoreSettings> {
+    // Loja ligada sem credencial do Pagar.me = todo checkout falhando com 503.
+    if (dto.storeEnabled && !process.env.PAGARME_SECRET_KEY) {
+      throw new ConflictException(
+        'O pagamento ainda não está configurado (chave do Pagar.me). A loja continua desligada.',
+      );
+    }
     await this.row();
     const { minInstallmentValue, ...rest } = dto;
     return toSettings(

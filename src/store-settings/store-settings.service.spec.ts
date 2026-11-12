@@ -1,4 +1,5 @@
 import { Test } from '@nestjs/testing';
+import { ConflictException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { StoreSettingsService } from './store-settings.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -6,6 +7,8 @@ import { PrismaService } from '../prisma/prisma.service';
 function row(overrides: Record<string, unknown> = {}) {
   return {
     id: 1,
+    siteEnabled: false,
+    storeEnabled: false,
     pickupEnabled: true,
     pickupAddress: 'R. Capiberibe, 32',
     pickupHours: 'Seg a sex, 10h às 18h',
@@ -51,10 +54,46 @@ describe('StoreSettingsService', () => {
     expect(settings.minInstallmentValue).toBe(30);
   });
 
-  it('only exposes the installment settings publicly', async () => {
+  it('exposes only the site and store switches and the installments publicly', async () => {
     await expect(service.getPublic()).resolves.toEqual({
+      siteEnabled: false,
+      storeEnabled: false,
       maxInstallments: 3,
       minInstallmentValue: 30,
+    });
+  });
+
+  describe('store switch', () => {
+    const env = { ...process.env };
+    afterEach(() => {
+      process.env = { ...env };
+    });
+
+    it('refuses to open the store without the Pagar.me key', async () => {
+      delete process.env.PAGARME_SECRET_KEY;
+
+      await expect(service.update({ storeEnabled: true })).rejects.toThrow(
+        ConflictException,
+      );
+      expect(prisma.storeSettings.update).not.toHaveBeenCalled();
+    });
+
+    it('opens the store with the key, and always lets it close', async () => {
+      process.env.PAGARME_SECRET_KEY = 'sk_test_x';
+      expect((await service.update({ storeEnabled: true })).storeEnabled).toBe(
+        true,
+      );
+
+      delete process.env.PAGARME_SECRET_KEY;
+      expect((await service.update({ storeEnabled: false })).storeEnabled).toBe(
+        false,
+      );
+    });
+
+    it('switches the full site on and off', async () => {
+      expect((await service.update({ siteEnabled: true })).siteEnabled).toBe(
+        true,
+      );
     });
   });
 

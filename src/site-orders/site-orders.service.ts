@@ -1,7 +1,12 @@
 import {
+  BadRequestException,
   ConflictException,
+  Inject,
   Injectable,
+  Logger,
   NotFoundException,
+  ServiceUnavailableException,
+  UnprocessableEntityException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { pageBounds, paginated } from '../common/pagination';
@@ -11,10 +16,18 @@ import { DeliveryLocationsService } from '../delivery-locations/delivery-locatio
 import { DeliveryAreasService } from '../delivery-locations/delivery-areas.service';
 import { StoreSettingsService } from '../store-settings/store-settings.service';
 import { installmentsFor } from '../store-settings/installments';
-import { availableStock } from './stock';
-import { lineTotal, orderTotals } from './pricing';
+import { availableStock, lockProducts } from './stock';
+import { lineTotal, orderTotals, toCents } from './pricing';
 import type { CartItemDto } from '../checkout/dto/cart-item.dto';
-import { parseOrderCode } from './order-code';
+import type { CreateCheckoutDto } from '../checkout/dto/create-checkout.dto';
+import { formatOrderCode, parseOrderCode } from './order-code';
+import { normalizePhone } from '../common/format-phone';
+import {
+  PAYMENT_GATEWAY,
+  type GatewayCharge,
+  type PaymentGateway,
+} from '../pagarme/payment-gateway';
+import { PushNotificationsService } from '../push-notifications/push-notifications.service';
 import {
   toAdminOrder,
   toPublicOrder,
@@ -108,13 +121,24 @@ function mergeItems(items: CartItemDto[]): Map<string, number> {
   return merged;
 }
 
+/** Quanto tempo o pedido pendente (e o link de pagamento) seguram a reserva. */
+export const ORDER_TTL_MS = 60 * 60 * 1000;
+/** Intervalo mínimo entre duas consultas ao gateway pelo mesmo pedido. */
+const SYNC_INTERVAL_MS = 60 * 1000;
+const PAYMENT_UNAVAILABLE =
+  'Não foi possível iniciar o pagamento. Tente de novo em instantes.';
+
 @Injectable()
 export class SiteOrdersService {
+  private readonly logger = new Logger(SiteOrdersService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly deliveryLocations: DeliveryLocationsService,
     private readonly deliveryAreas: DeliveryAreasService,
     private readonly storeSettings: StoreSettingsService,
+    @Inject(PAYMENT_GATEWAY) private readonly gateway: PaymentGateway,
+    private readonly push: PushNotificationsService,
   ) {}
 
   /**
@@ -129,25 +153,29 @@ export class SiteOrdersService {
   /**
    * A cotação completa. Recebe `db` pra rodar dentro da transação que cria o
    * pedido, depois de travar os produtos, e enxergar o estoque daquele
-   * momento.
+   * momento. `delivery` já resolvido evita consultar o CEP (que pode ir à
+   * BrasilAPI) com os produtos travados.
    */
   async quoteDetails(
     db: Db,
     items: CartItemDto[],
     cep?: string,
     now: Date = new Date(),
+    delivery?: QuoteDetails['delivery'],
   ): Promise<QuoteDetails> {
     const merged = mergeItems(items);
     const ids = [...merged.keys()];
-    const [products, stockLeft, settings, delivery] = await Promise.all([
-      db.product.findMany({
-        where: { id: { in: ids } },
-        include: { category: { select: { active: true } } },
-      }),
-      availableStock(db, ids, now),
-      this.storeSettings.get(),
-      this.deliveryFor(cep),
-    ]);
+    const [products, stockLeft, settings, resolvedDelivery] = await Promise.all(
+      [
+        db.product.findMany({
+          where: { id: { in: ids } },
+          include: { category: { select: { active: true } } },
+        }),
+        availableStock(db, ids, now),
+        this.storeSettings.get(),
+        delivery ?? this.deliveryFor(cep),
+      ],
+    );
 
     const lines: QuoteDetails['lines'] = [];
     const problems: QuoteProblem[] = [];
@@ -202,9 +230,302 @@ export class SiteOrdersService {
             instructions: settings.pickupInstructions,
           }
         : { available: false },
-      delivery,
+      delivery: resolvedDelivery,
       problems,
     };
+  }
+
+  /**
+   * Cria o pedido e o link de pagamento. Os produtos ficam travados só
+   * enquanto a cotação é refeita e o pedido gravado; a chamada ao gateway
+   * vem depois, fora da transação. Se o gateway falhar, o pedido é
+   * cancelado na hora (a reserva some) e o site recebe 503.
+   */
+  async create(
+    dto: CreateCheckoutDto,
+    now: Date = new Date(),
+  ): Promise<{ code: string; token: string; paymentUrl: string }> {
+    if (!(await this.storeSettings.get()).storeEnabled) {
+      throw new ConflictException({
+        message:
+          'A loja do site está fechada no momento. Fale com a gente pelo WhatsApp.',
+        reason: 'store_closed',
+      });
+    }
+    const phone = normalizePhone(dto.customer.phone);
+    if (!phone) throw new BadRequestException('Telefone inválido.');
+    const isDelivery = dto.deliveryMethod === 'delivery';
+    const address = isDelivery ? dto.address : undefined;
+    // Resolvido antes de travar: o CEP pode depender de uma chamada externa.
+    const delivery: QuoteDetails['delivery'] = address
+      ? await this.deliveryFor(address.cep)
+      : { available: false, reason: 'no_cep' };
+
+    const order = await this.prisma.$transaction(async (tx) => {
+      await lockProducts(tx, [...new Set(dto.items.map((i) => i.productId))]);
+      const quote = await this.quoteDetails(
+        tx,
+        dto.items,
+        address?.cep,
+        now,
+        delivery,
+      );
+      if (quote.problems.length > 0) {
+        throw new ConflictException({
+          message: 'Alguns produtos do carrinho mudaram. Confira o carrinho.',
+          problems: quote.problems,
+        });
+      }
+      if (isDelivery && !quote.delivery.available) {
+        throw new UnprocessableEntityException({
+          message: 'Não entregamos nesse endereço.',
+          reason: quote.delivery.reason,
+        });
+      }
+      if (!isDelivery && !quote.pickup.available) {
+        throw new UnprocessableEntityException({
+          message: 'A retirada não está disponível no momento.',
+          reason: 'pickup_disabled',
+        });
+      }
+      const fee = quote.delivery.available
+        ? quote.delivery.fee
+        : new Prisma.Decimal(0);
+      const deliveryFee = isDelivery ? fee : new Prisma.Decimal(0);
+      const { subtotal, total } = orderTotals(
+        quote.lines.map((l) => l.lineTotal),
+        deliveryFee,
+      );
+      const area =
+        isDelivery && quote.delivery.available ? quote.delivery : null;
+      return tx.siteOrder.create({
+        data: {
+          kind: 'products',
+          customerName: dto.customer.name.trim(),
+          customerEmail: dto.customer.email.trim(),
+          customerPhone: phone,
+          deliveryMethod: dto.deliveryMethod,
+          ...(address && {
+            cep: address.cep.replace(/\D/g, ''),
+            street: address.street.trim(),
+            streetNumber: address.number.trim(),
+            complement: address.complement?.trim() || null,
+          }),
+          bairro: area?.bairro ?? null,
+          deliveryZone: area?.zone ?? null,
+          deliveryArea: area?.area ?? null,
+          notes: dto.notes?.trim() || null,
+          subtotal,
+          deliveryFee,
+          total,
+          expiresAt: new Date(now.getTime() + ORDER_TTL_MS),
+          items: {
+            create: quote.lines.map((line) => ({
+              productId: line.product.id,
+              productName: line.product.name,
+              productSlug: line.product.slug,
+              imageUrl: line.product.images[0] ?? null,
+              unitPrice: line.unitPrice,
+              quantity: line.quantity,
+              leadTimeDays:
+                line.product.stock === null ? line.product.leadTimeDays : null,
+            })),
+          },
+        },
+        include: WITH_ITEMS,
+      });
+    });
+
+    const code = formatOrderCode(order.number);
+    const settings = await this.storeSettings.get();
+    try {
+      const { gatewayLinkId, paymentUrl } = await this.gateway.createCheckout({
+        orderId: order.id,
+        code,
+        items: order.items.map((item) => ({
+          id: item.productId ?? item.id,
+          description: item.productName,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+        })),
+        deliveryFee: order.deliveryFee,
+        customer: {
+          name: order.customerName,
+          email: order.customerEmail,
+          phone: order.customerPhone,
+        },
+        successUrl: `${siteUrl()}/pedido/${order.publicToken}`,
+        maxInstallments: installmentsFor(order.total, settings),
+        expiresAt: order.expiresAt,
+      });
+      await this.prisma.siteOrder.update({
+        where: { id: order.id },
+        data: { gatewayLinkId, paymentUrl },
+      });
+      return { code, token: order.publicToken, paymentUrl };
+    } catch (error) {
+      this.logger.error(
+        `Falha ao criar o pagamento de ${code}: ${(error as Error).message}`,
+      );
+      await this.prisma.siteOrder.updateMany({
+        where: { id: order.id, status: 'pending_payment' },
+        data: { status: 'cancelled' },
+      });
+      throw new ServiceUnavailableException(PAYMENT_UNAVAILABLE);
+    }
+  }
+
+  /**
+   * Aplica ao pedido o status de uma cobrança lida no gateway (nunca o corpo
+   * do webhook). Idempotente: o mesmo `paid` chegando várias vezes produz uma
+   * baixa de estoque e um push, porque só quem consegue a transição pra
+   * `paid` dispara os efeitos. Cobrança que não é nossa é ignorada.
+   */
+  async applyGatewayCharge(charge: GatewayCharge): Promise<void> {
+    const order = await this.findByCharge(charge);
+    if (!order) {
+      this.logger.warn(
+        `Cobrança ${charge.id} sem pedido nosso (pedido ${charge.orderId ?? '-'}, código ${charge.orderCode ?? '-'}).`,
+      );
+      return;
+    }
+    const code = formatOrderCode(order.number);
+    const base: Prisma.SiteOrderUpdateManyMutationInput = {
+      gatewayStatus: charge.rawStatus,
+      ...(charge.orderId &&
+        !order.gatewayOrderId && { gatewayOrderId: charge.orderId }),
+    };
+
+    switch (charge.status) {
+      case 'paid': {
+        if (charge.amountCents !== toCents(order.total)) {
+          this.logger.error(
+            `${code}: valor pago (${charge.amountCents} centavos) diferente do total (${toCents(order.total)}). Pedido não marcado como pago.`,
+          );
+          await this.prisma.siteOrder.updateMany({
+            where: { id: order.id },
+            data: base,
+          });
+          return;
+        }
+        const paid = await this.prisma.$transaction(async (tx) => {
+          const { count } = await tx.siteOrder.updateMany({
+            where: { id: order.id, status: { not: 'paid' } },
+            data: {
+              ...base,
+              status: 'paid',
+              paidAt: charge.paidAt ? new Date(charge.paidAt) : new Date(),
+              gatewayChargeId: charge.id,
+            },
+          });
+          if (count === 1 && order.kind === 'products') {
+            await takeStock(tx, order);
+          }
+          return count === 1;
+        });
+        if (!paid) {
+          await this.prisma.siteOrder.updateMany({
+            where: { id: order.id },
+            data: base,
+          });
+          return;
+        }
+        await this.push
+          .notifyNewOrder({
+            id: order.id,
+            code,
+            total: order.total,
+            customerName: order.customerName,
+            late: order.status === 'expired' || order.status === 'cancelled',
+          })
+          .catch((error) =>
+            this.logger.warn(`Push do pedido ${code} falhou: ${error}`),
+          );
+        return;
+      }
+      case 'refunded':
+      case 'chargedback': {
+        if (order.status === 'refunded') {
+          await this.prisma.siteOrder.updateMany({
+            where: { id: order.id },
+            data: base,
+          });
+          return;
+        }
+        await this.prisma.$transaction(async (tx) => {
+          const { count } = await tx.siteOrder.updateMany({
+            where: { id: order.id, status: order.status },
+            data: { ...base, status: 'refunded' },
+          });
+          if (
+            count === 1 &&
+            order.status === 'paid' &&
+            order.kind === 'products'
+          ) {
+            await returnStock(tx, order);
+          }
+        });
+        return;
+      }
+      default:
+        // pending, failed, canceled: o cliente pode tentar de novo até vencer.
+        await this.prisma.siteOrder.updateMany({
+          where: { id: order.id },
+          data: base,
+        });
+    }
+  }
+
+  /**
+   * Reconciliação sem cron: consulta o gateway pelas cobranças do link e
+   * aplica cada uma. Sem `force`, só pedido pendente e no máximo uma vez por
+   * minuto; falha do gateway não derruba quem está lendo o pedido. Com
+   * `force` (botão do admin), consulta sempre e a falha vira 503.
+   */
+  async syncWithGateway(
+    row: SiteOrderRow,
+    { force = false, now = new Date() } = {},
+  ): Promise<SiteOrderRow> {
+    if (!row.gatewayLinkId) return row;
+    if (!force) {
+      if (row.status !== 'pending_payment') return row;
+      if (
+        row.lastSyncedAt &&
+        now.getTime() - row.lastSyncedAt.getTime() < SYNC_INTERVAL_MS
+      ) {
+        return row;
+      }
+    }
+    try {
+      const charges = await this.gateway.findChargesForLink(
+        row.gatewayLinkId,
+        formatOrderCode(row.number),
+      );
+      for (const charge of charges) await this.applyGatewayCharge(charge);
+      await this.prisma.siteOrder.updateMany({
+        where: { id: row.id },
+        data: { lastSyncedAt: now },
+      });
+    } catch (error) {
+      this.logger.warn(
+        `Não deu pra consultar o pagamento de ${formatOrderCode(row.number)}: ${(error as Error).message}`,
+      );
+      if (force) {
+        throw new ServiceUnavailableException(
+          'Não foi possível consultar o Pagar.me agora. Tente de novo em instantes.',
+        );
+      }
+      return row;
+    }
+    return this.findRow(row.id);
+  }
+
+  /** Botão "Atualizar pagamento" do admin: consulta o gateway agora. */
+  async sync(id: string): Promise<SiteOrderAdmin> {
+    const row = await this.syncWithGateway(await this.findRow(id), {
+      force: true,
+    });
+    return toAdminOrder(await this.expireIfDue(row));
   }
 
   /**
@@ -219,7 +540,7 @@ export class SiteOrdersService {
     });
     if (!row) throw new NotFoundException('Pedido não encontrado.');
     const [order, settings] = await Promise.all([
-      this.expireIfDue(row),
+      this.syncWithGateway(row).then((synced) => this.expireIfDue(synced)),
       this.storeSettings.get(),
     ]);
     return toPublicOrder(order, settings);
@@ -258,7 +579,8 @@ export class SiteOrdersService {
   }
 
   async findById(id: string): Promise<SiteOrderAdmin> {
-    return toAdminOrder(await this.expireIfDue(await this.findRow(id)));
+    const row = await this.syncWithGateway(await this.findRow(id));
+    return toAdminOrder(await this.expireIfDue(row));
   }
 
   /** Preparo só faz sentido em pedido pago. */
@@ -307,6 +629,24 @@ export class SiteOrdersService {
       }
     });
     return this.findById(id);
+  }
+
+  /** O pedido de uma cobrança: pelo pedido do gateway ou pelo nosso `DV-…`. */
+  private async findByCharge(
+    charge: GatewayCharge,
+  ): Promise<SiteOrderRow | null> {
+    const or: Prisma.SiteOrderWhereInput[] = [];
+    if (charge.orderId) or.push({ gatewayOrderId: charge.orderId });
+    const number =
+      charge.orderCode && /^DV-\d+$/i.test(charge.orderCode.trim())
+        ? parseOrderCode(charge.orderCode)
+        : null;
+    if (number !== null) or.push({ number });
+    if (or.length === 0) return null;
+    return this.prisma.siteOrder.findFirst({
+      where: { OR: or },
+      include: WITH_ITEMS,
+    });
   }
 
   private async findRow(id: string): Promise<SiteOrderRow> {
@@ -393,6 +733,25 @@ function toPublicQuote(details: QuoteDetails): CheckoutQuote {
       : details.delivery,
     problems: details.problems,
   };
+}
+
+/** Base do link de volta do pagamento (`<site>/pedido/<token>`). */
+function siteUrl(): string {
+  return (process.env.SITE_URL || 'https://www.daverdinha.com.br').replace(
+    /\/$/,
+    '',
+  );
+}
+
+/** Baixa do estoque as unidades de um pedido que acabou de ser pago. */
+async function takeStock(db: Db, order: SiteOrderRow): Promise<void> {
+  for (const item of order.items) {
+    if (!item.productId) continue;
+    await db.product.updateMany({
+      where: { id: item.productId, stock: { not: null } },
+      data: { stock: { decrement: item.quantity } },
+    });
+  }
 }
 
 /** Devolve ao estoque as unidades de um pedido pago (só de produto com estoque contado). */

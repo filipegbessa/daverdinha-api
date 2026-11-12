@@ -19,7 +19,7 @@
 | Catálogo — API (`src/product-categories`, `src/products`, Blob) | ✅ feito (`docs/plans/2026-11-04-catalogo-produtos.md`) e delta aplicado na Neon. Falta só `npx prisma migrate resolve --applied 20261104204120_init` em produção. |
 | Catálogo — vitrine e cadastro no admin | ✅ feitos (plano irmão, Fase 1); falta a verificação com a API real (Tarefa 4 de lá) |
 | Checagem de CEP compartilhada (bot + site) | ✅ Tarefa 2 (2026-11-09) |
-| Loja V1 — produtos | ✅ Tarefas 1, 3, 4 e 5 (2026-11-09; delta da Tarefa 1 aplicado na Neon). ✅ sem gateway: página pública do pedido com vencimento (Tarefa 9, falta a reconciliação) e admin de pedidos (Tarefa 10, falta `POST :id/sync`). ⏳ Tarefas 6–8 e o que falta da 9 e da 10 esperam a chave de teste do Pagar.me da cliente |
+| Loja V1 — produtos | ✅ Tarefas 1, 3, 4 e 5 (2026-11-09; delta da Tarefa 1 aplicado na Neon). ✅ Tarefas 6–10 escritas pela documentação e pela skill do Pagar.me, com testes simulados (2026-11-12). ⏳ falta o Step 0 da Tarefa 6 no sandbox (ver "Suposições a conferir no sandbox") e rodar o e2e de concorrência (`test/checkout-create.e2e-spec.ts`) |
 | Fechamento (e2e, docs, produção) | ⏳ Tarefa 14, só produtos |
 | Ingressos (e a agenda da API, `docs/plans/2026-11-04-agenda-eventos.md`, Tarefas 1–5) | ⏸️ fora do MVP (2026-11-09); Tarefas 11–13 ficam como desenho pra depois |
 | V2 — pagamento dentro do site, e-mails, "avise-me" | fora deste plano (ver "Depois da V1") |
@@ -82,7 +82,16 @@ Fontes: `docs.pagar.me/docs/conecte-o-checkout-pagarme-usando-ia`, `docs/llms.md
 - **Teste:** cartão aprovado `4000000000000010`, recusado `4000000000000028`, qualquer CVV, validade futura; chave Pix de teste no painel.
 - **Não documentado** (fica pro Step 0 da Tarefa 6): autenticação do webhook (assinatura ou Basic Auth); se o pedido gerado pelo link carrega `order_code` como `code`; como achar o pedido/cobrança de um link sem webhook (`GET /paymentlinks/:id` tem resposta vazia na doc); se o checkout pede CPF ao comprador; e-mail de comprovante.
 
-**Pendente da conta Stone/Pagar.me da cliente** (esclarecer durante o desenvolvimento, quando ela trouxer as informações da conta; até lá valem os padrões do plano): plano contratado e taxas (Pix, crédito à vista, parcelado), prazo de recebimento, se a conta já tem acesso à API e ao sandbox, e o que isso muda no parcelamento (quantas parcelas, parcela mínima e se o "sem juros" compensa ou se os juros vão pro comprador). O código não depende desses números: parcelas e parcela mínima são configuração no admin. Entra no Step 0 da Tarefa 6.
+**Skill do Pagar.me (`docs/checkout_pagarme_skill_order.md`, lida em 2026-11-12):** confirma valores em centavos, `expires_in` em minutos e nunca junto com `expires_at`, Basic Auth com `sk_…:` e pede `User-Agent: pagarme-skill-generated/1.0` em toda chamada (adotado). Recomenda assinar `order.paid`, `order.payment_failed`, `charge.refunded` e `checkout.canceled`; o webhook aceita `order.*` (usa a última cobrança do pedido), `charge.*` e `chargeback.*`. Diz pra "validar a assinatura" do webhook, sem dizer como.
+
+**Suposições a conferir no sandbox** (o código foi escrito com elas, isoladas em `src/pagarme/`):
+1. **Autenticação do webhook = Basic Auth** configurado no painel (`webhook-auth.ts`). Se for assinatura, trocar só essa função.
+2. **A cobrança traz `order.code = DV-…`** (o `order_code` do link) ou `order.id`, que é como `applyGatewayCharge` acha o pedido. Se não trouxer nenhum dos dois, o pedido não é achado (fica pendente e vence) — conferir antes de tudo.
+3. **Reconciliação por `GET /orders?code=DV-…`** (`findChargesForLink`), porque a doc não descreve `GET /paymentlinks/:id`.
+4. **Estorno = cobrança `canceled` com `paid_at`** (tratado como `refunded`); `overpaid`/`underpaid` contam como pagos e caem na conferência de valor.
+5. O sandbox é compartilhado entre ambientes: dois bancos (local e homologação) geram `DV-0001` repetido. A conferência de valor segura a maioria dos casos; em homologação, usar uma conta sandbox só dela.
+
+ (esclarecer durante o desenvolvimento, quando ela trouxer as informações da conta; até lá valem os padrões do plano): plano contratado e taxas (Pix, crédito à vista, parcelado), prazo de recebimento, se a conta já tem acesso à API e ao sandbox, e o que isso muda no parcelamento (quantas parcelas, parcela mínima e se o "sem juros" compensa ou se os juros vão pro comprador). O código não depende desses números: parcelas e parcela mínima são configuração no admin. Entra no Step 0 da Tarefa 6.
 
 **Pra confirmar com a cliente:** entrega, retirada e troca/devolução, parcelamento e nota fiscal — respostas pelo questionário `daverdinha/docs/questionario-politicas.md`, que vira o texto das páginas (plano irmão, Tarefa 12). Cancelamento de ingresso fica em `daverdinha/docs/questionario-ingressos.md`, pra depois do MVP.
 

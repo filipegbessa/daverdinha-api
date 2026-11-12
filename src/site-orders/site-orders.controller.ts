@@ -46,4 +46,11 @@ export class SiteOrdersController {
   cancel(@Param('id') id: string) {
     return this.orders.cancel(id);
   }
+
+  /** Consulta o Pagar.me agora, sem esperar o intervalo de um minuto. */
+  @Post(':id/sync')
+  @HttpCode(HttpStatus.OK)
+  sync(@Param('id') id: string) {
+    return this.orders.sync(id);
+  }
 }

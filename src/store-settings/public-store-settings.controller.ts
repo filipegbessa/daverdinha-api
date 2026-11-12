@@ -4,8 +4,8 @@ import { StoreSettingsService } from './store-settings.service';
 
 /**
  * Separado do controller do admin pra "esta rota é pública" ser um fato da
- * estrutura, não um decorator faltando. Só expõe o parcelamento, que o site
- * mostra na página do produto.
+ * estrutura, não um decorator faltando. Expõe os interruptores do site e da
+ * loja (o site decide por eles o que mostrar) e o parcelamento.
  */
 @ApiTags('store-settings')
 @Controller('store-settings')

@@ -398,6 +398,12 @@ model SiteOrderItem {
 /// `BotSettings`; o service cria com os valores padrão se ela não existir.
 model StoreSettings {
   id                  Int      @id @default(1)
+  /// Liga o site completo em `/`. Desligado, `/` mostra a página "em breve"
+  /// e o site completo fica só na prévia `/site`. Liga e desliga no Dashboard.
+  siteEnabled         Boolean  @default(false) @map("site_enabled")
+  /// Liga a venda pelo site (carrinho + Pagar.me). Desligada, o site vende
+  /// pelo WhatsApp e o checkout da API recusa pedidos.
+  storeEnabled        Boolean  @default(false) @map("store_enabled")
   pickupEnabled       Boolean  @default(true) @map("pickup_enabled")
   pickupAddress       String   @map("pickup_address")
   pickupHours         String   @map("pickup_hours")

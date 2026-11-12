@@ -278,6 +278,8 @@ CREATE TABLE "site_order_items" (
 -- CreateTable
 CREATE TABLE "store_settings" (
     "id" INTEGER NOT NULL DEFAULT 1,
+    "site_enabled" BOOLEAN NOT NULL DEFAULT false,
+    "store_enabled" BOOLEAN NOT NULL DEFAULT false,
     "pickup_enabled" BOOLEAN NOT NULL DEFAULT true,
     "pickup_address" TEXT NOT NULL,
     "pickup_hours" TEXT NOT NULL,

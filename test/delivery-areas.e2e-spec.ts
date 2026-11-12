@@ -77,7 +77,7 @@ describe('Delivery areas and store settings (e2e)', () => {
     await request(app.getHttpServer()).get('/store-settings').expect(401);
   });
 
-  it('GET /store-settings/public is public and only shows the installment settings', async () => {
+  it('GET /store-settings/public is public and only shows the switches and the installments', async () => {
     const { body } = await request(app.getHttpServer())
       .get('/store-settings/public')
       .expect(200);
@@ -85,6 +85,8 @@ describe('Delivery areas and store settings (e2e)', () => {
     expect(Object.keys(body as object).sort()).toEqual([
       'maxInstallments',
       'minInstallmentValue',
+      'siteEnabled',
+      'storeEnabled',
     ]);
   });
 });

@@ -13,6 +13,16 @@ import {
 import { emptyToNull, trim } from '../../common/transforms';
 
 export class UpdateStoreSettingsDto {
+  /** Site completo em `/` (ligado) ou página "em breve" (desligado). */
+  @IsOptional()
+  @IsBoolean()
+  siteEnabled?: boolean;
+
+  /** Venda pelo site. Só liga com a chave do Pagar.me configurada (409). */
+  @IsOptional()
+  @IsBoolean()
+  storeEnabled?: boolean;
+
   /** Desligada, o checkout não oferece retirada. */
   @IsOptional()
   @IsBoolean()

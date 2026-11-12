@@ -1,67 +1,72 @@
 /* eslint-disable */
 // Gerado por scripts/generate-openapi-metadata.ts — não edite à mão.
 import * as m0 from './checkout/dto/cart-item.dto';
-import * as m1 from './bot-settings/dto/update-bot-settings.dto';
-import * as m2 from './menu-items/dto/create-menu-item.dto';
-import * as m3 from './menu-items/dto/update-menu-item.dto';
-import * as m4 from './menu-items/dto/reorder-menu-items.dto';
-import * as m5 from './delivery-locations/dto/update-delivery-location.dto';
-import * as m6 from './delivery-locations/dto/create-delivery-area.dto';
-import * as m7 from './delivery-locations/dto/update-delivery-area.dto';
-import * as m8 from './delivery-locations/dto/check-cep.dto';
-import * as m9 from './delivery-locations/dto/set-area-locations.dto';
-import * as m10 from './push-subscriptions/dto/save-push-subscription.dto';
-import * as m11 from './push-subscriptions/dto/remove-push-subscription.dto';
-import * as m12 from './common/pagination';
-import * as m13 from './conversations/dto/list-conversations.dto';
-import * as m14 from './conversations/dto/list-messages.dto';
-import * as m15 from './conversations/dto/reply.dto';
-import * as m16 from './conversations/dto/reply-image.dto';
-import * as m17 from './conversations/dto/reply-audio.dto';
-import * as m18 from './conversations/dto/update-conversation.dto';
-import * as m19 from './categories/dto/list-categories.dto';
-import * as m20 from './categories/dto/create-category.dto';
-import * as m21 from './categories/dto/update-category.dto';
-import * as m22 from './product-categories/dto/create-product-category.dto';
-import * as m23 from './product-categories/dto/update-product-category.dto';
-import * as m24 from './products/dto/create-product.dto';
-import * as m25 from './products/dto/update-product.dto';
-import * as m26 from './products/dto/list-products.dto';
-import * as m27 from './store-settings/dto/update-store-settings.dto';
-import * as m28 from './checkout/dto/quote.dto';
-import * as m29 from './site-orders/dto/list-site-orders.dto';
-import * as m30 from './site-orders/dto/update-fulfillment.dto';
-import * as m31 from './app.controller';
-import * as m32 from './bot-settings/bot-settings.controller';
-import * as m33 from './menu-items/menu-items.controller';
-import * as m34 from './delivery-locations/delivery-locations.controller';
-import * as m35 from './delivery-locations/public-delivery-locations.controller';
-import * as m36 from './delivery-locations/delivery-areas.controller';
-import * as m37 from './whatsapp/webhook.controller';
-import * as m38 from './push-subscriptions/push-subscriptions.controller';
-import * as m39 from './conversations/conversations.controller';
-import * as m40 from './categories/categories.controller';
-import * as m41 from './media/media-retention.controller';
-import * as m42 from './openapi/docs-page.controller';
-import * as m43 from './product-categories/product-categories.controller';
-import * as m44 from './product-categories/public-product-categories.controller';
-import * as m45 from './products/products.controller';
-import * as m46 from './products/public-products.controller';
-import * as m47 from './store-settings/store-settings.controller';
-import * as m48 from './store-settings/public-store-settings.controller';
-import * as m49 from './checkout/public-checkout.controller';
-import * as m50 from './site-orders/site-orders.controller';
-import * as m51 from './openapi/openapi.controller';
+import * as m1 from './checkout/dto/customer.dto';
+import * as m2 from './checkout/dto/create-checkout.dto';
+import * as m3 from './bot-settings/dto/update-bot-settings.dto';
+import * as m4 from './menu-items/dto/create-menu-item.dto';
+import * as m5 from './menu-items/dto/update-menu-item.dto';
+import * as m6 from './menu-items/dto/reorder-menu-items.dto';
+import * as m7 from './delivery-locations/dto/update-delivery-location.dto';
+import * as m8 from './delivery-locations/dto/create-delivery-area.dto';
+import * as m9 from './delivery-locations/dto/update-delivery-area.dto';
+import * as m10 from './delivery-locations/dto/check-cep.dto';
+import * as m11 from './delivery-locations/dto/set-area-locations.dto';
+import * as m12 from './push-subscriptions/dto/save-push-subscription.dto';
+import * as m13 from './push-subscriptions/dto/remove-push-subscription.dto';
+import * as m14 from './common/pagination';
+import * as m15 from './conversations/dto/list-conversations.dto';
+import * as m16 from './conversations/dto/list-messages.dto';
+import * as m17 from './conversations/dto/reply.dto';
+import * as m18 from './conversations/dto/reply-image.dto';
+import * as m19 from './conversations/dto/reply-audio.dto';
+import * as m20 from './conversations/dto/update-conversation.dto';
+import * as m21 from './categories/dto/list-categories.dto';
+import * as m22 from './categories/dto/create-category.dto';
+import * as m23 from './categories/dto/update-category.dto';
+import * as m24 from './product-categories/dto/create-product-category.dto';
+import * as m25 from './product-categories/dto/update-product-category.dto';
+import * as m26 from './products/dto/create-product.dto';
+import * as m27 from './products/dto/update-product.dto';
+import * as m28 from './products/dto/list-products.dto';
+import * as m29 from './store-settings/dto/update-store-settings.dto';
+import * as m30 from './checkout/dto/quote.dto';
+import * as m31 from './site-orders/dto/list-site-orders.dto';
+import * as m32 from './site-orders/dto/update-fulfillment.dto';
+import * as m33 from './app.controller';
+import * as m34 from './bot-settings/bot-settings.controller';
+import * as m35 from './menu-items/menu-items.controller';
+import * as m36 from './delivery-locations/delivery-locations.controller';
+import * as m37 from './delivery-locations/public-delivery-locations.controller';
+import * as m38 from './delivery-locations/delivery-areas.controller';
+import * as m39 from './whatsapp/webhook.controller';
+import * as m40 from './push-subscriptions/push-subscriptions.controller';
+import * as m41 from './conversations/conversations.controller';
+import * as m42 from './categories/categories.controller';
+import * as m43 from './media/media-retention.controller';
+import * as m44 from './openapi/docs-page.controller';
+import * as m45 from './product-categories/product-categories.controller';
+import * as m46 from './product-categories/public-product-categories.controller';
+import * as m47 from './products/products.controller';
+import * as m48 from './products/public-products.controller';
+import * as m49 from './store-settings/store-settings.controller';
+import * as m50 from './store-settings/public-store-settings.controller';
+import * as m51 from './checkout/public-checkout.controller';
+import * as m52 from './site-orders/site-orders.controller';
+import * as m53 from './checkout/pagarme-webhook.controller';
+import * as m54 from './openapi/openapi.controller';
 
 export default async () => {
   const t = {
     ['./checkout/dto/cart-item.dto']: await m0,
+    ['./checkout/dto/customer.dto']: await m1,
+    ['./checkout/dto/create-checkout.dto']: await m2,
   };
   return {
     '@nestjs/swagger': {
       models: [
         [
-          m1,
+          m3,
           {
             UpdateBotSettingsDto: {
               botEnabled: { required: false, type: () => Boolean },
@@ -76,7 +81,7 @@ export default async () => {
           },
         ],
         [
-          m2,
+          m4,
           {
             CreateMenuItemDto: {
               order: { required: true, type: () => Number },
@@ -102,9 +107,9 @@ export default async () => {
             },
           },
         ],
-        [m3, { UpdateMenuItemDto: {} }],
+        [m5, { UpdateMenuItemDto: {} }],
         [
-          m4,
+          m6,
           {
             ReorderMenuItemsDto: {
               orderedIds: {
@@ -119,7 +124,7 @@ export default async () => {
           },
         ],
         [
-          m5,
+          m7,
           {
             UpdateDeliveryLocationDto: {
               covered: { required: true, type: () => Boolean },
@@ -127,7 +132,7 @@ export default async () => {
           },
         ],
         [
-          m6,
+          m8,
           {
             CreateDeliveryAreaDto: {
               zone: {
@@ -148,10 +153,13 @@ export default async () => {
             },
           },
         ],
-        [m7, { UpdateDeliveryAreaDto: {} }],
-        [m8, { CheckCepDto: { cep: { required: false, type: () => String } } }],
+        [m9, { UpdateDeliveryAreaDto: {} }],
         [
-          m9,
+          m10,
+          { CheckCepDto: { cep: { required: false, type: () => String } } },
+        ],
+        [
+          m11,
           {
             SetAreaLocationsDto: {
               locationIds: {
@@ -166,7 +174,7 @@ export default async () => {
           },
         ],
         [
-          m10,
+          m12,
           {
             SavePushSubscriptionDto: {
               endpoint: { required: true, type: () => String },
@@ -174,7 +182,7 @@ export default async () => {
           },
         ],
         [
-          m11,
+          m13,
           {
             RemovePushSubscriptionDto: {
               endpoint: { required: true, type: () => String },
@@ -182,7 +190,7 @@ export default async () => {
           },
         ],
         [
-          m12,
+          m14,
           {
             PaginationQueryDto: {
               page: {
@@ -202,7 +210,7 @@ export default async () => {
           },
         ],
         [
-          m13,
+          m15,
           {
             ListConversationsDto: {
               q: {
@@ -221,7 +229,7 @@ export default async () => {
           },
         ],
         [
-          m14,
+          m16,
           {
             ListMessagesDto: {
               since: {
@@ -241,7 +249,7 @@ export default async () => {
           },
         ],
         [
-          m15,
+          m17,
           {
             ReplyDto: {
               text: {
@@ -255,7 +263,7 @@ export default async () => {
           },
         ],
         [
-          m16,
+          m18,
           {
             ReplyImageDto: {
               caption: { required: false, type: () => String },
@@ -264,7 +272,7 @@ export default async () => {
           },
         ],
         [
-          m17,
+          m19,
           {
             ReplyAudioDto: {
               replyToMessageId: { required: false, type: () => String },
@@ -272,7 +280,7 @@ export default async () => {
           },
         ],
         [
-          m18,
+          m20,
           {
             UpdateConversationDto: {
               name: {
@@ -286,7 +294,7 @@ export default async () => {
           },
         ],
         [
-          m19,
+          m21,
           {
             ListCategoriesDto: {
               q: {
@@ -299,7 +307,7 @@ export default async () => {
           },
         ],
         [
-          m20,
+          m22,
           {
             CreateCategoryDto: {
               name: { required: true, type: () => String },
@@ -307,7 +315,7 @@ export default async () => {
             },
           },
         ],
-        [m21, { UpdateCategoryDto: {} }],
+        [m23, { UpdateCategoryDto: {} }],
         [
           m0,
           {
@@ -323,7 +331,85 @@ export default async () => {
           },
         ],
         [
-          m22,
+          m1,
+          {
+            CustomerDto: {
+              name: {
+                required: true,
+                type: () => String,
+                minLength: 2,
+                maxLength: 100,
+              },
+              email: {
+                required: true,
+                type: () => String,
+                maxLength: 200,
+                format: 'email',
+              },
+              phone: {
+                required: true,
+                type: () => String,
+                description:
+                  'Com ou sem m\u00E1scara e c\u00F3digo do pa\u00EDs: 10 a 13 d\u00EDgitos. Gravado normalizado (`5521\u2026`).',
+                maxLength: 30,
+                pattern: '^(?:\\D*\\d){10,13}\\D*$',
+              },
+            },
+          },
+        ],
+        [
+          m2,
+          {
+            AddressDto: {
+              cep: {
+                required: true,
+                type: () => String,
+                description: 'Com ou sem m\u00E1scara: 8 d\u00EDgitos.',
+                maxLength: 20,
+                pattern: '^(?:\\D*\\d){8}\\D*$',
+              },
+              street: {
+                required: true,
+                type: () => String,
+                minLength: 1,
+                maxLength: 200,
+              },
+              number: {
+                required: true,
+                type: () => String,
+                minLength: 1,
+                maxLength: 20,
+              },
+              complement: {
+                required: false,
+                type: () => String,
+                maxLength: 100,
+              },
+            },
+            CreateCheckoutDto: {
+              items: {
+                required: true,
+                type: () => [t['./checkout/dto/cart-item.dto'].CartItemDto],
+                minItems: 1,
+                maxItems: 30,
+              },
+              customer: {
+                required: true,
+                type: () => t['./checkout/dto/customer.dto'].CustomerDto,
+              },
+              deliveryMethod: { required: true, enum: ['pickup', 'delivery'] },
+              address: {
+                required: false,
+                type: () => t['./checkout/dto/create-checkout.dto'].AddressDto,
+                description:
+                  'Obrigat\u00F3rio na entrega; ignorado na retirada.',
+              },
+              notes: { required: false, type: () => String, maxLength: 500 },
+            },
+          },
+        ],
+        [
+          m24,
           {
             CreateProductCategoryDto: {
               name: { required: true, type: () => String },
@@ -338,9 +424,9 @@ export default async () => {
             },
           },
         ],
-        [m23, { UpdateProductCategoryDto: {} }],
+        [m25, { UpdateProductCategoryDto: {} }],
         [
-          m24,
+          m26,
           {
             CreateProductDto: {
               name: { required: true, type: () => String },
@@ -379,9 +465,9 @@ export default async () => {
             },
           },
         ],
-        [m25, { UpdateProductDto: {} }],
+        [m27, { UpdateProductDto: {} }],
         [
-          m26,
+          m28,
           {
             ListProductsDto: {
               q: {
@@ -408,9 +494,21 @@ export default async () => {
           },
         ],
         [
-          m27,
+          m29,
           {
             UpdateStoreSettingsDto: {
+              siteEnabled: {
+                required: false,
+                type: () => Boolean,
+                description:
+                  'Site completo em `/` (ligado) ou p\u00E1gina "em breve" (desligado).',
+              },
+              storeEnabled: {
+                required: false,
+                type: () => Boolean,
+                description:
+                  'Venda pelo site. S\u00F3 liga com a chave do Pagar.me configurada (409).',
+              },
               pickupEnabled: {
                 required: false,
                 type: () => Boolean,
@@ -453,7 +551,7 @@ export default async () => {
           },
         ],
         [
-          m28,
+          m30,
           {
             QuoteDto: {
               items: {
@@ -473,7 +571,7 @@ export default async () => {
           },
         ],
         [
-          m29,
+          m31,
           {
             ListSiteOrdersDto: {
               status: {
@@ -498,7 +596,7 @@ export default async () => {
           },
         ],
         [
-          m30,
+          m32,
           {
             UpdateFulfillmentDto: {
               fulfillmentStatus: {
@@ -510,9 +608,9 @@ export default async () => {
         ],
       ],
       controllers: [
-        [m31, { AppController: { health: {} } }],
+        [m33, { AppController: { health: {} } }],
         [
-          m32,
+          m34,
           {
             BotSettingsController: {
               get: { type: Object },
@@ -521,7 +619,7 @@ export default async () => {
           },
         ],
         [
-          m33,
+          m35,
           {
             MenuItemsController: {
               list: { type: Object },
@@ -534,13 +632,13 @@ export default async () => {
           },
         ],
         [
-          m34,
+          m36,
           {
             DeliveryLocationsController: { list: { type: Object }, update: {} },
           },
         ],
         [
-          m35,
+          m37,
           {
             PublicDeliveryLocationsController: {
               listCovered: { type: [Object] },
@@ -553,7 +651,7 @@ export default async () => {
           },
         ],
         [
-          m36,
+          m38,
           {
             DeliveryAreasController: {
               list: { type: [Object] },
@@ -564,10 +662,10 @@ export default async () => {
             },
           },
         ],
-        [m37, { WebhookController: { verify: { type: String }, receive: {} } }],
-        [m38, { PushSubscriptionsController: { save: {}, remove: {} } }],
+        [m39, { WebhookController: { verify: { type: String }, receive: {} } }],
+        [m40, { PushSubscriptionsController: { save: {}, remove: {} } }],
         [
-          m39,
+          m41,
           {
             ConversationsController: {
               list: {},
@@ -595,7 +693,7 @@ export default async () => {
           },
         ],
         [
-          m40,
+          m42,
           {
             CategoriesController: {
               list: {},
@@ -606,7 +704,7 @@ export default async () => {
           },
         ],
         [
-          m41,
+          m43,
           {
             MediaRetentionController: {
               run: {
@@ -616,9 +714,9 @@ export default async () => {
             },
           },
         ],
-        [m42, { DocsPageController: { page: { type: String } } }],
+        [m44, { DocsPageController: { page: { type: String } } }],
         [
-          m43,
+          m45,
           {
             ProductCategoriesController: {
               list: { type: Object },
@@ -629,7 +727,7 @@ export default async () => {
           },
         ],
         [
-          m44,
+          m46,
           {
             PublicProductCategoriesController: {
               listActive: { type: [Object] },
@@ -637,7 +735,7 @@ export default async () => {
           },
         ],
         [
-          m45,
+          m47,
           {
             ProductsController: {
               list: {},
@@ -649,7 +747,7 @@ export default async () => {
           },
         ],
         [
-          m46,
+          m48,
           {
             PublicProductsController: {
               listActive: { type: [Object] },
@@ -658,7 +756,7 @@ export default async () => {
           },
         ],
         [
-          m47,
+          m49,
           {
             StoreSettingsController: {
               get: { type: Object },
@@ -667,17 +765,21 @@ export default async () => {
           },
         ],
         [
-          m48,
+          m50,
           { PublicStoreSettingsController: { getPublic: { type: Object } } },
         ],
         [
-          m49,
+          m51,
           {
             PublicCheckoutController: {
               quote: {
                 summary:
                   'Pre\u00E7o, estoque e frete do carrinho, sempre calculados no servidor.',
                 type: Object,
+              },
+              create: {
+                summary:
+                  'Cria o pedido e devolve o link de pagamento. 409 = carrinho mudou\n(`problems`), 422 = entrega/retirada indispon\u00EDvel (`reason`), 503 = o\npagamento n\u00E3o p\u00F4de ser iniciado.',
               },
               findOrder: {
                 summary:
@@ -688,17 +790,23 @@ export default async () => {
           },
         ],
         [
-          m50,
+          m52,
           {
             SiteOrdersController: {
               list: {},
               findOne: { type: Object },
               updateFulfillment: { type: Object },
               cancel: { type: Object },
+              sync: {
+                summary:
+                  'Consulta o Pagar.me agora, sem esperar o intervalo de um minuto.',
+                type: Object,
+              },
             },
           },
         ],
-        [m51, { OpenApiController: { get: { type: Object } } }],
+        [m53, { PagarmeWebhookController: { handle: {} } }],
+        [m54, { OpenApiController: { get: { type: Object } } }],
       ],
     },
   };

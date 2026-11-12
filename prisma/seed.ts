@@ -237,6 +237,8 @@ async function seedCatalog() {
 
 /** Mesmo endereço de `daverdinha/src/data/business.ts`. */
 const STORE_SETTINGS = {
+  // Local abre o site completo; a loja só liga com a chave do Pagar.me (Dashboard).
+  siteEnabled: true,
   pickupAddress:
     'R. Capiberibe, 32 - Santo Cristo, Rio de Janeiro - RJ, 20220-030',
   pickupHours: 'Seg a sex, 10h às 18h · Sáb, 10h às 14h',

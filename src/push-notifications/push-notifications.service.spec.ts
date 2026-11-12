@@ -250,4 +250,30 @@ describe('PushNotificationsService', () => {
       }
     });
   });
+
+  it('announces a paid site order with the code, the buyer and the total', async () => {
+    subscriptions.listAll.mockResolvedValue([
+      { endpoint: 'https://push.example/1', p256dh: 'p1', auth: 'a1' },
+    ]);
+    (webpush.sendNotification as jest.Mock).mockResolvedValue(undefined);
+
+    await service.notifyNewOrder({ id: 'o1', code: 'DV-0042', total: 159.8, customerName: 'Maria' });
+
+    const payload = JSON.parse((webpush.sendNotification as jest.Mock).mock.calls[0][1]);
+    expect(payload.title).toBe('Novo pedido DV-0042');
+    expect(payload.body).toMatch(/^Maria · R\$\s159,80$/);
+    expect(payload.url).toBe('/admin/pedidos/o1');
+  });
+
+  it('warns when the order was paid after it expired', async () => {
+    subscriptions.listAll.mockResolvedValue([
+      { endpoint: 'https://push.example/1', p256dh: 'p1', auth: 'a1' },
+    ]);
+    (webpush.sendNotification as jest.Mock).mockResolvedValue(undefined);
+
+    await service.notifyNewOrder({ id: 'o1', code: 'DV-0042', total: 10, customerName: 'Maria', late: true });
+
+    const payload = JSON.parse((webpush.sendNotification as jest.Mock).mock.calls[0][1]);
+    expect(payload.body).toContain('confira o estoque');
+  });
 });
