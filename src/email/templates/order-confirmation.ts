@@ -3,7 +3,13 @@ import { formatOrderCode } from '../../site-orders/order-code';
 import { toMoney } from '../../common/money';
 import type { SiteOrderRow } from '../../site-orders/site-order-views';
 import type { OutgoingEmail } from '../email.service';
-import { emailLayout, escapeHtml, formatBrl, formatEventDate } from './layout';
+import {
+  emailButton as button,
+  emailLayout,
+  escapeHtml,
+  formatBrl,
+  formatEventDate,
+} from './layout';
 
 /** O que a retirada mostra, das configurações da loja na hora do envio. */
 export interface PickupInfo {
@@ -153,8 +159,4 @@ function productsEmail(
     html,
     text,
   };
-}
-
-function button(href: string, label: string): string {
-  return `<p style="margin:24px 0"><a href="${escapeHtml(href)}" style="display:inline-block;background:#3f5a3a;color:#fff;text-decoration:none;padding:12px 24px;border-radius:999px;font-weight:600">${label}</a></p>`;
 }

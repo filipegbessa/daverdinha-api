@@ -35,9 +35,14 @@ import {
   type PaymentGateway,
 } from '../pagarme/payment-gateway';
 import { PushNotificationsService } from '../push-notifications/push-notifications.service';
-import { EmailService } from '../email/email.service';
+import { EmailService, type OutgoingEmail } from '../email/email.service';
 import { orderConfirmationEmail } from '../email/templates/order-confirmation';
 import { orderLinksEmail } from '../email/templates/order-links';
+import {
+  orderCancelledEmail,
+  orderReadyEmail,
+  orderRefundedEmail,
+} from '../email/templates/order-updates';
 import {
   toAdminOrder,
   toPublicOrder,
@@ -610,7 +615,7 @@ export class SiteOrdersService {
           });
           return;
         }
-        await this.prisma.$transaction(async (tx) => {
+        const changed = await this.prisma.$transaction(async (tx) => {
           const { count } = await tx.siteOrder.updateMany({
             where: { id: order.id, status: order.status },
             data: { ...base, status: 'refunded' },
@@ -622,7 +627,21 @@ export class SiteOrdersService {
           ) {
             await returnStock(tx, order);
           }
+          return count === 1;
         });
+        // E-mail só no estorno feito pela loja, de pedido que tinha sido pago
+        // (pago ou já cancelado no admin); chargeback é disputa do comprador
+        // com o banco, sem aviso nosso.
+        if (
+          changed &&
+          charge.status === 'refunded' &&
+          (order.status === 'paid' || order.status === 'cancelled') &&
+          order.paidAt
+        ) {
+          await this.sendUpdate(order, 'estorno', () =>
+            orderRefundedEmail(order, siteUrl()),
+          );
+        }
         return;
       }
       default:
@@ -753,13 +772,24 @@ export class SiteOrdersService {
         'Só dá pra mudar o preparo de um pedido pago.',
       );
     }
-    return toAdminOrder(
-      await this.prisma.siteOrder.update({
-        where: { id },
-        data: { fulfillmentStatus: dto.fulfillmentStatus },
-        include: WITH_DETAILS,
-      }),
-    );
+    const updated = await this.prisma.siteOrder.update({
+      where: { id },
+      data: { fulfillmentStatus: dto.fulfillmentStatus },
+      include: WITH_DETAILS,
+    });
+    // Avisa o comprador quando o preparo chega em "pronto" (retirar ou saiu
+    // pra entrega). Só na mudança: salvar "pronto" de novo não reenvia.
+    if (
+      updated.kind === 'products' &&
+      dto.fulfillmentStatus === 'ready' &&
+      row.fulfillmentStatus !== 'ready'
+    ) {
+      const settings = await this.storeSettings.get();
+      await this.sendUpdate(updated, 'pronto', () =>
+        orderReadyEmail(updated, settings, siteUrl()),
+      );
+    }
+    return toAdminOrder(updated);
   }
 
   /**
@@ -787,6 +817,12 @@ export class SiteOrdersService {
         await returnStock(tx, row);
       }
     });
+    // Pedido que nunca foi pago não tem o que avisar: o comprador desistiu.
+    if (row.status === 'paid') {
+      await this.sendUpdate(row, 'cancelamento', () =>
+        orderCancelledEmail(row, siteUrl()),
+      );
+    }
     return this.findById(id);
   }
 
@@ -913,6 +949,25 @@ export class SiteOrdersService {
       );
       await release();
       return false;
+    }
+  }
+
+  /**
+   * Os e-mails de andamento (pronto, cancelado, estornado). Sem marca no
+   * banco: cada um sai na mudança de status que o dispara, que já é única.
+   * Falha só vira log: o admin não pode ficar travado por causa do e-mail.
+   */
+  private async sendUpdate(
+    order: SiteOrderRow,
+    what: string,
+    build: () => OutgoingEmail,
+  ): Promise<void> {
+    try {
+      await this.email.send(build());
+    } catch (error) {
+      this.logger.warn(
+        `E-mail de ${what} do pedido ${order.id} falhou: ${(error as Error).message}`,
+      );
     }
   }
 

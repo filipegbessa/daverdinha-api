@@ -1,6 +1,11 @@
 import { Prisma } from '@prisma/client';
 import { orderConfirmationEmail } from './order-confirmation';
 import { orderLinksEmail } from './order-links';
+import {
+  orderCancelledEmail,
+  orderReadyEmail,
+  orderRefundedEmail,
+} from './order-updates';
 import { escapeHtml, formatEventDate } from './layout';
 import type { SiteOrderRow } from '../../site-orders/site-order-views';
 
@@ -116,5 +121,57 @@ describe('email templates', () => {
     expect(escapeHtml(`<a href="x">'`)).toBe(
       '&lt;a href=&quot;x&quot;&gt;&#39;',
     );
+  });
+
+  describe('update emails', () => {
+    it('says ready to pick up with the pickup details and escapes the name', () => {
+      const email = orderReadyEmail(order(), pickup, 'https://site');
+
+      expect(email.subject).toBe(
+        'Pedido DV-0042 pronto para retirar · Daverdinha',
+      );
+      expect(email.html).not.toContain('<b>Souza</b>');
+      expect(email.html).toContain(
+        'R. Capiberibe, 32<br>Seg a sex, 10h às 18h',
+      );
+      expect(email.text).toContain('https://site/pedido/tok');
+    });
+
+    it('says out for delivery with the bairro', () => {
+      const email = orderReadyEmail(
+        order({ deliveryMethod: 'delivery', bairro: 'Catete' }),
+        pickup,
+        'https://site',
+      );
+
+      expect(email.subject).toBe(
+        'Pedido DV-0042 saiu para entrega · Daverdinha',
+      );
+      expect(email.text).toContain('a caminho de Catete');
+    });
+
+    it('cancels with the refund amount, and a free sign-up without one', () => {
+      const paid = orderCancelledEmail(order(), 'https://site');
+      expect(paid.text).toContain('O valor de R$ 59,80 volta');
+
+      const free = orderCancelledEmail(
+        order({
+          kind: 'tickets',
+          total: new Prisma.Decimal('0'),
+          event: { title: 'Feirinha' },
+        }),
+        'https://site',
+      );
+      expect(free.html).toContain('Inscrição cancelada');
+      expect(free.text).toContain('a inscrição do pedido DV-0042 (Feirinha)');
+      expect(free.text).not.toContain('R$');
+    });
+
+    it('confirms the refund', () => {
+      const email = orderRefundedEmail(order(), 'https://site');
+
+      expect(email.subject).toBe('Estorno do pedido DV-0042 · Daverdinha');
+      expect(email.text).toContain('O estorno de R$ 59,80');
+    });
   });
 });

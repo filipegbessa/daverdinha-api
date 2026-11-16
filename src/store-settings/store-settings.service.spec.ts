@@ -54,13 +54,17 @@ describe('StoreSettingsService', () => {
     expect(settings.minInstallmentValue).toBe(30);
   });
 
-  it('exposes only the switches and the installments publicly', async () => {
+  it('exposes the switches, the installments and the pickup publicly, not the payment setup', async () => {
     await expect(service.getPublic()).resolves.toEqual({
       siteEnabled: false,
       storeEnabled: false,
       ticketsEnabled: false,
       maxInstallments: 3,
       minInstallmentValue: 30,
+      pickupEnabled: true,
+      pickupAddress: expect.stringContaining('R. Capiberibe, 32'),
+      pickupHours: expect.any(String),
+      pickupInstructions: null,
     });
   });
 

@@ -73,3 +73,8 @@ export function emailLayout(body: string): string {
   </td></tr></table>
 </body></html>`;
 }
+
+/** Botão "Ver meu pedido" e afins: link com cara de botão, que todo programa de e-mail mostra. */
+export function emailButton(href: string, label: string): string {
+  return `<p style="margin:24px 0"><a href="${escapeHtml(href)}" style="display:inline-block;background:#3f5a3a;color:#fff;text-decoration:none;padding:12px 24px;border-radius:999px;font-weight:600">${escapeHtml(label)}</a></p>`;
+}

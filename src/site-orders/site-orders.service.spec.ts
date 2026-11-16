@@ -272,6 +272,7 @@ describe('SiteOrdersService orders', () => {
     findChargesForLink: jest.Mock;
   };
   let push: { notifyNewOrder: jest.Mock };
+  let email: ReturnType<typeof emailMock>;
   let prisma: {
     siteOrder: Record<string, jest.Mock>;
     product: { updateMany: jest.Mock };
@@ -338,6 +339,7 @@ describe('SiteOrdersService orders', () => {
       findChargesForLink: jest.fn().mockResolvedValue([]),
     };
     push = { notifyNewOrder: jest.fn().mockResolvedValue(undefined) };
+    email = emailMock();
     prisma = {
       siteOrder: {
         findUnique: jest.fn().mockResolvedValue(order()),
@@ -362,7 +364,7 @@ describe('SiteOrdersService orders', () => {
         },
         { provide: PAYMENT_GATEWAY, useValue: gateway },
         { provide: PushNotificationsService, useValue: push },
-        { provide: EmailService, useValue: emailMock() },
+        { provide: EmailService, useValue: email },
       ],
     }).compile();
     service = moduleRef.get(SiteOrdersService);
@@ -738,6 +740,101 @@ describe('SiteOrdersService orders', () => {
         where: { id: 'p1', stock: { not: null } },
         data: { stock: { increment: 2 } },
       });
+    });
+  });
+
+  describe('update emails', () => {
+    const subjects = () =>
+      email.send.mock.calls.map(
+        ([sent]: [{ subject: string }]) => sent.subject,
+      );
+
+    it('tells the buyer when a delivery leaves, once per change to ready', async () => {
+      await service.updateFulfillment('o1', { fulfillmentStatus: 'preparing' });
+      await service.updateFulfillment('o1', { fulfillmentStatus: 'ready' });
+      prisma.siteOrder.findUnique.mockResolvedValue(
+        order({ fulfillmentStatus: 'ready' }),
+      );
+      await service.updateFulfillment('o1', { fulfillmentStatus: 'ready' });
+
+      expect(subjects()).toEqual([
+        'Pedido DV-0042 saiu para entrega · Daverdinha',
+      ]);
+    });
+
+    it('says ready to pick up, with the pickup details, for pickup orders', async () => {
+      prisma.siteOrder.findUnique.mockResolvedValue(
+        order({ deliveryMethod: 'pickup', bairro: null }),
+      );
+      prisma.siteOrder.update.mockImplementation(({ data }) =>
+        order({ deliveryMethod: 'pickup', bairro: null, ...data }),
+      );
+
+      await service.updateFulfillment('o1', { fulfillmentStatus: 'ready' });
+
+      const [sent] = email.send.mock.calls[0];
+      expect(sent.subject).toBe(
+        'Pedido DV-0042 pronto para retirar · Daverdinha',
+      );
+      expect(sent.text).toContain(settings.pickupAddress);
+    });
+
+    it('does not block the admin when the email fails', async () => {
+      email.send.mockRejectedValue(new Error('resend down'));
+      jest.spyOn(service['logger'], 'warn').mockImplementation(() => {});
+
+      await expect(
+        service.updateFulfillment('o1', { fulfillmentStatus: 'ready' }),
+      ).resolves.toEqual(
+        expect.objectContaining({ fulfillmentStatus: 'ready' }),
+      );
+    });
+
+    it('emails a cancelled paid order, but not one that was never paid', async () => {
+      await service.cancel('o1');
+      expect(subjects()).toEqual(['Pedido DV-0042 cancelado · Daverdinha']);
+      expect(email.send.mock.calls[0][0].text).toContain('R$ 104,90');
+
+      email.send.mockClear();
+      prisma.siteOrder.findUnique.mockResolvedValue(
+        order({
+          status: 'pending_payment',
+          paidAt: null,
+          expiresAt: new Date(Date.now() + 60_000),
+        }),
+      );
+      await service.cancel('o1');
+      expect(email.send).not.toHaveBeenCalled();
+    });
+
+    it('emails a refund once, also after the admin cancelled, but not a chargeback', async () => {
+      const refund = {
+        id: 'ch_1',
+        orderId: 'or_1',
+        orderCode: 'DV-0042',
+        status: 'refunded' as const,
+        amountCents: 10490,
+        paidAt: '2026-11-09T12:10:00Z',
+        rawStatus: 'canceled',
+      };
+      prisma.siteOrder.findFirst.mockResolvedValue(
+        order({ status: 'cancelled' }),
+      );
+      await service.applyGatewayCharge(refund);
+      expect(subjects()).toEqual(['Estorno do pedido DV-0042 · Daverdinha']);
+
+      email.send.mockClear();
+      prisma.siteOrder.findFirst.mockResolvedValue(
+        order({ status: 'refunded' }),
+      );
+      await service.applyGatewayCharge(refund);
+      prisma.siteOrder.findFirst.mockResolvedValue(order({ status: 'paid' }));
+      await service.applyGatewayCharge({
+        ...refund,
+        status: 'chargedback',
+        rawStatus: 'chargedback',
+      });
+      expect(email.send).not.toHaveBeenCalled();
     });
   });
 

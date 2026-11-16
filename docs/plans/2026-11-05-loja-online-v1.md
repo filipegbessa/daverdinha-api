@@ -103,6 +103,8 @@ Fontes: `docs.pagar.me/docs/conecte-o-checkout-pagarme-usando-ia`, `docs/llms.md
 
 **Pra confirmar com a cliente:** entrega, retirada e troca/devolução, parcelamento e nota fiscal — respostas pelo questionário `daverdinha/docs/questionario-politicas.md`, que vira o texto das páginas (plano irmão, Tarefa 12). Cancelamento de ingresso fica em `daverdinha/docs/questionario-ingressos.md`, pra depois do MVP.
 
+**Páginas de política no site (2026-11-16):** `/trocas-e-devolucoes` (o link do checkout) e `/entrega-e-retirada` já existem com o texto-base: prazos da lei (7 dias de arrependimento, 30/90 dias pra defeito), como pedir, como o dinheiro volta, bairros atendidos e a retirada cadastrada no admin. As regras próprias da Daverdinha entram com as respostas do questionário.
+
 ## Contratos
 
 ```ts

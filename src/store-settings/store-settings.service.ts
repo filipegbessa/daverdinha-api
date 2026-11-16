@@ -28,13 +28,21 @@ export interface StoreSettings {
   updatedAt: Date;
 }
 
-/** O que o site pode ler sem login: os interruptores e o parcelamento. */
+/**
+ * O que o site pode ler sem login: os interruptores, o parcelamento e a
+ * retirada no ateliê (a página "Entrega e retirada" mostra endereço e
+ * horário; o checkout já mostrava). Nada de `paymentConfigured`.
+ */
 export interface PublicStoreSettings {
   siteEnabled: boolean;
   storeEnabled: boolean;
   ticketsEnabled: boolean;
   maxInstallments: number;
   minInstallmentValue: number;
+  pickupEnabled: boolean;
+  pickupAddress: string;
+  pickupHours: string;
+  pickupInstructions: string | null;
 }
 
 /**
@@ -79,6 +87,10 @@ export class StoreSettingsService {
       ticketsEnabled,
       maxInstallments,
       minInstallmentValue,
+      pickupEnabled,
+      pickupAddress,
+      pickupHours,
+      pickupInstructions,
     } = await this.get();
     return {
       siteEnabled,
@@ -86,6 +98,10 @@ export class StoreSettingsService {
       ticketsEnabled,
       maxInstallments,
       minInstallmentValue,
+      pickupEnabled,
+      pickupAddress,
+      pickupHours,
+      pickupInstructions,
     };
   }
 
