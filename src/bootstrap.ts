@@ -1,4 +1,5 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
+import type { CorsOptions } from 'cors';
 import { json } from 'express';
 import type { NextFunction, Request, Response } from 'express';
 import { clerkProxyMiddleware } from './common/auth/clerk-proxy.middleware';
@@ -10,6 +11,13 @@ import { OpenApiService } from './openapi/openapi.service';
 // would consume the stream and leave us with a re-serialized body that no
 // longer matches the signature). RawBodyMiddleware parses that route instead.
 const RAW_BODY_ROUTES = ['/webhook/whatsapp'];
+
+// Shared with api/index.ts, which answers an OPTIONS preflight with this
+// same config directly — before paying for a full Nest bootstrap just to
+// get a 204 back.
+export const corsOptions: CorsOptions = {
+  origin: createCorsOriginHandler(process.env.FRONTEND_URL),
+};
 
 /**
  * The single source of truth for app-level wiring, shared by both entry
@@ -27,7 +35,7 @@ export function configureApp(app: INestApplication): void {
     return json()(req, res, next);
   });
 
-  app.enableCors({ origin: createCorsOriginHandler(process.env.FRONTEND_URL) });
+  app.enableCors(corsOptions);
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
   app.get(OpenApiService).attach(app);
 }
