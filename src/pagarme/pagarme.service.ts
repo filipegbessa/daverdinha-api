@@ -12,6 +12,7 @@ import type {
 } from './payment-gateway';
 
 const PRODUCTION_URL = 'https://api.pagar.me/core/v5';
+const SANDBOX_URL = 'https://sdx-api.pagar.me/core/v5';
 /** Nome na fatura do cartão (até 13 caracteres). */
 const STATEMENT_DESCRIPTOR = 'DAVERDINHA';
 /** O valor que a skill de integração do Pagar.me pede em toda chamada. */
@@ -165,10 +166,7 @@ export class PagarmeService implements PaymentGateway {
         'Pagamento não configurado (PAGARME_SECRET_KEY).',
       );
     }
-    const baseUrl = (process.env.PAGARME_API_URL || PRODUCTION_URL).replace(
-      /\/$/,
-      '',
-    );
+    const baseUrl = pagarmeBaseUrl(secretKey, process.env.PAGARME_API_URL);
     const response = await fetch(`${baseUrl}${path}`, {
       method,
       headers: {
@@ -189,6 +187,18 @@ export class PagarmeService implements PaymentGateway {
     }
     return (text ? JSON.parse(text) : {}) as T;
   }
+}
+
+/**
+ * O ambiente sai da chave: `sk_test_…` só funciona no sandbox e `sk_live_…`
+ * só em produção, então colar a chave basta. `PAGARME_API_URL` ainda manda,
+ * se estiver configurada.
+ */
+export function pagarmeBaseUrl(secretKey: string, configured?: string): string {
+  const url =
+    configured ||
+    (secretKey.startsWith('sk_test_') ? SANDBOX_URL : PRODUCTION_URL);
+  return url.replace(/\/$/, '');
 }
 
 /**

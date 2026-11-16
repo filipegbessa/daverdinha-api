@@ -350,12 +350,12 @@ export default async () => {
                 required: true,
                 type: () => String,
                 minLength: 2,
-                maxLength: 100,
+                maxLength: 64,
               },
               email: {
                 required: true,
                 type: () => String,
-                maxLength: 200,
+                maxLength: 64,
                 format: 'email',
               },
               phone: {
@@ -777,7 +777,7 @@ export default async () => {
               email: {
                 required: true,
                 type: () => String,
-                maxLength: 200,
+                maxLength: 64,
                 format: 'email',
               },
             },

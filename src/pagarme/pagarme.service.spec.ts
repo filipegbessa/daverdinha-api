@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import {
   PagarmeError,
   PagarmeService,
+  pagarmeBaseUrl,
   splitPhone,
   toGatewayCharge,
 } from './pagarme.service';
@@ -23,7 +24,7 @@ describe('PagarmeService', () => {
 
   beforeEach(() => {
     process.env.PAGARME_SECRET_KEY = 'sk_test_abc';
-    process.env.PAGARME_API_URL = 'https://sdx-api.pagar.me/core/v5';
+    delete process.env.PAGARME_API_URL;
     process.env.SITE_URL = 'https://www.daverdinha.com.br';
     fetchMock = jest.fn();
     global.fetch = fetchMock as unknown as typeof fetch;
@@ -207,8 +208,8 @@ describe('PagarmeService', () => {
       });
     });
 
-    it('uses the production API when no URL is configured', async () => {
-      delete process.env.PAGARME_API_URL;
+    it('uses the production API with a live key', async () => {
+      process.env.PAGARME_SECRET_KEY = 'sk_live_abc';
       fetchMock.mockResolvedValue(jsonResponse({ id: 'ch_1', status: 'paid' }));
 
       await service.getCharge('ch_1');
@@ -253,6 +254,21 @@ describe('PagarmeService', () => {
 
       expect(await service.findChargesForLink('pl_123', 'DV-0042')).toEqual([]);
     });
+  });
+});
+
+describe('pagarmeBaseUrl', () => {
+  it('picks the sandbox for test keys and production for the rest', () => {
+    expect(pagarmeBaseUrl('sk_test_abc')).toBe(
+      'https://sdx-api.pagar.me/core/v5',
+    );
+    expect(pagarmeBaseUrl('sk_live_abc')).toBe('https://api.pagar.me/core/v5');
+  });
+
+  it('lets PAGARME_API_URL win, without a trailing slash', () => {
+    expect(pagarmeBaseUrl('sk_live_abc', 'https://outra.api/core/v5/')).toBe(
+      'https://outra.api/core/v5',
+    );
   });
 });
 
