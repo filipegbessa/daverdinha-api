@@ -27,7 +27,7 @@ describe('PagarmeService', () => {
     delete process.env.PAGARME_API_URL;
     process.env.SITE_URL = 'https://www.daverdinha.com.br';
     fetchMock = jest.fn();
-    global.fetch = fetchMock as unknown as typeof fetch;
+    global.fetch = fetchMock;
     service = new PagarmeService();
     jest.spyOn(service['logger'], 'error').mockImplementation(() => {});
   });
@@ -54,6 +54,8 @@ describe('PagarmeService', () => {
         name: 'Maria Souza',
         email: 'maria@exemplo.com',
         phone: '5521999998888',
+        document: '11144477735',
+        documentType: 'CPF',
       },
       successUrl: 'https://www.daverdinha.com.br/pedido/tok',
       maxInstallments: 2,
@@ -144,6 +146,8 @@ describe('PagarmeService', () => {
         name: 'Maria Souza',
         email: 'maria@exemplo.com',
         type: 'individual',
+        document: '11144477735',
+        document_type: 'CPF',
         phones: {
           mobile_phone: {
             country_code: '55',
@@ -152,6 +156,27 @@ describe('PagarmeService', () => {
           },
         },
       });
+    });
+
+    it('sends the customer as a company when the document is a CNPJ', async () => {
+      await service.createCheckout(
+        input({
+          customer: {
+            ...input().customer,
+            document: '11222333000181',
+            documentType: 'CNPJ',
+          },
+        }),
+      );
+
+      const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+      expect(body.customer_settings.customer).toEqual(
+        expect.objectContaining({
+          type: 'company',
+          document: '11222333000181',
+          document_type: 'CNPJ',
+        }),
+      );
     });
 
     it('fails with a 503 when the secret key is not configured, without calling out', async () => {

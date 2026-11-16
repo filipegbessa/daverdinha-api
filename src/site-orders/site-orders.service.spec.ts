@@ -949,6 +949,7 @@ describe('SiteOrdersService.create', () => {
       name: 'Maria Souza',
       email: 'maria@exemplo.com',
       phone: '(21) 99999-8888',
+      document: '111.444.777-35',
     },
     deliveryMethod: 'delivery' as const,
     address: {
@@ -1022,6 +1023,16 @@ describe('SiteOrdersService.create', () => {
     jest.spyOn(service['logger'], 'error').mockImplementation(() => {});
   });
 
+  it('rejects an invalid document before touching the database', async () => {
+    await expect(
+      service.create(
+        dto({ customer: { ...dto().customer, document: '12345678900' } }),
+        now,
+      ),
+    ).rejects.toThrow('Informe um CPF, CNPJ ou passaporte válido.');
+    expect(prisma.siteOrder.create).not.toHaveBeenCalled();
+  });
+
   it('creates the order from database prices and returns the payment link', async () => {
     const result = await service.create(dto(), now);
 
@@ -1034,6 +1045,8 @@ describe('SiteOrdersService.create', () => {
     expect(data).toEqual(
       expect.objectContaining({
         customerPhone: '5521999998888',
+        customerDocument: '11144477735',
+        customerDocumentType: 'CPF',
         cep: '22220000',
         bairro: 'Catete',
         deliveryZone: 'Zona Sul',
@@ -1059,6 +1072,14 @@ describe('SiteOrdersService.create', () => {
         paymentUrl: 'https://checkout.pagar.me/pl_9',
       },
     });
+    expect(gateway.createCheckout).toHaveBeenCalledWith(
+      expect.objectContaining({
+        customer: expect.objectContaining({
+          document: '11144477735',
+          documentType: 'CPF',
+        }),
+      }),
+    );
   });
 
   it('locks the products and hands the gateway the order id, code and deadline', async () => {
@@ -1191,6 +1212,7 @@ describe('SiteOrdersService tickets', () => {
       name: 'Maria Souza',
       email: 'maria@exemplo.com',
       phone: '(21) 99999-8888',
+      document: '111.444.777-35',
     },
   });
 
@@ -1261,6 +1283,19 @@ describe('SiteOrdersService tickets', () => {
   });
 
   describe('createTickets', () => {
+    it('rejects an invalid document before touching the database', async () => {
+      await expect(
+        service.createTickets(
+          {
+            ...dto(),
+            customer: { ...dto().customer, document: '12345678900' },
+          },
+          new Date('2026-11-21T12:30:00Z'),
+        ),
+      ).rejects.toThrow('Informe um CPF, CNPJ ou passaporte válido.');
+      expect(prisma.siteOrder.create).not.toHaveBeenCalled();
+    });
+
     it('sells paid tickets: one per name, price from the database, reservation capped by the start', async () => {
       const result = await service.createTickets(
         dto(),
@@ -1274,6 +1309,8 @@ describe('SiteOrdersService tickets', () => {
         eventId: event().id,
         deliveryMethod: null,
         customerPhone: '5521999998888',
+        customerDocument: '11144477735',
+        customerDocumentType: 'CPF',
       });
       expect(data.total.toString()).toBe('90');
       expect(data.expiresAt).toEqual(startsAt);
@@ -1284,6 +1321,12 @@ describe('SiteOrdersService tickets', () => {
       ).toEqual(['Maria', 'João']);
       expect(data.tickets.create[0].unitPrice.toString()).toBe('45');
       const input = gateway.createCheckout.mock.calls[0][0];
+      expect(input.customer).toEqual(
+        expect.objectContaining({
+          document: '11144477735',
+          documentType: 'CPF',
+        }),
+      );
       expect(input.items).toEqual([
         expect.objectContaining({
           description: 'Ingresso — Oficina de terrário',

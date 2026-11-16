@@ -99,7 +99,12 @@ describe('Checkout tickets (e2e)', () => {
       .send({
         eventId,
         attendees: names.map((name) => ({ name })),
-        customer: { name: 'E2E Comprador', email, phone: '(21) 99999-8888' },
+        customer: {
+          name: 'E2E Comprador',
+          email,
+          phone: '(21) 99999-8888',
+          document: '11144477735',
+        },
       });
 
   it('sells the last spot only once when two purchases race for it', async () => {

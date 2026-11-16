@@ -22,6 +22,9 @@ CREATE TYPE "DeliveryMethod" AS ENUM ('pickup', 'delivery');
 -- CreateEnum
 CREATE TYPE "SiteOrderKind" AS ENUM ('products', 'tickets');
 
+-- CreateEnum
+CREATE TYPE "CustomerDocumentType" AS ENUM ('CPF', 'CNPJ', 'PASSPORT');
+
 -- CreateTable
 CREATE TABLE "bot_settings" (
     "id" INTEGER NOT NULL DEFAULT 1,
@@ -234,6 +237,8 @@ CREATE TABLE "site_orders" (
     "customer_name" TEXT NOT NULL,
     "customer_email" TEXT NOT NULL,
     "customer_phone" TEXT NOT NULL,
+    "customer_document" TEXT,
+    "customer_document_type" "CustomerDocumentType",
     "delivery_method" "DeliveryMethod",
     "cep" TEXT,
     "street" TEXT,

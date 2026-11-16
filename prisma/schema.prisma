@@ -328,6 +328,12 @@ enum SiteOrderKind {
   tickets
 }
 
+enum CustomerDocumentType {
+  CPF
+  CNPJ
+  PASSPORT
+}
+
 /// Pedido feito no site (carrinho ou ingresso + Pagar.me). Não confundir com
 /// `Order`, que é o pedido de catálogo recebido pelo WhatsApp.
 model SiteOrder {
@@ -342,6 +348,10 @@ model SiteOrder {
   customerName       String            @map("customer_name")
   customerEmail      String            @map("customer_email")
   customerPhone      String            @map("customer_phone")
+  /// `null` só em pedido de antes desse campo existir; o service sempre exige
+  /// documento pra pedido novo (`parseDocument`, 400 se faltar ou for inválido).
+  customerDocument     String?               @map("customer_document")
+  customerDocumentType CustomerDocumentType? @map("customer_document_type")
   /// `null` em pedido de ingresso (não tem entrega).
   deliveryMethod     DeliveryMethod?   @map("delivery_method")
   cep                String?

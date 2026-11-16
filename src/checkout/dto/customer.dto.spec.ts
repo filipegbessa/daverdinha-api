@@ -11,6 +11,7 @@ describe('limites do Pagar.me no comprador', () => {
     name: 'Maria Silva',
     email: 'maria@exemplo.com',
     phone: '21999998888',
+    document: '11144477735',
   };
   const emailOf = (length: number) =>
     `${'a'.repeat(length - '@exemplo.com'.length)}@exemplo.com`;
@@ -31,6 +32,15 @@ describe('limites do Pagar.me no comprador', () => {
       email: emailOf(65),
     });
     expect(errorsOf(dto)).toEqual(['name', 'email']);
+  });
+
+  it('recusa documento vazio ou curto demais', () => {
+    expect(
+      errorsOf(plainToInstance(CustomerDto, { ...valid, document: '' })),
+    ).toEqual(['document']);
+    expect(
+      errorsOf(plainToInstance(CustomerDto, { ...valid, document: 'AB1' })),
+    ).toEqual(['document']);
   });
 
   it('usa o mesmo limite no "Meus pedidos"', () => {

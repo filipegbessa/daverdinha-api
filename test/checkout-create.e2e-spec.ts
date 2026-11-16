@@ -95,7 +95,12 @@ describe('Checkout create (e2e)', () => {
 
   const pickupOrder = {
     items: [{ productId: '', quantity: 1, unitPrice: 0.01 }],
-    customer: { name: 'E2E Comprador', email, phone: '(21) 99999-8888' },
+    customer: {
+      name: 'E2E Comprador',
+      email,
+      phone: '(21) 99999-8888',
+      document: '11144477735',
+    },
     deliveryMethod: 'pickup',
   };
 

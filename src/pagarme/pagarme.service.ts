@@ -106,7 +106,10 @@ export class PagarmeService implements PaymentGateway {
           code: input.orderId,
           name: input.customer.name.slice(0, 64),
           email: input.customer.email,
-          type: 'individual',
+          type:
+            input.customer.documentType === 'CNPJ' ? 'company' : 'individual',
+          document: input.customer.document,
+          document_type: input.customer.documentType,
           phones: { mobile_phone: splitPhone(input.customer.phone) },
         },
       },

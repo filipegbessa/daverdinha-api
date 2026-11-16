@@ -28,6 +28,7 @@ import { generateTicketCode, normalizeTicketCode } from './ticket-code';
 import { isUniqueViolation } from '../common/prisma-errors';
 import { formatOrderCode, parseOrderCode } from './order-code';
 import { normalizePhone } from '../common/format-phone';
+import { parseDocument } from '../common/document';
 import {
   PAYMENT_GATEWAY,
   type CheckoutInput,
@@ -288,6 +289,12 @@ export class SiteOrdersService {
     }
     const phone = normalizePhone(dto.customer.phone);
     if (!phone) throw new BadRequestException('Telefone inválido.');
+    const document = parseDocument(dto.customer.document);
+    if (!document) {
+      throw new BadRequestException(
+        'Informe um CPF, CNPJ ou passaporte válido.',
+      );
+    }
     const isDelivery = dto.deliveryMethod === 'delivery';
     const address = isDelivery ? dto.address : undefined;
     // Resolvido antes de travar: o CEP pode depender de uma chamada externa.
@@ -338,6 +345,8 @@ export class SiteOrdersService {
           customerName: dto.customer.name.trim(),
           customerEmail: dto.customer.email.trim(),
           customerPhone: phone,
+          customerDocument: document.value,
+          customerDocumentType: document.type,
           deliveryMethod: dto.deliveryMethod,
           ...(address && {
             cep: address.cep.replace(/\D/g, ''),
@@ -404,6 +413,12 @@ export class SiteOrdersService {
     }
     const phone = normalizePhone(dto.customer.phone);
     if (!phone) throw new BadRequestException('Telefone inválido.');
+    const document = parseDocument(dto.customer.document);
+    if (!document) {
+      throw new BadRequestException(
+        'Informe um CPF, CNPJ ou passaporte válido.',
+      );
+    }
     const quantity = dto.attendees.length;
 
     // Código de ingresso repetido (P2002) é quase impossível; se acontecer,
@@ -455,6 +470,8 @@ export class SiteOrdersService {
             customerName: dto.customer.name.trim(),
             customerEmail: dto.customer.email.trim(),
             customerPhone: phone,
+            customerDocument: document.value,
+            customerDocumentType: document.type,
             deliveryMethod: null,
             notes: dto.notes?.trim() || null,
             subtotal,
@@ -522,6 +539,10 @@ export class SiteOrdersService {
           name: order.customerName,
           email: order.customerEmail,
           phone: order.customerPhone,
+          // `startPayment` só roda sobre o pedido recém-criado por `create`/
+          // `createTickets`, que sempre grava os dois campos.
+          document: order.customerDocument!,
+          documentType: order.customerDocumentType!,
         },
         successUrl: `${siteUrl()}/pedido/${order.publicToken}`,
         maxInstallments: installmentsFor(order.total, settings),

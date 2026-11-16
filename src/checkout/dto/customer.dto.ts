@@ -22,4 +22,13 @@ export class CustomerDto {
     message: 'phone deve ter de 10 a 13 dígitos',
   })
   phone: string;
+
+  /**
+   * CPF, CNPJ ou passaporte, com ou sem máscara. Só a forma é checada aqui;
+   * o dígito verificador e a classificação do tipo ficam em
+   * `parseDocument` (`src/common/document.ts`), chamado pelo service.
+   */
+  @IsString()
+  @Length(5, 32)
+  document: string;
 }

@@ -366,6 +366,14 @@ export default async () => {
                 maxLength: 30,
                 pattern: '^(?:\\D*\\d){10,13}\\D*$',
               },
+              document: {
+                required: true,
+                type: () => String,
+                description:
+                  'CPF, CNPJ ou passaporte, com ou sem m\u00E1scara. S\u00F3 a forma \u00E9 checada aqui;\no d\u00EDgito verificador e a classifica\u00E7\u00E3o do tipo ficam em\n`parseDocument` (`src/common/document.ts`), chamado pelo service.',
+                minLength: 5,
+                maxLength: 32,
+              },
             },
           },
         ],

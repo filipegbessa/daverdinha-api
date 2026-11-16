@@ -1,4 +1,5 @@
 import { Prisma } from '@prisma/client';
+import type { DocumentType } from '../common/document';
 
 /**
  * A fronteira com o gateway de pagamento. Só `src/pagarme/` sabe que é o
@@ -18,7 +19,13 @@ export interface CheckoutInput {
     unitPrice: Prisma.Decimal;
   }[];
   deliveryFee: Prisma.Decimal;
-  customer: { name: string; email: string; phone: string };
+  customer: {
+    name: string;
+    email: string;
+    phone: string;
+    document: string;
+    documentType: DocumentType;
+  };
   /** Pra onde o comprador volta depois de pagar (`<site>/pedido/<token>`). */
   successUrl: string;
   /** Parcelas sem juros oferecidas; 1 = só à vista. */

@@ -105,6 +105,8 @@ describe('Public catalog (e2e)', () => {
             customerName: 'E2E',
             customerEmail: 'e2e@exemplo.com',
             customerPhone: '5521999999999',
+            customerDocument: '11144477735',
+            customerDocumentType: 'CPF',
             deliveryMethod: 'pickup',
             subtotal: '10',
             deliveryFee: '0',
