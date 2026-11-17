@@ -181,6 +181,12 @@ export class EventsService {
     );
   }
 
+  async findOne(id: string): Promise<EventAdmin> {
+    const row = await this.findRow(id);
+    const taken = await takenSpots(this.prisma, [id], new Date());
+    return toEventAdmin(row, taken.get(id));
+  }
+
   /**
    * Sobe a capa antes de gravar (o Blob não participa de transação) e apaga
    * se a gravação falhar, pra não deixar arquivo órfão.

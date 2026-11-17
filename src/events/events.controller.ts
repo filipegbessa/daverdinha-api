@@ -92,9 +92,9 @@ const eventFormSchema = (required: string[], update = false) => ({
 });
 
 /**
- * Agenda no admin. Sem `GET /events/:id`, de propósito: colidiria com o
- * público `GET /events/:slug`, e a lista já traz o evento inteiro pro dialog
- * de edição.
+ * Agenda no admin. O evento sozinho é `GET /events/:id/admin`, não
+ * `GET /events/:id`: esse colidiria com o público `GET /events/:slug`,
+ * registrado antes.
  */
 @ApiTags('events')
 @ApiBearerAuth()
@@ -106,6 +106,12 @@ export class EventsController {
   @Get()
   list(@Query() query: ListEventsDto) {
     return this.service.list(query);
+  }
+
+  /** A página de edição do evento no admin, com vagas vendidas e reservadas. */
+  @Get(':id/admin')
+  findOne(@Param('id') id: string) {
+    return this.service.findOne(id);
   }
 
   @Post()
