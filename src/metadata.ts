@@ -489,6 +489,28 @@ export default async () => {
               name: { required: true, type: () => String },
               description: { required: true, type: () => String },
               price: { required: true, type: () => Number, minimum: 0 },
+              promoPrice: {
+                required: false,
+                type: () => Number,
+                nullable: true,
+                description:
+                  'Pre\u00E7o promocional, menor que `price`; vazio = sem promo\u00E7\u00E3o. N\u00FAmeros\nliterais porque o plugin do OpenAPI n\u00E3o l\u00EA constantes.',
+                minimum: 0,
+              },
+              promoStartsAt: {
+                required: false,
+                type: () => String,
+                nullable: true,
+                description:
+                  'In\u00EDcio da promo\u00E7\u00E3o (ISO 8601); vazio = j\u00E1 vale.',
+              },
+              promoEndsAt: {
+                required: false,
+                type: () => String,
+                nullable: true,
+                description:
+                  'Fim da promo\u00E7\u00E3o (ISO 8601), exclusivo; vazio = n\u00E3o acaba.',
+              },
               categoryId: {
                 required: true,
                 type: () => String,

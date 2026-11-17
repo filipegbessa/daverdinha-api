@@ -270,35 +270,41 @@ model ProductCategory {
 }
 
 model Product {
-  id           String          @id @default(uuid())
-  name         String
+  id            String          @id @default(uuid())
+  name          String
   /// Único no catálogo inteiro, não por categoria: o site acha o produto só
   /// pelo slug e redireciona se a categoria da URL estiver desatualizada.
-  slug         String          @unique
-  description  String
-  price        Decimal         @db.Decimal(10, 2)
+  slug          String          @unique
+  description   String
+  price         Decimal         @db.Decimal(10, 2)
+  /// Preço promocional ("de R$ price por R$ promoPrice"). Só vale quando é
+  /// menor que `price` e dentro da janela opcional `promoStartsAt`–`promoEndsAt`
+  /// (`effectivePrice`). O site e o checkout usam o preço efetivo.
+  promoPrice    Decimal?        @map("promo_price") @db.Decimal(10, 2)
+  promoStartsAt DateTime?       @map("promo_starts_at")
+  promoEndsAt   DateTime?       @map("promo_ends_at")
   /// URLs públicas no Vercel Blob; a primeira é a capa.
-  images       String[]
-  categoryId   String          @map("category_id")
+  images        String[]
+  categoryId    String          @map("category_id")
   // Sem onDelete: RESTRICT, então apagar uma categoria com produto falha
   // (P2003) em vez de levar os produtos junto.
-  category     ProductCategory @relation(fields: [categoryId], references: [id])
-  active       Boolean         @default(true)
+  category      ProductCategory @relation(fields: [categoryId], references: [id])
+  active        Boolean         @default(true)
   /// Aparece na vitrine da home e nas listas das páginas internas (agenda).
-  featured     Boolean         @default(false)
-  order        Int             @default(0)
+  featured      Boolean         @default(false)
+  order         Int             @default(0)
   /// Com número: pronta entrega, e 0 disponível é esgotado. `null` = sob
   /// encomenda (vende sem limite e usa `leadTimeDays`).
-  stock        Int?
+  stock         Int?
   /// Prazo de confecção em dias; obrigatório quando `stock` é `null`. Fica
   /// guardado ao voltar pra pronta entrega, pra reaparecer se mudar de novo.
-  leadTimeDays Int?            @map("lead_time_days")
-  orderItems   SiteOrderItem[]
+  leadTimeDays  Int?            @map("lead_time_days")
+  orderItems    SiteOrderItem[]
   /// Removido no admin: some do site e do admin, mas a linha (e as fotos)
   /// fica pra os pedidos antigos continuarem apontando pro produto.
-  archivedAt   DateTime?       @map("archived_at")
-  createdAt    DateTime        @default(now()) @map("created_at")
-  updatedAt    DateTime        @updatedAt @map("updated_at")
+  archivedAt    DateTime?       @map("archived_at")
+  createdAt     DateTime        @default(now()) @map("created_at")
+  updatedAt     DateTime        @updatedAt @map("updated_at")
 
   @@index([active, order])
   @@index([categoryId])

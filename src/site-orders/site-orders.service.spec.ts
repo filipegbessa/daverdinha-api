@@ -22,6 +22,9 @@ function product(overrides: Record<string, unknown> = {}) {
     slug: 'vaso-m',
     description: 'd',
     price: new Prisma.Decimal('19.90'),
+    promoPrice: null as Prisma.Decimal | null,
+    promoStartsAt: null as Date | null,
+    promoEndsAt: null as Date | null,
     images: ['https://blob/vaso.jpg'],
     categoryId: 'c1',
     category: { active: true },
@@ -112,6 +115,15 @@ describe('SiteOrdersService.quote', () => {
     ]);
     expect(quote.subtotal).toBe(59.7);
     expect(quote.installments).toBe(1);
+  });
+
+  it('charges the promo price while the promo is on', async () => {
+    withProducts(product({ promoPrice: new Prisma.Decimal('14.90') }));
+
+    const quote = await service.quote([{ productId: 'p1', quantity: 2 }]);
+
+    expect(quote.items[0]).toMatchObject({ unitPrice: 14.9, lineTotal: 29.8 });
+    expect(quote.subtotal).toBe(29.8);
   });
 
   it('turns missing and inactive products into problems, out of the subtotal', async () => {

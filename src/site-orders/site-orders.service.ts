@@ -1,3 +1,4 @@
+import { effectivePrice } from '../products/effective-price';
 import {
   BadRequestException,
   ConflictException,
@@ -232,7 +233,8 @@ export class SiteOrdersService {
         });
         continue;
       }
-      const unitPrice = new Prisma.Decimal(product.price);
+      // O preço que vale agora: o promocional, com promoção valendo.
+      const unitPrice = effectivePrice(product, now).price;
       lines.push({
         product: {
           id: product.id,

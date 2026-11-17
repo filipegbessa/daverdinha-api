@@ -139,6 +139,8 @@ const PRODUCTS = [
     leadTimeDays: null,
     category: 'vasos',
     price: '119.00',
+    // Em promoção, pra o local mostrar o "de/por" (o mesmo de `samples.ts` no site).
+    promoPrice: '99.00',
     featured: true,
     description:
       'Cerâmica de 14 cm pintada à mão no ateliê. Cada peça sai um pouco diferente da outra.',

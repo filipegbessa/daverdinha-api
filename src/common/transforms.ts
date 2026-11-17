@@ -27,6 +27,10 @@ export const toOptionalBoolean = ({ value }: TransformArgs) =>
       ? false
       : undefined;
 
+/** Número de form: campo vazio vira `null` (ex.: preço promocional apagado). */
+export const toNullableNumber = ({ value }: TransformArgs) =>
+  value === '' || value === null || value === 'null' ? null : Number(value);
+
 /** Inteiro de form: campo vazio vira `null` (ex.: "sob encomenda", prazo limpo). */
 export const toNullableInt = ({ value }: TransformArgs) =>
   value === '' || value === null || value === 'null' ? null : Number(value);

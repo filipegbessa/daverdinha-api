@@ -1,6 +1,7 @@
 import { Transform, Type } from 'class-transformer';
 import {
   IsBoolean,
+  IsDateString,
   IsInt,
   IsNotEmpty,
   IsNumber,
@@ -10,7 +11,13 @@ import {
   Max,
   Min,
 } from 'class-validator';
-import { toBoolean, toNullableInt, trim } from '../../common/transforms';
+import {
+  emptyToNull,
+  toBoolean,
+  toNullableInt,
+  toNullableNumber,
+  trim,
+} from '../../common/transforms';
 
 /**
  * Chega como `multipart/form-data` (junto com as fotos), então todo número e
@@ -30,6 +37,28 @@ export class CreateProductDto {
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
   price: number;
+
+  /**
+   * Preço promocional, menor que `price`; vazio = sem promoção. Números
+   * literais porque o plugin do OpenAPI não lê constantes.
+   */
+  @IsOptional()
+  @Transform(toNullableNumber)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  promoPrice?: number | null;
+
+  /** Início da promoção (ISO 8601); vazio = já vale. */
+  @IsOptional()
+  @Transform(emptyToNull)
+  @IsDateString()
+  promoStartsAt?: string | null;
+
+  /** Fim da promoção (ISO 8601), exclusivo; vazio = não acaba. */
+  @IsOptional()
+  @Transform(emptyToNull)
+  @IsDateString()
+  promoEndsAt?: string | null;
 
   @IsUUID()
   categoryId: string;
