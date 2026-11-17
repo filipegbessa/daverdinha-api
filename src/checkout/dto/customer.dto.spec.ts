@@ -19,7 +19,7 @@ describe('limites do Pagar.me no comprador', () => {
   it('aceita nome e e-mail com até 64 caracteres', () => {
     const dto = plainToInstance(CustomerDto, {
       ...valid,
-      name: 'M'.repeat(64),
+      name: `Maria ${'S'.repeat(58)}`,
       email: emailOf(64),
     });
     expect(errorsOf(dto)).toEqual([]);
@@ -28,7 +28,7 @@ describe('limites do Pagar.me no comprador', () => {
   it('recusa nome ou e-mail com 65', () => {
     const dto = plainToInstance(CustomerDto, {
       ...valid,
-      name: 'M'.repeat(65),
+      name: `Maria ${'S'.repeat(59)}`,
       email: emailOf(65),
     });
     expect(errorsOf(dto)).toEqual(['name', 'email']);
@@ -47,5 +47,42 @@ describe('limites do Pagar.me no comprador', () => {
     expect(
       errorsOf(plainToInstance(LookupOrdersDto, { email: emailOf(65) })),
     ).toEqual(['email']);
+  });
+});
+
+describe('nome completo', () => {
+  const base = {
+    email: 'maria@exemplo.com',
+    phone: '21999998888',
+    document: '11144477735',
+  };
+  const nameErrors = (name: string) =>
+    errorsOf(plainToInstance(CustomerDto, { ...base, name }));
+
+  it.each(['Maria Silva', 'Ana de Sá', 'José  da   Silva', 'Ana Maria-Souza'])(
+    'aceita "%s"',
+    (name) => expect(nameErrors(name)).toEqual([]),
+  );
+
+  it.each(['Maria', 'Maria .', 'M 2', '  Maria  ', '12 34'])(
+    'recusa "%s"',
+    (name) => expect(nameErrors(name)).toEqual(['name']),
+  );
+
+  it('junta espaços repetidos e tira as pontas', () => {
+    const dto = plainToInstance(CustomerDto, {
+      ...base,
+      name: '  Maria   da  Silva ',
+    });
+    expect(dto.name).toBe('Maria da Silva');
+  });
+
+  it('explica o erro em português', () => {
+    const [error] = validateSync(
+      plainToInstance(CustomerDto, { ...base, name: 'Maria' }),
+    );
+    expect(Object.values(error.constraints ?? {})).toContain(
+      'Informe nome e sobrenome.',
+    );
   });
 });
