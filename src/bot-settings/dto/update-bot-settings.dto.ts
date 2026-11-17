@@ -4,6 +4,11 @@ import { trim } from '../../common/transforms';
 
 /** As mensagens são opcionais no PATCH, mas quando vêm não podem ser vazias. */
 export class UpdateBotSettingsDto {
+  /** Desligar o módulo também desliga o bot; religar não religa o bot. */
+  @IsBoolean()
+  @IsOptional()
+  whatsappModuleEnabled?: boolean;
+
   @IsBoolean()
   @IsOptional()
   botEnabled?: boolean;

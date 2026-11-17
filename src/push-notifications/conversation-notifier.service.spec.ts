@@ -5,11 +5,21 @@ import { PushNotificationsService } from './push-notifications.service';
 
 describe('ConversationNotifierService', () => {
   let service: ConversationNotifierService;
-  let prisma: { conversation: { findUnique: jest.Mock } };
+  let prisma: {
+    conversation: { findUnique: jest.Mock };
+    botSettings: { findUnique: jest.Mock };
+  };
   let pushNotifications: { notifyNewMessage: jest.Mock };
 
   beforeEach(async () => {
-    prisma = { conversation: { findUnique: jest.fn() } };
+    prisma = {
+      conversation: { findUnique: jest.fn() },
+      botSettings: {
+        findUnique: jest
+          .fn()
+          .mockResolvedValue({ whatsappModuleEnabled: true }),
+      },
+    };
     pushNotifications = { notifyNewMessage: jest.fn() };
 
     const moduleRef = await Test.createTestingModule({
@@ -53,6 +63,23 @@ describe('ConversationNotifierService', () => {
       phone: '5521999999999',
       messagePreview: 'Oi, tudo bem?',
     });
+  });
+
+  it('stays quiet while the WhatsApp module is off in the admin', async () => {
+    prisma.conversation.findUnique.mockResolvedValue({
+      id: 'c1',
+      name: 'Maria',
+      phone: '5521999999999',
+      status: 'paused_human',
+      messages: [{ kind: 'text', body: 'Oi' }],
+    });
+    prisma.botSettings.findUnique.mockResolvedValue({
+      whatsappModuleEnabled: false,
+    });
+
+    await service.notifyNewInboundMessage('c1');
+
+    expect(pushNotifications.notifyNewMessage).not.toHaveBeenCalled();
   });
 
   it('passes the message time along, so the push is not stamped with its own delivery', async () => {

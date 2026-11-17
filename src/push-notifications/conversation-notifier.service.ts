@@ -61,6 +61,13 @@ export class ConversationNotifierService {
     });
 
     if (conversation?.status !== 'paused_human') return;
+    // Com o módulo de WhatsApp desligado no admin, ninguém está atendendo
+    // por ali: a mensagem fica gravada, mas não vira push.
+    const settings = await this.prisma.botSettings.findUnique({
+      where: { id: 1 },
+      select: { whatsappModuleEnabled: true },
+    });
+    if (settings && !settings.whatsappModuleEnabled) return;
 
     const [lastMessage] = conversation.messages;
     const messagePreview = buildPreview(lastMessage);

@@ -25,7 +25,38 @@ export interface StoreSettings {
   pickupInstructions: string | null;
   maxInstallments: number;
   minInstallmentValue: number;
+  /** Pronta entrega com este estoque ou menos entra no aviso do Dashboard. */
+  lowStockThreshold: number;
+  /** O interruptor e o texto da pausa, como a cliente deixou no admin. */
+  storePaused: boolean;
+  pauseMessage: string | null;
+  pausedUntil: Date | null;
+  /** A pausa valendo agora (`null` se não houver ou já passou da data de volta). */
+  activePause: StorePause | null;
   updatedAt: Date;
+}
+
+/** Loja em pausa: o aviso do site e o motivo do checkout recusar. */
+export interface StorePause {
+  message: string | null;
+  /** Quando a loja volta sozinha; `null` = até a cliente desligar a pausa. */
+  until: string | null;
+}
+
+/**
+ * A pausa vale com o interruptor ligado e antes da data de volta. Passou da
+ * data, a loja reabre sozinha, sem ninguém precisar lembrar de desligar.
+ */
+export function activePause(
+  row: Pick<StoreSettingsRow, 'storePaused' | 'pauseMessage' | 'pausedUntil'>,
+  now: Date = new Date(),
+): StorePause | null {
+  if (!row.storePaused) return null;
+  if (row.pausedUntil && row.pausedUntil <= now) return null;
+  return {
+    message: row.pauseMessage,
+    until: row.pausedUntil?.toISOString() ?? null,
+  };
 }
 
 /**
@@ -43,6 +74,8 @@ export interface PublicStoreSettings {
   pickupAddress: string;
   pickupHours: string;
   pickupInstructions: string | null;
+  /** Só quando a loja está em pausa agora. */
+  storePause: StorePause | null;
 }
 
 /**
@@ -67,6 +100,11 @@ function toSettings(row: StoreSettingsRow): StoreSettings {
     pickupInstructions: row.pickupInstructions,
     maxInstallments: row.maxInstallments,
     minInstallmentValue: toMoney(row.minInstallmentValue),
+    lowStockThreshold: row.lowStockThreshold,
+    storePaused: row.storePaused,
+    pauseMessage: row.pauseMessage,
+    pausedUntil: row.pausedUntil,
+    activePause: activePause(row),
     updatedAt: row.updatedAt,
   };
 }
@@ -91,6 +129,7 @@ export class StoreSettingsService {
       pickupAddress,
       pickupHours,
       pickupInstructions,
+      activePause: storePause,
     } = await this.get();
     return {
       siteEnabled,
@@ -102,12 +141,13 @@ export class StoreSettingsService {
       pickupAddress,
       pickupHours,
       pickupInstructions,
+      storePause,
     };
   }
 
   async update(dto: UpdateStoreSettingsDto): Promise<StoreSettings> {
     await this.row();
-    const { minInstallmentValue, ...rest } = dto;
+    const { minInstallmentValue, pausedUntil, ...rest } = dto;
     return toSettings(
       await this.prisma.storeSettings.update({
         where: { id: 1 },
@@ -115,6 +155,9 @@ export class StoreSettingsService {
           ...rest,
           ...(minInstallmentValue !== undefined && {
             minInstallmentValue: toDecimal(minInstallmentValue),
+          }),
+          ...(pausedUntil !== undefined && {
+            pausedUntil: pausedUntil === null ? null : new Date(pausedUntil),
           }),
         },
       }),

@@ -12,6 +12,10 @@ generator client {
 
 model BotSettings {
   id                             Int      @id @default(1)
+  /// O módulo de WhatsApp no admin: desligado, o menu esconde as páginas do
+  /// bot (Conversas, Menu, Mensagens, Marcadores), o bot fica desligado e
+  /// não sai push de mensagem nova. As mensagens continuam sendo gravadas.
+  whatsappModuleEnabled          Boolean  @default(true) @map("whatsapp_module_enabled")
   botEnabled                     Boolean  @default(false) @map("bot_enabled")
   welcomeMessage                 String   @map("welcome_message")
   invalidAttemptsExceededMessage String   @default("Não consegui entender sua opção, vou te chamar um atendente!") @map("invalid_attempts_exceeded_message")
@@ -337,54 +341,54 @@ enum CustomerDocumentType {
 /// Pedido feito no site (carrinho ou ingresso + Pagar.me). Não confundir com
 /// `Order`, que é o pedido de catálogo recebido pelo WhatsApp.
 model SiteOrder {
-  id                 String            @id @default(uuid())
+  id                   String                @id @default(uuid())
   /// Vira o código `DV-0001` mostrado pra cliente e pro comprador.
-  number             Int               @unique @default(autoincrement())
+  number               Int                   @unique @default(autoincrement())
   /// Vai na URL pública do pedido; o número é sequencial e não pode ser.
-  publicToken        String            @unique @default(uuid()) @map("public_token")
-  kind               SiteOrderKind     @default(products)
-  status             SiteOrderStatus   @default(pending_payment)
-  fulfillmentStatus  FulfillmentStatus @default(awaiting) @map("fulfillment_status")
-  customerName       String            @map("customer_name")
-  customerEmail      String            @map("customer_email")
-  customerPhone      String            @map("customer_phone")
+  publicToken          String                @unique @default(uuid()) @map("public_token")
+  kind                 SiteOrderKind         @default(products)
+  status               SiteOrderStatus       @default(pending_payment)
+  fulfillmentStatus    FulfillmentStatus     @default(awaiting) @map("fulfillment_status")
+  customerName         String                @map("customer_name")
+  customerEmail        String                @map("customer_email")
+  customerPhone        String                @map("customer_phone")
   /// `null` só em pedido de antes desse campo existir; o service sempre exige
   /// documento pra pedido novo (`parseDocument`, 400 se faltar ou for inválido).
   customerDocument     String?               @map("customer_document")
   customerDocumentType CustomerDocumentType? @map("customer_document_type")
   /// `null` em pedido de ingresso (não tem entrega).
-  deliveryMethod     DeliveryMethod?   @map("delivery_method")
-  cep                String?
-  street             String?
-  streetNumber       String?           @map("street_number")
-  complement         String?
-  bairro             String?
+  deliveryMethod       DeliveryMethod?       @map("delivery_method")
+  cep                  String?
+  street               String?
+  streetNumber         String?               @map("street_number")
+  complement           String?
+  bairro               String?
   /// Snapshot do nome da zona e da área no momento do pedido.
-  deliveryZone       String?           @map("delivery_zone")
-  deliveryArea       String?           @map("delivery_area")
-  notes              String?
-  subtotal           Decimal           @db.Decimal(10, 2)
-  deliveryFee        Decimal           @map("delivery_fee") @db.Decimal(10, 2)
-  total              Decimal           @db.Decimal(10, 2)
+  deliveryZone         String?               @map("delivery_zone")
+  deliveryArea         String?               @map("delivery_area")
+  notes                String?
+  subtotal             Decimal               @db.Decimal(10, 2)
+  deliveryFee          Decimal               @map("delivery_fee") @db.Decimal(10, 2)
+  total                Decimal               @db.Decimal(10, 2)
   /// Link de pagamento (`pl_…`), pedido (`or_…`) e cobrança (`ch_…`) no
   /// Pagar.me. Nomes neutros de propósito: só `src/pagarme/` sabe o formato.
-  gatewayLinkId      String?           @unique @map("gateway_link_id")
-  gatewayOrderId     String?           @unique @map("gateway_order_id")
-  gatewayChargeId    String?           @map("gateway_charge_id")
-  gatewayStatus      String?           @map("gateway_status")
-  paymentUrl         String?           @map("payment_url")
-  paidAt             DateTime?         @map("paid_at")
-  expiresAt          DateTime          @map("expires_at")
-  lastSyncedAt       DateTime?         @map("last_synced_at")
+  gatewayLinkId        String?               @unique @map("gateway_link_id")
+  gatewayOrderId       String?               @unique @map("gateway_order_id")
+  gatewayChargeId      String?               @map("gateway_charge_id")
+  gatewayStatus        String?               @map("gateway_status")
+  paymentUrl           String?               @map("payment_url")
+  paidAt               DateTime?             @map("paid_at")
+  expiresAt            DateTime              @map("expires_at")
+  lastSyncedAt         DateTime?             @map("last_synced_at")
   /// Quando o e-mail de confirmação saiu; garante um e-mail só por pedido.
-  confirmationSentAt DateTime?         @map("confirmation_sent_at")
-  items              SiteOrderItem[]
+  confirmationSentAt   DateTime?             @map("confirmation_sent_at")
+  items                SiteOrderItem[]
   /// Só em pedido de ingresso. Restrict: evento com venda não pode ser apagado.
-  eventId            String?           @map("event_id")
-  event              Event?            @relation(fields: [eventId], references: [id], onDelete: Restrict)
-  tickets            SiteOrderTicket[]
-  createdAt          DateTime          @default(now()) @map("created_at")
-  updatedAt          DateTime          @updatedAt @map("updated_at")
+  eventId              String?               @map("event_id")
+  event                Event?                @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  tickets              SiteOrderTicket[]
+  createdAt            DateTime              @default(now()) @map("created_at")
+  updatedAt            DateTime              @updatedAt @map("updated_at")
 
   @@index([kind, status, createdAt])
   @@index([eventId, status])
@@ -432,25 +436,34 @@ model SiteOrderItem {
 /// Configurações da loja editadas no admin. Linha única (id = 1), como
 /// `BotSettings`; o service cria com os valores padrão se ela não existir.
 model StoreSettings {
-  id                  Int      @id @default(1)
+  id                  Int       @id @default(1)
   /// Liga o site completo em `/`. Desligado, `/` mostra a página "em breve"
   /// e o site completo fica só na prévia `/site`. Liga e desliga no Dashboard.
-  siteEnabled         Boolean  @default(false) @map("site_enabled")
+  siteEnabled         Boolean   @default(false) @map("site_enabled")
   /// Liga a venda pelo site (carrinho + Pagar.me). Desligada, o site vende
   /// pelo WhatsApp e o checkout da API recusa pedidos.
-  storeEnabled        Boolean  @default(false) @map("store_enabled")
+  storeEnabled        Boolean   @default(false) @map("store_enabled")
   /// Liga a venda de ingressos pelo site, independente da loja. Um evento só
   /// vende com este ligado e o `ticketSales` dele ligado.
-  ticketsEnabled      Boolean  @default(false) @map("tickets_enabled")
-  pickupEnabled       Boolean  @default(true) @map("pickup_enabled")
-  pickupAddress       String   @map("pickup_address")
-  pickupHours         String   @map("pickup_hours")
-  pickupInstructions  String?  @map("pickup_instructions")
+  ticketsEnabled      Boolean   @default(false) @map("tickets_enabled")
+  pickupEnabled       Boolean   @default(true) @map("pickup_enabled")
+  pickupAddress       String    @map("pickup_address")
+  pickupHours         String    @map("pickup_hours")
+  pickupInstructions  String?   @map("pickup_instructions")
   /// Parcelamento sem juros pro comprador: até `maxInstallments`, desde que
   /// cada parcela fique em pelo menos `minInstallmentValue`.
-  maxInstallments     Int      @default(3) @map("max_installments")
-  minInstallmentValue Decimal  @default(30) @map("min_installment_value") @db.Decimal(10, 2)
-  updatedAt           DateTime @updatedAt @map("updated_at")
+  maxInstallments     Int       @default(3) @map("max_installments")
+  minInstallmentValue Decimal   @default(30) @map("min_installment_value") @db.Decimal(10, 2)
+  /// Produto de pronta entrega com este estoque ou menos aparece no aviso de
+  /// estoque baixo do Dashboard.
+  lowStockThreshold   Int       @default(2) @map("low_stock_threshold")
+  /// Loja em pausa (férias, feriado): o site mostra o aviso e o checkout
+  /// recusa pedidos de produtos. Volta sozinha em `pausedUntil`, se houver.
+  /// Ingressos não param.
+  storePaused         Boolean   @default(false) @map("store_paused")
+  pauseMessage        String?   @map("pause_message")
+  pausedUntil         DateTime? @map("paused_until")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
 
   @@map("store_settings")
 }

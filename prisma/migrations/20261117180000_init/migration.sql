@@ -28,6 +28,7 @@ CREATE TYPE "CustomerDocumentType" AS ENUM ('CPF', 'CNPJ', 'PASSPORT');
 -- CreateTable
 CREATE TABLE "bot_settings" (
     "id" INTEGER NOT NULL DEFAULT 1,
+    "whatsapp_module_enabled" BOOLEAN NOT NULL DEFAULT true,
     "bot_enabled" BOOLEAN NOT NULL DEFAULT false,
     "welcome_message" TEXT NOT NULL,
     "invalid_attempts_exceeded_message" TEXT NOT NULL DEFAULT 'Não consegui entender sua opção, vou te chamar um atendente!',
@@ -307,6 +308,10 @@ CREATE TABLE "store_settings" (
     "pickup_instructions" TEXT,
     "max_installments" INTEGER NOT NULL DEFAULT 3,
     "min_installment_value" DECIMAL(10,2) NOT NULL DEFAULT 30,
+    "low_stock_threshold" INTEGER NOT NULL DEFAULT 2,
+    "store_paused" BOOLEAN NOT NULL DEFAULT false,
+    "pause_message" TEXT,
+    "paused_until" TIMESTAMP(3),
     "updated_at" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "store_settings_pkey" PRIMARY KEY ("id")

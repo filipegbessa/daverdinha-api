@@ -1,6 +1,6 @@
 import { Test } from '@nestjs/testing';
 import { Prisma } from '@prisma/client';
-import { StoreSettingsService } from './store-settings.service';
+import { StoreSettingsService, activePause } from './store-settings.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 function row(overrides: Record<string, unknown> = {}) {
@@ -15,6 +15,10 @@ function row(overrides: Record<string, unknown> = {}) {
     pickupInstructions: null,
     maxInstallments: 3,
     minInstallmentValue: new Prisma.Decimal('30.00'),
+    lowStockThreshold: 2,
+    storePaused: false,
+    pauseMessage: null,
+    pausedUntil: null,
     updatedAt: new Date('2026-11-09T12:00:00Z'),
     ...overrides,
   };
@@ -65,6 +69,82 @@ describe('StoreSettingsService', () => {
       pickupAddress: expect.stringContaining('R. Capiberibe, 32'),
       pickupHours: expect.any(String),
       pickupInstructions: null,
+      storePause: null,
+    });
+  });
+
+  describe('store pause', () => {
+    const now = new Date('2026-12-20T12:00:00Z');
+
+    it('is active while switched on and before the return date', () => {
+      expect(
+        activePause(
+          {
+            storePaused: true,
+            pauseMessage: 'Férias!',
+            pausedUntil: new Date('2027-01-05T03:00:00Z'),
+          },
+          now,
+        ),
+      ).toEqual({ message: 'Férias!', until: '2027-01-05T03:00:00.000Z' });
+      expect(
+        activePause(
+          { storePaused: true, pauseMessage: null, pausedUntil: null },
+          now,
+        ),
+      ).toEqual({ message: null, until: null });
+    });
+
+    it('ends by itself on the return date, and never while switched off', () => {
+      expect(
+        activePause(
+          {
+            storePaused: true,
+            pauseMessage: null,
+            pausedUntil: new Date('2026-12-20T11:00:00Z'),
+          },
+          now,
+        ),
+      ).toBeNull();
+      expect(
+        activePause(
+          {
+            storePaused: false,
+            pauseMessage: 'x',
+            pausedUntil: new Date('2027-01-05T03:00:00Z'),
+          },
+          now,
+        ),
+      ).toBeNull();
+    });
+
+    it('saves the return date as a date, and clears it with null', async () => {
+      await service.update({
+        storePaused: true,
+        pausedUntil: '2027-01-05T03:00:00.000Z',
+      });
+      expect(prisma.storeSettings.update).toHaveBeenLastCalledWith({
+        where: { id: 1 },
+        data: {
+          storePaused: true,
+          pausedUntil: new Date('2027-01-05T03:00:00.000Z'),
+        },
+      });
+
+      await service.update({ pausedUntil: null });
+      expect(prisma.storeSettings.update).toHaveBeenLastCalledWith({
+        where: { id: 1 },
+        data: { pausedUntil: null },
+      });
+    });
+
+    it('shows the active pause publicly', async () => {
+      prisma.storeSettings.upsert.mockResolvedValue(
+        row({ storePaused: true, pauseMessage: 'Voltamos logo' }),
+      );
+      await expect(service.getPublic()).resolves.toMatchObject({
+        storePause: { message: 'Voltamos logo', until: null },
+      });
     });
   });
 

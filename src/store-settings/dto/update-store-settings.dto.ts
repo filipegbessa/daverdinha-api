@@ -1,6 +1,7 @@
 import { Transform } from 'class-transformer';
 import {
   IsBoolean,
+  IsDateString,
   IsInt,
   IsNotEmpty,
   IsNumber,
@@ -67,4 +68,29 @@ export class UpdateStoreSettingsDto {
   @Min(0)
   @Max(99999)
   minInstallmentValue?: number;
+
+  /** Pronta entrega com este estoque ou menos aparece no aviso do Dashboard. */
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(1000)
+  lowStockThreshold?: number;
+
+  /** Loja em pausa: o site avisa e o checkout de produtos recusa pedidos. */
+  @IsOptional()
+  @IsBoolean()
+  storePaused?: boolean;
+
+  /** O aviso que aparece no site ("Estamos de férias"); vazio vira `null`. */
+  @IsOptional()
+  @Transform(emptyToNull)
+  @IsString()
+  @MaxLength(300)
+  pauseMessage?: string | null;
+
+  /** Data e hora em que a loja reabre sozinha (ISO 8601); `null` = sem data. */
+  @IsOptional()
+  @Transform(emptyToNull)
+  @IsDateString()
+  pausedUntil?: string | null;
 }

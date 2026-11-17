@@ -6,6 +6,7 @@ import { PagarmeModule } from '../pagarme/pagarme.module';
 import { PushNotificationsModule } from '../push-notifications/push-notifications.module';
 import { EmailModule } from '../email/email.module';
 import { SiteOrdersService } from './site-orders.service';
+import { SalesSummaryService } from './sales-summary.service';
 import { SiteOrdersController } from './site-orders.controller';
 import { SiteOrderTicketsController } from './site-order-tickets.controller';
 
@@ -18,7 +19,7 @@ import { SiteOrderTicketsController } from './site-order-tickets.controller';
     PushNotificationsModule,
     EmailModule,
   ],
-  providers: [SiteOrdersService],
+  providers: [SiteOrdersService, SalesSummaryService],
   controllers: [SiteOrdersController, SiteOrderTicketsController],
   exports: [SiteOrdersService],
 })

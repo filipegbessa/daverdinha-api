@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 
 const ROW = {
   id: 1,
+  whatsappModuleEnabled: true,
   botEnabled: false,
   welcomeMessage: 'Oi!',
   invalidAttemptsExceededMessage: 'a',
@@ -83,6 +84,51 @@ describe('BotSettingsService', () => {
     expect(result.welcomeMessage).toBe('Oi!');
     expect(result.mediaBytesUsed).toBe(0);
     expect(prisma.menuItem.count).not.toHaveBeenCalled();
+  });
+
+  describe('WhatsApp module', () => {
+    it('turning the module off also turns the bot off, in the same write', async () => {
+      prisma.botSettings.upsert.mockResolvedValue({ ...ROW, botEnabled: true });
+      prisma.botSettings.update.mockResolvedValue({
+        ...ROW,
+        whatsappModuleEnabled: false,
+      });
+
+      await service.update({ whatsappModuleEnabled: false });
+
+      expect(prisma.botSettings.update).toHaveBeenCalledWith({
+        where: { id: 1 },
+        data: { whatsappModuleEnabled: false, botEnabled: false },
+      });
+    });
+
+    it('turning the module back on leaves the bot as it is', async () => {
+      prisma.botSettings.upsert.mockResolvedValue({
+        ...ROW,
+        whatsappModuleEnabled: false,
+      });
+      prisma.botSettings.update.mockResolvedValue({ ...ROW });
+
+      await service.update({ whatsappModuleEnabled: true });
+
+      expect(prisma.botSettings.update).toHaveBeenCalledWith({
+        where: { id: 1 },
+        data: { whatsappModuleEnabled: true },
+      });
+    });
+
+    it('refuses to turn the bot on while the module is off', async () => {
+      prisma.botSettings.upsert.mockResolvedValue({
+        ...ROW,
+        whatsappModuleEnabled: false,
+      });
+      prisma.menuItem.count.mockResolvedValue(2);
+
+      await expect(service.update({ botEnabled: true })).rejects.toThrow(
+        'Ligue o WhatsApp bot no Dashboard antes de ligar o atendimento automático.',
+      );
+      expect(prisma.botSettings.update).not.toHaveBeenCalled();
+    });
   });
 
   it('autoDisableIfNoActiveMenuItems() sets botEnabled to false when zero items are active', async () => {

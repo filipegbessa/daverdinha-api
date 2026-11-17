@@ -279,11 +279,22 @@ export class SiteOrdersService {
     dto: CreateCheckoutDto,
     now: Date = new Date(),
   ): Promise<{ code: string; token: string; paymentUrl: string }> {
-    if (!(await this.storeSettings.get()).storeEnabled) {
+    const store = await this.storeSettings.get();
+    if (!store.storeEnabled) {
       throw new ConflictException({
         message:
           'A loja do site está fechada no momento. Fale com a gente pelo WhatsApp.',
         reason: 'store_closed',
+      });
+    }
+    // Loja em pausa (férias): o site já mostra o aviso, mas um carrinho
+    // aberto antes da pausa ainda pode tentar fechar o pedido.
+    if (store.activePause) {
+      throw new ConflictException({
+        message:
+          store.activePause.message ??
+          'A loja está em pausa e não está recebendo pedidos agora.',
+        reason: 'store_paused',
       });
     }
     const phone = normalizePhone(dto.customer.phone);

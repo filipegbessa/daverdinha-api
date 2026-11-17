@@ -45,7 +45,19 @@ export class BotSettingsService {
     return toView(await this.row());
   }
 
+  /**
+   * Desligar o módulo de WhatsApp desliga o bot na mesma escrita: ninguém
+   * deve ficar com um bot respondendo sem as páginas dele no admin. Ligar o
+   * bot com o módulo desligado é recusado.
+   */
   async update(dto: UpdateBotSettingsDto): Promise<BotSettingsView> {
+    const current = await this.row();
+    const moduleOn = dto.whatsappModuleEnabled ?? current.whatsappModuleEnabled;
+    if (dto.botEnabled === true && !moduleOn) {
+      throw new BadRequestException(
+        'Ligue o WhatsApp bot no Dashboard antes de ligar o atendimento automático.',
+      );
+    }
     if (dto.botEnabled === true) {
       const activeCount = await this.prisma.menuItem.count({
         where: { active: true },
@@ -56,9 +68,11 @@ export class BotSettingsService {
         );
       }
     }
-    await this.row();
     return toView(
-      await this.prisma.botSettings.update({ where: { id: 1 }, data: dto }),
+      await this.prisma.botSettings.update({
+        where: { id: 1 },
+        data: { ...dto, ...(!moduleOn && { botEnabled: false }) },
+      }),
     );
   }
 

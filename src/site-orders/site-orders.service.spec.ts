@@ -191,7 +191,7 @@ describe('SiteOrdersService.quote', () => {
       expect(quote.delivery).toEqual(expected);
     });
 
-    it('is unavailable, never free, for a covered bairro with no area', async () => {
+    it('is unavailable, never free, if the area disappears between the two reads', async () => {
       deliveryLocations.resolveCep.mockResolvedValue({
         status: 'covered',
         bairro: 'Catete',
@@ -1155,6 +1155,24 @@ describe('SiteOrdersService.create', () => {
     expect(error).toBeInstanceOf(ConflictException);
     expect(error.getResponse()).toEqual(
       expect.objectContaining({ reason: 'store_closed' }),
+    );
+    expect(prisma.siteOrder.create).not.toHaveBeenCalled();
+  });
+
+  it('refuses the order with the pause message while the store is paused', async () => {
+    storeSettings.get.mockResolvedValue({
+      ...settings,
+      activePause: { message: 'De férias até dia 5!', until: null },
+    });
+
+    const error = await service.create(dto(), now).catch((e) => e);
+
+    expect(error).toBeInstanceOf(ConflictException);
+    expect(error.getResponse()).toEqual(
+      expect.objectContaining({
+        reason: 'store_paused',
+        message: 'De férias até dia 5!',
+      }),
     );
     expect(prisma.siteOrder.create).not.toHaveBeenCalled();
   });

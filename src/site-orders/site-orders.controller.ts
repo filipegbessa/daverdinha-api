@@ -13,6 +13,7 @@ import {
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { ClerkAuthGuard } from '../common/auth/clerk-auth.guard';
 import { SiteOrdersService } from './site-orders.service';
+import { SalesSummaryService } from './sales-summary.service';
 import { ListSiteOrdersDto } from './dto/list-site-orders.dto';
 import { UpdateFulfillmentDto } from './dto/update-fulfillment.dto';
 
@@ -21,11 +22,20 @@ import { UpdateFulfillmentDto } from './dto/update-fulfillment.dto';
 @Controller('site-orders')
 @UseGuards(ClerkAuthGuard)
 export class SiteOrdersController {
-  constructor(private readonly orders: SiteOrdersService) {}
+  constructor(
+    private readonly orders: SiteOrdersService,
+    private readonly sales: SalesSummaryService,
+  ) {}
 
   @Get()
   list(@Query() query: ListSiteOrdersDto) {
     return this.orders.list(query);
+  }
+
+  /** O resumo do Dashboard: vendas, o que preparar e o estoque baixo. Antes de `:id`. */
+  @Get('summary')
+  summary() {
+    return this.sales.summary();
   }
 
   @Get(':id')

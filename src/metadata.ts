@@ -81,6 +81,12 @@ export default async () => {
           m4,
           {
             UpdateBotSettingsDto: {
+              whatsappModuleEnabled: {
+                required: false,
+                type: () => Boolean,
+                description:
+                  'Desligar o m\u00F3dulo tamb\u00E9m desliga o bot; religar n\u00E3o religa o bot.',
+              },
               botEnabled: { required: false, type: () => Boolean },
               welcomeMessage: { required: false, type: () => String },
               invalidAttemptsExceededMessage: {
@@ -604,6 +610,35 @@ export default async () => {
                 minimum: 0,
                 maximum: 99999,
               },
+              lowStockThreshold: {
+                required: false,
+                type: () => Number,
+                description:
+                  'Pronta entrega com este estoque ou menos aparece no aviso do Dashboard.',
+                minimum: 0,
+                maximum: 1000,
+              },
+              storePaused: {
+                required: false,
+                type: () => Boolean,
+                description:
+                  'Loja em pausa: o site avisa e o checkout de produtos recusa pedidos.',
+              },
+              pauseMessage: {
+                required: false,
+                type: () => String,
+                nullable: true,
+                description:
+                  'O aviso que aparece no site ("Estamos de f\u00E9rias"); vazio vira `null`.',
+                maxLength: 300,
+              },
+              pausedUntil: {
+                required: false,
+                type: () => String,
+                nullable: true,
+                description:
+                  'Data e hora em que a loja reabre sozinha (ISO 8601); `null` = sem data.',
+              },
             },
           },
         ],
@@ -1009,6 +1044,11 @@ export default async () => {
           {
             SiteOrdersController: {
               list: {},
+              summary: {
+                summary:
+                  'O resumo do Dashboard: vendas, o que preparar e o estoque baixo. Antes de `:id`.',
+                type: Object,
+              },
               findOne: { type: Object },
               updateFulfillment: { type: Object },
               cancel: { type: Object },
