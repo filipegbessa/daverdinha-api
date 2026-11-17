@@ -16,6 +16,7 @@ import { SiteOrdersService } from './site-orders.service';
 import { SalesSummaryService } from './sales-summary.service';
 import { ListSiteOrdersDto } from './dto/list-site-orders.dto';
 import { UpdateFulfillmentDto } from './dto/update-fulfillment.dto';
+import { CreateCheckoutDto } from '../checkout/dto/create-checkout.dto';
 
 @ApiTags('site-orders')
 @ApiBearerAuth()
@@ -30,6 +31,17 @@ export class SiteOrdersController {
   @Get()
   list(@Query() query: ListSiteOrdersDto) {
     return this.orders.list(query);
+  }
+
+  /**
+   * Pedido criado no admin, pra venda combinada no WhatsApp: as mesmas
+   * regras do checkout (preço, estoque e frete do banco), mas vale com a loja
+   * fechada ou em pausa e segura a reserva por 24 h. Devolve o link de
+   * pagamento pra mandar à cliente.
+   */
+  @Post()
+  create(@Body() dto: CreateCheckoutDto) {
+    return this.orders.create(dto, new Date(), { fromAdmin: true });
   }
 
   /** O resumo do Dashboard: vendas, o que preparar e o estoque baixo. Antes de `:id`. */

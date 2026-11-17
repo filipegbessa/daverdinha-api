@@ -1,5 +1,10 @@
 import { effectivePrice } from '../products/effective-price';
 import {
+  CouponsService,
+  type EvaluatedCoupon,
+} from '../coupons/coupons.service';
+import type { CouponLine } from '../coupons/apply-coupon';
+import {
   BadRequestException,
   ConflictException,
   HttpException,
@@ -92,10 +97,13 @@ export interface QuoteDetails {
       images: string[];
       stock: number | null;
       leadTimeDays: number | null;
+      categoryId: string;
     };
     quantity: number;
     unitPrice: Prisma.Decimal;
     lineTotal: Prisma.Decimal;
+    /** Em preço promocional: fica fora do cupom. */
+    onPromo: boolean;
   }[];
   subtotal: Prisma.Decimal;
   installments: number;
@@ -140,6 +148,25 @@ export interface CheckoutQuote {
     | { available: true; fee: number; bairro: string; area: string }
     | { available: false; reason: DeliveryUnavailableReason; bairro?: string };
   problems: QuoteProblem[];
+  /**
+   * O cupom digitado: o desconto (e se dá frete grátis) ou por que não vale.
+   * `null` sem cupom. O total é `subtotal - discount + frete` (frete zero
+   * com `freeShipping`).
+   */
+  coupon:
+    | { code: string; discount: number; freeShipping: boolean }
+    | { code: string; error: string }
+    | null;
+}
+
+/** As linhas da cotação do jeito que o cupom olha pra elas. */
+function couponLines(details: QuoteDetails): CouponLine[] {
+  return details.lines.map((line) => ({
+    productId: line.product.id,
+    categoryId: line.product.categoryId,
+    lineTotal: line.lineTotal,
+    onPromo: line.onPromo,
+  }));
 }
 
 /** Item repetido no carrinho vira uma linha só, com as quantidades somadas. */
@@ -157,6 +184,12 @@ const LOOKUP_LIMIT_PER_IP = 20;
 
 /** Quanto tempo o pedido pendente (e o link de pagamento) seguram a reserva. */
 export const ORDER_TTL_MS = 60 * 60 * 1000;
+/**
+ * Pedido criado no admin (venda fechada no WhatsApp): o link vai pra
+ * conversa e a cliente pode pagar mais tarde, então segura a reserva por um
+ * dia em vez de uma hora.
+ */
+export const ADMIN_ORDER_TTL_MS = 24 * 60 * 60 * 1000;
 /** Intervalo mínimo entre duas consultas ao gateway pelo mesmo pedido. */
 const SYNC_INTERVAL_MS = 60 * 1000;
 const PAYMENT_UNAVAILABLE =
@@ -174,6 +207,7 @@ export class SiteOrdersService {
     @Inject(PAYMENT_GATEWAY) private readonly gateway: PaymentGateway,
     private readonly push: PushNotificationsService,
     private readonly email: EmailService,
+    private readonly coupons: CouponsService,
   ) {}
 
   /**
@@ -181,8 +215,19 @@ export class SiteOrdersService {
    * carrinho do site só manda `{ productId, quantity }`: o que ele acha que
    * custa não entra na conta.
    */
-  async quote(items: CartItemDto[], cep?: string): Promise<CheckoutQuote> {
-    return toPublicQuote(await this.quoteDetails(this.prisma, items, cep));
+  async quote(
+    items: CartItemDto[],
+    cep?: string,
+    couponCode?: string,
+  ): Promise<CheckoutQuote> {
+    const details = await this.quoteDetails(this.prisma, items, cep);
+    const coupon = couponCode
+      ? await this.coupons.evaluate(this.prisma, couponCode, {
+          kind: 'products',
+          lines: couponLines(details),
+        })
+      : null;
+    return toPublicQuote(details, coupon);
   }
 
   /**
@@ -234,7 +279,7 @@ export class SiteOrdersService {
         continue;
       }
       // O preço que vale agora: o promocional, com promoção valendo.
-      const unitPrice = effectivePrice(product, now).price;
+      const { price: unitPrice, listPrice } = effectivePrice(product, now);
       lines.push({
         product: {
           id: product.id,
@@ -243,10 +288,12 @@ export class SiteOrdersService {
           images: product.images,
           stock: product.stock,
           leadTimeDays: product.leadTimeDays,
+          categoryId: product.categoryId,
         },
         quantity,
         unitPrice,
         lineTotal: lineTotal(unitPrice, quantity),
+        onPromo: listPrice !== null,
       });
     }
 
@@ -280,9 +327,12 @@ export class SiteOrdersService {
   async create(
     dto: CreateCheckoutDto,
     now: Date = new Date(),
-  ): Promise<{ code: string; token: string; paymentUrl: string }> {
+    { fromAdmin = false }: { fromAdmin?: boolean } = {},
+  ): Promise<{ id: string; code: string; token: string; paymentUrl: string }> {
     const store = await this.storeSettings.get();
-    if (!store.storeEnabled) {
+    // O admin vende mesmo com a loja do site fechada ou em pausa: é a venda
+    // combinada no WhatsApp, que só usa o pedido e o link de pagamento.
+    if (!fromAdmin && !store.storeEnabled) {
       throw new ConflictException({
         message:
           'A loja do site está fechada no momento. Fale com a gente pelo WhatsApp.',
@@ -291,7 +341,7 @@ export class SiteOrdersService {
     }
     // Loja em pausa (férias): o site já mostra o aviso, mas um carrinho
     // aberto antes da pausa ainda pode tentar fechar o pedido.
-    if (store.activePause) {
+    if (!fromAdmin && store.activePause) {
       throw new ConflictException({
         message:
           store.activePause.message ??
@@ -341,13 +391,33 @@ export class SiteOrdersService {
           reason: 'pickup_disabled',
         });
       }
+      // Cupom avaliado com a linha dele travada: dois pedidos pelo último
+      // uso não passam juntos.
+      const coupon = dto.couponCode
+        ? await this.coupons.evaluate(
+            tx,
+            dto.couponCode,
+            { kind: 'products', lines: couponLines(quote) },
+            now,
+            { lock: true },
+          )
+        : null;
+      if (coupon && !coupon.ok) {
+        throw new UnprocessableEntityException({
+          message: coupon.error,
+          reason: 'coupon_invalid',
+        });
+      }
       const fee = quote.delivery.available
         ? quote.delivery.fee
         : new Prisma.Decimal(0);
-      const deliveryFee = isDelivery ? fee : new Prisma.Decimal(0);
+      const deliveryFee =
+        isDelivery && !coupon?.freeShipping ? fee : new Prisma.Decimal(0);
+      const discount = coupon?.ok ? coupon.discount : new Prisma.Decimal(0);
       const { subtotal, total } = orderTotals(
         quote.lines.map((l) => l.lineTotal),
         deliveryFee,
+        discount,
       );
       const area =
         isDelivery && quote.delivery.available ? quote.delivery : null;
@@ -373,7 +443,14 @@ export class SiteOrdersService {
           subtotal,
           deliveryFee,
           total,
-          expiresAt: new Date(now.getTime() + ORDER_TTL_MS),
+          discount,
+          ...(coupon?.ok && {
+            couponId: coupon.couponId,
+            couponCode: coupon.code,
+          }),
+          expiresAt: new Date(
+            now.getTime() + (fromAdmin ? ADMIN_ORDER_TTL_MS : ORDER_TTL_MS),
+          ),
           items: {
             create: quote.lines.map((line) => ({
               productId: line.product.id,
@@ -393,17 +470,72 @@ export class SiteOrdersService {
 
     const paymentUrl = await this.startPayment(
       order,
-      order.items.map((item) => ({
-        id: item.productId ?? item.id,
-        description: item.productName,
-        quantity: item.quantity,
-        unitPrice: item.unitPrice,
-      })),
+      order.discount.isZero()
+        ? order.items.map((item) => ({
+            id: item.productId ?? item.id,
+            description: item.productName,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+          }))
+        : // Com desconto, os produtos vão como um item só, já descontado: o
+          // link de pagamento não tem campo de desconto, e ratear o desconto
+          // pelos itens dá centavo sobrando. O pedido guarda os itens.
+          [
+            {
+              id: order.id,
+              description: `Pedido ${formatOrderCode(order.number)} (cupom ${order.couponCode})`,
+              quantity: 1,
+              unitPrice: order.subtotal.sub(order.discount),
+            },
+          ],
     );
     return {
+      id: order.id,
       code: formatOrderCode(order.number),
       token: order.publicToken,
       paymentUrl,
+    };
+  }
+
+  /**
+   * O total da compra de ingresso com o cupom, pra mostrar antes de pagar.
+   * O preço vem do banco; vagas e limites só são conferidos na compra.
+   */
+  async quoteTickets(
+    eventId: string,
+    quantity: number,
+    couponCode?: string,
+  ): Promise<{
+    unitPrice: number;
+    subtotal: number;
+    discount: number;
+    total: number;
+    coupon: CheckoutQuote['coupon'];
+  }> {
+    const event = await this.prisma.event.findUnique({
+      where: { id: eventId },
+      select: { id: true, price: true, published: true },
+    });
+    if (!event || !event.published) {
+      throw new NotFoundException('Evento não encontrado.');
+    }
+    const unitPrice = new Prisma.Decimal(event.price ?? 0);
+    const subtotal = lineTotal(unitPrice, quantity);
+    const coupon =
+      couponCode && !unitPrice.isZero()
+        ? await this.coupons.evaluate(this.prisma, couponCode, {
+            kind: 'tickets',
+            eventId: event.id,
+            subtotal,
+          })
+        : null;
+    const discount = coupon?.ok ? coupon.discount : new Prisma.Decimal(0);
+    return {
+      unitPrice: toMoney(unitPrice),
+      subtotal: toMoney(subtotal),
+      discount: toMoney(discount),
+      total: toMoney(subtotal.sub(discount)),
+      coupon: toPublicCoupon(coupon),
     };
   }
 
@@ -470,11 +602,34 @@ export class SiteOrdersService {
         }
         // `null` ou 0 = gratuito.
         const unitPrice = new Prisma.Decimal(event.price ?? 0);
-        const free = unitPrice.isZero();
+        const coupon =
+          dto.couponCode && !unitPrice.isZero()
+            ? await this.coupons.evaluate(
+                tx,
+                dto.couponCode,
+                {
+                  kind: 'tickets',
+                  eventId: event.id,
+                  subtotal: lineTotal(unitPrice, quantity),
+                },
+                now,
+                { lock: true },
+              )
+            : null;
+        if (coupon && !coupon.ok) {
+          throw new UnprocessableEntityException({
+            message: coupon.error,
+            reason: 'coupon_invalid',
+          });
+        }
+        const discount = coupon?.ok ? coupon.discount : new Prisma.Decimal(0);
         const { subtotal, total } = orderTotals(
           [lineTotal(unitPrice, quantity)],
           new Prisma.Decimal(0),
+          discount,
         );
+        // Gratuito, ou cupom de 100%: nasce pago, sem passar pelo gateway.
+        const free = total.isZero();
         return tx.siteOrder.create({
           data: {
             kind: 'tickets',
@@ -489,6 +644,11 @@ export class SiteOrdersService {
             subtotal,
             deliveryFee: new Prisma.Decimal(0),
             total,
+            discount,
+            ...(coupon?.ok && {
+              couponId: coupon.couponId,
+              couponCode: coupon.code,
+            }),
             ...(free
               ? { status: 'paid', paidAt: now, expiresAt: now }
               : {
@@ -520,12 +680,20 @@ export class SiteOrdersService {
       return { code, token: order.publicToken, paymentUrl: null };
     }
     const paymentUrl = await this.startPayment(order, [
-      {
-        id: order.eventId!,
-        description: `Ingresso — ${order.event!.title}`,
-        quantity,
-        unitPrice: order.tickets[0].unitPrice,
-      },
+      order.discount.isZero()
+        ? {
+            id: order.eventId!,
+            description: `Ingresso — ${order.event!.title}`,
+            quantity,
+            unitPrice: order.tickets[0].unitPrice,
+          }
+        : // Com cupom, um item só já descontado (ver `create`).
+          {
+            id: order.eventId!,
+            description: `Ingressos — ${order.event!.title} (cupom ${order.couponCode})`,
+            quantity: 1,
+            unitPrice: order.total,
+          },
     ]);
     return { code, token: order.publicToken, paymentUrl };
   }
@@ -1250,7 +1418,23 @@ export class SiteOrdersService {
   }
 }
 
-function toPublicQuote(details: QuoteDetails): CheckoutQuote {
+function toPublicCoupon(
+  coupon: EvaluatedCoupon | null,
+): CheckoutQuote['coupon'] {
+  if (!coupon) return null;
+  return coupon.ok
+    ? {
+        code: coupon.code,
+        discount: toMoney(coupon.discount),
+        freeShipping: coupon.freeShipping,
+      }
+    : { code: coupon.code, error: coupon.error };
+}
+
+function toPublicQuote(
+  details: QuoteDetails,
+  coupon: EvaluatedCoupon | null = null,
+): CheckoutQuote {
   return {
     items: details.lines.map((line) => ({
       productId: line.product.id,
@@ -1276,6 +1460,7 @@ function toPublicQuote(details: QuoteDetails): CheckoutQuote {
         }
       : details.delivery,
     problems: details.problems,
+    coupon: toPublicCoupon(coupon),
   };
 }
 

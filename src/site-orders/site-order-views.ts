@@ -58,6 +58,9 @@ export interface PublicSiteOrder {
     checkedIn: boolean;
   }[];
   subtotal: number;
+  /** Desconto do cupom (0 sem cupom), já tirado do total. */
+  discount: number;
+  couponCode: string | null;
   deliveryFee: number;
   total: number;
   deliveryMethod: 'pickup' | 'delivery' | null;
@@ -112,6 +115,9 @@ export interface SiteOrderAdmin {
   /** Quando o e-mail de confirmação saiu; `null` = ainda não saiu. */
   confirmationSentAt: string | null;
   subtotal: number;
+  /** Desconto do cupom (0 sem cupom), já tirado do total. */
+  discount: number;
+  couponCode: string | null;
   deliveryFee: number;
   total: number;
   payment: {
@@ -165,6 +171,8 @@ export function toPublicOrder(
       checkedIn: ticket.checkedInAt !== null,
     })),
     subtotal: toMoney(row.subtotal),
+    discount: toMoney(row.discount ?? 0),
+    couponCode: row.couponCode ?? null,
     deliveryFee: toMoney(row.deliveryFee),
     total: toMoney(row.total),
     deliveryMethod: row.deliveryMethod,
@@ -228,6 +236,8 @@ export function toAdminOrder(row: SiteOrderRow): SiteOrderAdmin {
     })),
     confirmationSentAt: row.confirmationSentAt?.toISOString() ?? null,
     subtotal: toMoney(row.subtotal),
+    discount: toMoney(row.discount ?? 0),
+    couponCode: row.couponCode ?? null,
     deliveryFee: toMoney(row.deliveryFee),
     total: toMoney(row.total),
     payment: {

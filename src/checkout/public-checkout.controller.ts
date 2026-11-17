@@ -13,7 +13,10 @@ import { ApiTags } from '@nestjs/swagger';
 import { SiteOrdersService } from '../site-orders/site-orders.service';
 import { QuoteDto } from './dto/quote.dto';
 import { CreateCheckoutDto } from './dto/create-checkout.dto';
-import { CreateTicketCheckoutDto } from './dto/create-ticket-checkout.dto';
+import {
+  CreateTicketCheckoutDto,
+  TicketQuoteDto,
+} from './dto/create-ticket-checkout.dto';
 import { LookupOrdersDto } from './dto/lookup-orders.dto';
 
 /**
@@ -29,7 +32,7 @@ export class PublicCheckoutController {
   @Post('quote')
   @HttpCode(HttpStatus.OK)
   quote(@Body() dto: QuoteDto) {
-    return this.orders.quote(dto.items, dto.cep);
+    return this.orders.quote(dto.items, dto.cep, dto.couponCode);
   }
 
   /**
@@ -38,8 +41,10 @@ export class PublicCheckoutController {
    * pagamento não pôde ser iniciado.
    */
   @Post()
-  create(@Body() dto: CreateCheckoutDto) {
-    return this.orders.create(dto);
+  async create(@Body() dto: CreateCheckoutDto) {
+    // O id interno fica só pro admin; o site usa o token do link.
+    const { code, token, paymentUrl } = await this.orders.create(dto);
+    return { code, token, paymentUrl };
   }
 
   /**
@@ -47,6 +52,13 @@ export class PublicCheckoutController {
    * `paymentUrl: null` = gratuito, já confirmado. 409 com `reason`:
    * `tickets_closed`, `not_available`, `sold_out` ou `too_many`.
    */
+  /** O total da compra de ingresso com o cupom, antes de pagar. */
+  @Post('tickets/quote')
+  @HttpCode(HttpStatus.OK)
+  quoteTickets(@Body() dto: TicketQuoteDto) {
+    return this.orders.quoteTickets(dto.eventId, dto.quantity, dto.couponCode);
+  }
+
   @Post('tickets')
   createTickets(@Body() dto: CreateTicketCheckoutDto) {
     return this.orders.createTickets(dto);

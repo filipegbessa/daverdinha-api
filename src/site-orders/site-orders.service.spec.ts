@@ -6,6 +6,7 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { CouponsService } from '../coupons/coupons.service';
 import { SiteOrdersService } from './site-orders.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { DeliveryLocationsService } from '../delivery-locations/delivery-locations.service';
@@ -56,6 +57,9 @@ const settings = {
   updatedAt: new Date(),
 };
 
+/** Cupom: cada teste de cupom troca o `evaluate`; o padrão nunca é chamado sem código. */
+const coupons = { evaluate: jest.fn() };
+
 describe('SiteOrdersService.quote', () => {
   let service: SiteOrdersService;
   let prisma: {
@@ -84,6 +88,7 @@ describe('SiteOrdersService.quote', () => {
         { provide: PAYMENT_GATEWAY, useValue: {} },
         { provide: PushNotificationsService, useValue: {} },
         { provide: EmailService, useValue: emailMock() },
+        { provide: CouponsService, useValue: coupons },
       ],
     }).compile();
     service = moduleRef.get(SiteOrdersService);
@@ -377,6 +382,7 @@ describe('SiteOrdersService orders', () => {
         { provide: PAYMENT_GATEWAY, useValue: gateway },
         { provide: PushNotificationsService, useValue: push },
         { provide: EmailService, useValue: email },
+        { provide: CouponsService, useValue: coupons },
       ],
     }).compile();
     service = moduleRef.get(SiteOrdersService);
@@ -1029,6 +1035,7 @@ describe('SiteOrdersService.create', () => {
         { provide: PAYMENT_GATEWAY, useValue: gateway },
         { provide: PushNotificationsService, useValue: {} },
         { provide: EmailService, useValue: emailMock() },
+        { provide: CouponsService, useValue: coupons },
       ],
     }).compile();
     service = moduleRef.get(SiteOrdersService);
@@ -1049,6 +1056,7 @@ describe('SiteOrdersService.create', () => {
     const result = await service.create(dto(), now);
 
     expect(result).toEqual({
+      id: 'o9',
       code: 'DV-0007',
       token: 'tok9',
       paymentUrl: 'https://checkout.pagar.me/pl_9',
@@ -1092,6 +1100,84 @@ describe('SiteOrdersService.create', () => {
         }),
       }),
     );
+  });
+
+  describe('coupon', () => {
+    afterEach(() => coupons.evaluate.mockReset());
+
+    it('takes the discount off the items and sends the gateway one item already discounted', async () => {
+      coupons.evaluate.mockResolvedValue({
+        ok: true,
+        discount: new Prisma.Decimal('9.80'),
+        freeShipping: false,
+        couponId: 'c1',
+        code: 'BEMVINDA',
+      });
+
+      await service.create(dto({ couponCode: 'BEMVINDA' }), now);
+
+      expect(coupons.evaluate).toHaveBeenCalledWith(
+        prisma,
+        'BEMVINDA',
+        {
+          kind: 'products',
+          lines: [expect.objectContaining({ productId: 'p1', onPromo: false })],
+        },
+        now,
+        { lock: true },
+      );
+      const data = prisma.siteOrder.create.mock.calls[0][0].data;
+      expect(data.discount.toString()).toBe('9.8');
+      expect(data.total.toString()).toBe('42.5');
+      expect(data).toEqual(
+        expect.objectContaining({ couponId: 'c1', couponCode: 'BEMVINDA' }),
+      );
+      const { items, deliveryFee } = gateway.createCheckout.mock.calls[0][0];
+      expect(items).toEqual([
+        {
+          id: 'o9',
+          description: 'Pedido DV-0007 (cupom BEMVINDA)',
+          quantity: 1,
+          unitPrice: new Prisma.Decimal('30.00'),
+        },
+      ]);
+      expect(deliveryFee.toString()).toBe('12.5');
+    });
+
+    it('zeroes the delivery with a free shipping coupon', async () => {
+      coupons.evaluate.mockResolvedValue({
+        ok: true,
+        discount: new Prisma.Decimal(0),
+        freeShipping: true,
+        couponId: 'c2',
+        code: 'FRETEGRATIS',
+      });
+
+      await service.create(dto({ couponCode: 'FRETEGRATIS' }), now);
+
+      const data = prisma.siteOrder.create.mock.calls[0][0].data;
+      expect(data.deliveryFee.toString()).toBe('0');
+      expect(data.total.toString()).toBe('39.8');
+    });
+
+    it('is a 422 with the reason when the coupon does not apply', async () => {
+      coupons.evaluate.mockResolvedValue({
+        ok: false,
+        error: 'Cupom expirado.',
+        code: 'VELHO',
+      });
+
+      const error = await service
+        .create(dto({ couponCode: 'VELHO' }), now)
+        .catch((e) => e);
+
+      expect(error).toBeInstanceOf(UnprocessableEntityException);
+      expect(error.getResponse()).toEqual({
+        message: 'Cupom expirado.',
+        reason: 'coupon_invalid',
+      });
+      expect(prisma.siteOrder.create).not.toHaveBeenCalled();
+    });
   });
 
   it('locks the products and hands the gateway the order id, code and deadline', async () => {
@@ -1157,6 +1243,21 @@ describe('SiteOrdersService.create', () => {
     expect(data.deliveryFee.toString()).toBe('0');
     expect(data.street).toBeUndefined();
     expect(data.total.toString()).toBe('39.8');
+  });
+
+  it('creates an admin order even with the store closed or paused, holding it for 24 hours', async () => {
+    storeSettings.get.mockResolvedValue({
+      ...settings,
+      storeEnabled: false,
+      activePause: { message: 'Férias', until: null },
+    });
+
+    await service.create(dto(), now, { fromAdmin: true });
+
+    const data = prisma.siteOrder.create.mock.calls[0][0].data;
+    expect(data.expiresAt).toEqual(
+      new Date(now.getTime() + 24 * 60 * 60 * 1000),
+    );
   });
 
   it('refuses orders while the store is switched off in the dashboard', async () => {
@@ -1306,6 +1407,7 @@ describe('SiteOrdersService tickets', () => {
         { provide: PAYMENT_GATEWAY, useValue: gateway },
         { provide: PushNotificationsService, useValue: push },
         { provide: EmailService, useValue: emailMock() },
+        { provide: CouponsService, useValue: coupons },
       ],
     }).compile();
     service = moduleRef.get(SiteOrdersService);
@@ -1637,6 +1739,7 @@ describe('SiteOrdersService post-sale', () => {
         { provide: PAYMENT_GATEWAY, useValue: {} },
         { provide: PushNotificationsService, useValue: {} },
         { provide: EmailService, useValue: email },
+        { provide: CouponsService, useValue: coupons },
       ],
     }).compile();
     service = moduleRef.get(SiteOrdersService);

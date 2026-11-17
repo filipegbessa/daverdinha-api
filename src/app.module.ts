@@ -15,6 +15,7 @@ import { ProductCategoriesModule } from './product-categories/product-categories
 import { ProductsModule } from './products/products.module';
 import { EventsModule } from './events/events.module';
 import { StoreSettingsModule } from './store-settings/store-settings.module';
+import { CouponsModule } from './coupons/coupons.module';
 import { SiteOrdersModule } from './site-orders/site-orders.module';
 import { CheckoutModule } from './checkout/checkout.module';
 
@@ -35,6 +36,7 @@ import { CheckoutModule } from './checkout/checkout.module';
     ProductsModule,
     EventsModule,
     StoreSettingsModule,
+    CouponsModule,
     SiteOrdersModule,
     CheckoutModule,
   ],

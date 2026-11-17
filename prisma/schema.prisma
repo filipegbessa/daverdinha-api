@@ -266,6 +266,8 @@ model ProductCategory {
   updatedAt   DateTime  @updatedAt @map("updated_at")
   products    Product[]
 
+  coupons CouponCategory[]
+
   @@map("product_categories")
 }
 
@@ -305,6 +307,7 @@ model Product {
   archivedAt    DateTime?       @map("archived_at")
   createdAt     DateTime        @default(now()) @map("created_at")
   updatedAt     DateTime        @updatedAt @map("updated_at")
+  coupons       CouponProduct[]
 
   @@index([active, order])
   @@index([categoryId])
@@ -376,6 +379,13 @@ model SiteOrder {
   subtotal             Decimal               @db.Decimal(10, 2)
   deliveryFee          Decimal               @map("delivery_fee") @db.Decimal(10, 2)
   total                Decimal               @db.Decimal(10, 2)
+  /// Desconto do cupom, já tirado do `total` (`total = subtotal - discount + deliveryFee`).
+  discount             Decimal               @default(0) @db.Decimal(10, 2)
+  /// O cupom usado. `couponCode` é a cópia do código: o pedido continua
+  /// mostrando o cupom mesmo se ele for apagado (`couponId` vira `null`).
+  couponId             String?               @map("coupon_id")
+  coupon               Coupon?               @relation(fields: [couponId], references: [id], onDelete: SetNull)
+  couponCode           String?               @map("coupon_code")
   /// Link de pagamento (`pl_…`), pedido (`or_…`) e cobrança (`ch_…`) no
   /// Pagar.me. Nomes neutros de propósito: só `src/pagarme/` sabe o formato.
   gatewayLinkId        String?               @unique @map("gateway_link_id")
@@ -398,6 +408,7 @@ model SiteOrder {
 
   @@index([kind, status, createdAt])
   @@index([eventId, status])
+  @@index([couponId, status])
   @@map("site_orders")
 }
 
@@ -504,6 +515,7 @@ model Event {
   orders             SiteOrder[]
   createdAt          DateTime          @default(now()) @map("created_at")
   updatedAt          DateTime          @updatedAt @map("updated_at")
+  coupons            CouponEvent[]
 
   @@index([published, endsAt])
   @@map("events")
@@ -520,4 +532,82 @@ model LookupAttempt {
 
   @@index([key, createdAt])
   @@map("lookup_attempts")
+}
+
+enum CouponType {
+  percent
+  fixed
+  free_shipping
+}
+
+/// Onde o cupom vale: todos os produtos do pedido, só algumas categorias,
+/// só alguns produtos, ou ingressos de eventos (lista vazia = todos).
+enum CouponScope {
+  order
+  categories
+  products
+  events
+}
+
+/// Cupom de desconto ("Promoções → Cupons" no admin). Regras em
+/// `src/coupons/apply-coupon.ts`: um benefício por cupom, um cupom por
+/// pedido, nunca sobre produto em preço promocional nem sobre o frete.
+model Coupon {
+  id          String           @id @default(uuid())
+  /// Sempre em maiúsculas.
+  code        String           @unique
+  /// Só pro admin ("Instagram de novembro").
+  description String?
+  type        CouponType
+  /// Porcentagem (0–100) ou valor em reais; `null` no frete grátis.
+  value       Decimal?         @db.Decimal(10, 2)
+  /// Teto do desconto em reais, só na porcentagem.
+  maxDiscount Decimal?         @map("max_discount") @db.Decimal(10, 2)
+  scope       CouponScope      @default(order)
+  /// Valor mínimo dos itens elegíveis ("acima de").
+  minSubtotal Decimal?         @map("min_subtotal") @db.Decimal(10, 2)
+  startsAt    DateTime?        @map("starts_at")
+  /// Exclusivo: no instante `endsAt` o cupom já não vale.
+  endsAt      DateTime?        @map("ends_at")
+  /// Limite total de usos (pedido pago ou pendente no prazo conta).
+  maxUses     Int?             @map("max_uses")
+  active      Boolean          @default(true)
+  categories  CouponCategory[]
+  products    CouponProduct[]
+  events      CouponEvent[]
+  orders      SiteOrder[]
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+
+  @@map("coupons")
+}
+
+model CouponCategory {
+  couponId   String          @map("coupon_id")
+  coupon     Coupon          @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  categoryId String          @map("category_id")
+  category   ProductCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([couponId, categoryId])
+  @@map("coupon_categories")
+}
+
+model CouponProduct {
+  couponId  String  @map("coupon_id")
+  coupon    Coupon  @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  productId String  @map("product_id")
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@id([couponId, productId])
+  @@map("coupon_products")
+}
+
+model CouponEvent {
+  couponId String @map("coupon_id")
+  coupon   Coupon @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  eventId  String @map("event_id")
+  event    Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@id([couponId, eventId])
+  @@map("coupon_events")
 }

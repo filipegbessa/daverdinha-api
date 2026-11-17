@@ -1,4 +1,5 @@
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
+import { normalizeCode } from '../../coupons/dto/coupon.dto';
 import {
   ArrayMaxSize,
   ArrayMinSize,
@@ -64,4 +65,11 @@ export class CreateCheckoutDto {
   @IsString()
   @MaxLength(500)
   notes?: string;
+
+  /** Código do cupom, de qualquer jeito (vira maiúsculas). Inválido: a cotação explica, o pedido é 422. */
+  @IsOptional()
+  @Transform(normalizeCode)
+  @IsString()
+  @MaxLength(30)
+  couponCode?: string;
 }

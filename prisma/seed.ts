@@ -211,6 +211,37 @@ const PRODUCTS = [
   },
 ];
 
+/**
+ * Cupons de exemplo pro ambiente local ("Promoções → Cupons"): 10% em tudo e
+ * frete grátis acima de R$ 150. Por `code` com `update: {}`, como o resto.
+ */
+async function seedCoupons() {
+  const coupons = [
+    {
+      code: 'BEMVINDA10',
+      description: 'Exemplo: 10% em todo o pedido',
+      type: 'percent' as const,
+      value: '10',
+      scope: 'order' as const,
+    },
+    {
+      code: 'FRETEGRATIS',
+      description: 'Exemplo: frete grátis acima de R$ 150',
+      type: 'free_shipping' as const,
+      value: null,
+      scope: 'order' as const,
+      minSubtotal: '150',
+    },
+  ];
+  for (const coupon of coupons) {
+    await prisma.coupon.upsert({
+      where: { code: coupon.code },
+      update: {},
+      create: coupon,
+    });
+  }
+}
+
 async function seedCatalog() {
   // `update: {}` em tudo: rodar o seed de novo nunca desfaz o que foi
   // editado no admin, só recria o que foi apagado.
@@ -796,6 +827,7 @@ async function main() {
   await seedConversations();
   await seedWhatsAppOrder();
   await seedCatalog();
+  await seedCoupons();
   await seedEvents();
   await seedStoreSettings();
   await seedDeliveryAreas();

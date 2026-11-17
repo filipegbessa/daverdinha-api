@@ -14,12 +14,14 @@ export function lineTotal(
 export function orderTotals(
   lineTotals: Prisma.Decimal[],
   deliveryFee: Prisma.Decimal,
+  discount: Prisma.Decimal = new Prisma.Decimal(0),
 ): { subtotal: Prisma.Decimal; total: Prisma.Decimal } {
   const subtotal = lineTotals.reduce(
     (sum, line) => sum.add(line),
     new Prisma.Decimal(0),
   );
-  return { subtotal, total: subtotal.add(deliveryFee) };
+  // O cupom desconta dos itens, nunca do frete.
+  return { subtotal, total: subtotal.sub(discount).add(deliveryFee) };
 }
 
 /** Reais → centavos inteiros, que é como o gateway de pagamento recebe. */
