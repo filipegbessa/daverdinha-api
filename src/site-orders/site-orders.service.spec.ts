@@ -556,7 +556,7 @@ describe('SiteOrdersService orders', () => {
       );
     });
 
-    it('searches by order code or buyer name, with status and kind', async () => {
+    it('searches by order code, buyer name or email, with status and kind', async () => {
       await service.list({
         q: 'DV-0042',
         status: 'pending_payment',
@@ -570,6 +570,7 @@ describe('SiteOrdersService orders', () => {
             kind: 'products',
             OR: [
               { customerName: { contains: 'DV-0042', mode: 'insensitive' } },
+              { customerEmail: { contains: 'DV-0042', mode: 'insensitive' } },
               { number: 42 },
             ],
           },
@@ -580,7 +581,10 @@ describe('SiteOrdersService orders', () => {
       expect(prisma.siteOrder.count).toHaveBeenLastCalledWith({
         where: {
           status: 'paid',
-          OR: [{ customerName: { contains: 'maria', mode: 'insensitive' } }],
+          OR: [
+            { customerName: { contains: 'maria', mode: 'insensitive' } },
+            { customerEmail: { contains: 'maria', mode: 'insensitive' } },
+          ],
         },
       });
     });

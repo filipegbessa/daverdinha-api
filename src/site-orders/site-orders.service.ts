@@ -990,6 +990,7 @@ export class SiteOrdersService {
       ...(search && {
         OR: [
           { customerName: { contains: search, mode: 'insensitive' } },
+          { customerEmail: { contains: search, mode: 'insensitive' } },
           ...(number !== null ? [{ number }] : []),
         ],
       }),

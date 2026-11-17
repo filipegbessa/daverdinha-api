@@ -331,6 +331,15 @@ A cor é escolhida livremente pelo operador num color picker. A API não tem pal
 - **Admin** (`ClerkAuthGuard`, sem paginação de propósito: são poucas): `GET/POST /shipping-promotions`, `PATCH/DELETE /shipping-promotions/:id` (as áreas, quando vêm, substituem). Fim antes do início é 400.
 - O seed cria "frete grátis acima de R$ 250" em todas as áreas, se ainda não houver nenhuma.
 
+## Clientes (módulo `customers`)
+
+"Loja → Clientes" no admin, e a ponte entre a loja e as conversas do bot. Sem tabela nem conta da compradora: tudo sai de `site_orders`, então a LGPD não muda (é outra forma de ver o que os pedidos já guardam; se um dia esses dados forem usados pra marketing, a política de privacidade precisa dizer).
+
+- **`GET /customers?q=&sort=recent|spent|orders`** (paginada): pedidos **pagos** (produtos e ingressos) agrupados por e-mail sem diferença de maiúscula, com nº de pedidos, total gasto e última compra. Nome e telefone são os do pedido mais recente. A busca olha nome e e-mail e, com 4 dígitos ou mais, o telefone; `%` e `_` digitados são texto. É SQL escrito à mão (`$queryRaw`), coberto por `test/customers.e2e-spec.ts`. Cada linha traz o `conversationId` do mesmo telefone.
+- **`GET /customers/by-phone?phone=`**: o que a conversa e o pedido mostram. `customer` (só pedidos pagos, ou `null`), os 5 pedidos mais recentes de qualquer status menos vencido, e a conversa do telefone.
+- **Nono dígito** (`phone-variants.ts`): o checkout grava o celular como a compradora digita (`5521984448130`), mas o WhatsApp de alguns números antigos chega sem o nono dígito (`552184448130`). As duas formas são procuradas nos dois sentidos. Com mais de uma conversa, vale a de atividade mais recente.
+- A busca de `GET /site-orders?q=` também procura no e-mail: é por onde o botão "Pedidos" da lista de clientes abre os pedidos dela.
+
 ## Notificações push (módulo `push-notifications`)
 
 Dois serviços com responsabilidades separadas de propósito:
