@@ -1,4 +1,15 @@
+import { Transform } from 'class-transformer';
 import { IsEmail, IsOptional, IsString, Length, Matches, MaxLength } from 'class-validator';
+
+/**
+ * Nome e sobrenome: pelo menos duas palavras com letra. O checkout do
+ * Pagar.me (Stone) exige o nome completo do comprador.
+ */
+export const FULL_NAME = /^\S*\p{L}\S*(?:\s+\S*\p{L}\S*)+$/u;
+
+/** Tira as pontas e junta espaços repetidos, pro nome sair limpo no Pagar.me. */
+const collapseSpaces = ({ value }: { value: unknown }) =>
+  typeof value === 'string' ? value.trim().replace(/\s+/g, ' ') : value;
 
 /**
  * Quem compra. Reaproveitado pela compra de ingresso. Nome e e-mail seguem o
@@ -7,8 +18,10 @@ import { IsEmail, IsOptional, IsString, Length, Matches, MaxLength } from 'class
  * Números literais porque o plugin do OpenAPI não lê constantes.
  */
 export class CustomerDto {
+  @Transform(collapseSpaces)
   @IsString()
   @Length(2, 64)
+  @Matches(FULL_NAME, { message: 'Informe nome e sobrenome.' })
   name: string;
 
   @IsEmail()

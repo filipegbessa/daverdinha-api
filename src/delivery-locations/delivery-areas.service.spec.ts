@@ -14,7 +14,7 @@ function area(overrides: Record<string, unknown> = {}) {
     zone: 'Zona Sul',
     name: 'Perto',
     fee: new Prisma.Decimal('15.00'),
-    locations: [] as { id: string; regionName: string; covered: boolean }[],
+    locations: [] as { id: string; regionName: string }[],
     createdAt: new Date(),
     updatedAt: new Date(),
     ...overrides,
@@ -56,10 +56,10 @@ describe('DeliveryAreasService', () => {
   });
 
   describe('listByZone', () => {
-    it('groups areas by zone and lists covered bairros that have no area yet', async () => {
+    it('groups areas by zone and lists the bairros that are in no area (not served)', async () => {
       prisma.deliveryArea.findMany.mockResolvedValue([
         area({
-          locations: [{ id: 'l1', regionName: 'Catete', covered: true }],
+          locations: [{ id: 'l1', regionName: 'Catete' }],
         }),
       ]);
       prisma.deliveryLocation.findMany.mockResolvedValue([
@@ -67,28 +67,24 @@ describe('DeliveryAreasService', () => {
           id: 'l1',
           zone: 'Zona Sul',
           regionName: 'Catete',
-          covered: true,
           areaId: 'a1',
         },
         {
           id: 'l2',
           zone: 'Zona Sul',
           regionName: 'Flamengo',
-          covered: true,
           areaId: null,
         },
         {
           id: 'l3',
           zone: 'Zona Sul',
           regionName: 'Gávea',
-          covered: false,
           areaId: null,
         },
         {
           id: 'l4',
           zone: 'Centro',
           regionName: 'Gamboa',
-          covered: true,
           areaId: null,
         },
       ]);
@@ -107,10 +103,13 @@ describe('DeliveryAreasService', () => {
               zone: 'Zona Sul',
               name: 'Perto',
               fee: 15,
-              locations: [{ id: 'l1', regionName: 'Catete', covered: true }],
+              locations: [{ id: 'l1', regionName: 'Catete' }],
             },
           ],
-          unassigned: [{ id: 'l2', regionName: 'Flamengo' }],
+          unassigned: [
+            { id: 'l2', regionName: 'Flamengo' },
+            { id: 'l3', regionName: 'Gávea' },
+          ],
         },
       ]);
     });

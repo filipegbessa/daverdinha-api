@@ -50,7 +50,7 @@ describe('PublicDeliveryLocationsController', () => {
     expect(areas.feeForLocation).toHaveBeenCalledWith('l1');
   });
 
-  it('answers fee null for a covered bairro that is in no delivery area yet', async () => {
+  it('answers not_covered if the area was deleted between the two reads', async () => {
     service.resolveCep.mockResolvedValue({
       status: 'covered',
       bairro: 'Catete',
@@ -59,9 +59,8 @@ describe('PublicDeliveryLocationsController', () => {
     });
 
     await expect(controller.check({ cep: '22220-000' })).resolves.toEqual({
-      status: 'covered',
+      status: 'not_covered',
       bairro: 'Catete',
-      fee: null,
     });
   });
 

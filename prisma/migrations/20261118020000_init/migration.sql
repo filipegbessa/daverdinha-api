@@ -25,9 +25,16 @@ CREATE TYPE "SiteOrderKind" AS ENUM ('products', 'tickets');
 -- CreateEnum
 CREATE TYPE "CustomerDocumentType" AS ENUM ('CPF', 'CNPJ', 'PASSPORT');
 
+-- CreateEnum
+CREATE TYPE "CouponType" AS ENUM ('percent', 'fixed', 'free_shipping');
+
+-- CreateEnum
+CREATE TYPE "CouponScope" AS ENUM ('order', 'categories', 'products', 'events');
+
 -- CreateTable
 CREATE TABLE "bot_settings" (
     "id" INTEGER NOT NULL DEFAULT 1,
+    "whatsapp_module_enabled" BOOLEAN NOT NULL DEFAULT true,
     "bot_enabled" BOOLEAN NOT NULL DEFAULT false,
     "welcome_message" TEXT NOT NULL,
     "invalid_attempts_exceeded_message" TEXT NOT NULL DEFAULT 'Não consegui entender sua opção, vou te chamar um atendente!',
@@ -212,6 +219,9 @@ CREATE TABLE "products" (
     "slug" TEXT NOT NULL,
     "description" TEXT NOT NULL,
     "price" DECIMAL(10,2) NOT NULL,
+    "promo_price" DECIMAL(10,2),
+    "promo_starts_at" TIMESTAMP(3),
+    "promo_ends_at" TIMESTAMP(3),
     "images" TEXT[],
     "category_id" TEXT NOT NULL,
     "active" BOOLEAN NOT NULL DEFAULT true,
@@ -251,6 +261,9 @@ CREATE TABLE "site_orders" (
     "subtotal" DECIMAL(10,2) NOT NULL,
     "delivery_fee" DECIMAL(10,2) NOT NULL,
     "total" DECIMAL(10,2) NOT NULL,
+    "discount" DECIMAL(10,2) NOT NULL DEFAULT 0,
+    "coupon_id" TEXT,
+    "coupon_code" TEXT,
     "gateway_link_id" TEXT,
     "gateway_order_id" TEXT,
     "gateway_charge_id" TEXT,
@@ -307,6 +320,10 @@ CREATE TABLE "store_settings" (
     "pickup_instructions" TEXT,
     "max_installments" INTEGER NOT NULL DEFAULT 3,
     "min_installment_value" DECIMAL(10,2) NOT NULL DEFAULT 30,
+    "low_stock_threshold" INTEGER NOT NULL DEFAULT 2,
+    "store_paused" BOOLEAN NOT NULL DEFAULT false,
+    "pause_message" TEXT,
+    "paused_until" TIMESTAMP(3),
     "updated_at" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "store_settings_pkey" PRIMARY KEY ("id")
@@ -341,6 +358,72 @@ CREATE TABLE "lookup_attempts" (
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "lookup_attempts_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "coupons" (
+    "id" TEXT NOT NULL,
+    "code" TEXT NOT NULL,
+    "description" TEXT,
+    "type" "CouponType" NOT NULL,
+    "value" DECIMAL(10,2),
+    "max_discount" DECIMAL(10,2),
+    "scope" "CouponScope" NOT NULL DEFAULT 'order',
+    "min_subtotal" DECIMAL(10,2),
+    "starts_at" TIMESTAMP(3),
+    "ends_at" TIMESTAMP(3),
+    "max_uses" INTEGER,
+    "active" BOOLEAN NOT NULL DEFAULT true,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "coupons_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "coupon_categories" (
+    "coupon_id" TEXT NOT NULL,
+    "category_id" TEXT NOT NULL,
+
+    CONSTRAINT "coupon_categories_pkey" PRIMARY KEY ("coupon_id","category_id")
+);
+
+-- CreateTable
+CREATE TABLE "coupon_products" (
+    "coupon_id" TEXT NOT NULL,
+    "product_id" TEXT NOT NULL,
+
+    CONSTRAINT "coupon_products_pkey" PRIMARY KEY ("coupon_id","product_id")
+);
+
+-- CreateTable
+CREATE TABLE "coupon_events" (
+    "coupon_id" TEXT NOT NULL,
+    "event_id" TEXT NOT NULL,
+
+    CONSTRAINT "coupon_events_pkey" PRIMARY KEY ("coupon_id","event_id")
+);
+
+-- CreateTable
+CREATE TABLE "shipping_promotions" (
+    "id" TEXT NOT NULL,
+    "name" TEXT,
+    "min_subtotal" DECIMAL(10,2) NOT NULL,
+    "starts_at" TIMESTAMP(3),
+    "ends_at" TIMESTAMP(3),
+    "active" BOOLEAN NOT NULL DEFAULT true,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "shipping_promotions_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "shipping_promotion_areas" (
+    "promotion_id" TEXT NOT NULL,
+    "area_id" TEXT NOT NULL,
+
+    CONSTRAINT "shipping_promotion_areas_pkey" PRIMARY KEY ("promotion_id","area_id")
 );
 
 -- CreateIndex
@@ -413,6 +496,9 @@ CREATE INDEX "site_orders_kind_status_created_at_idx" ON "site_orders"("kind", "
 CREATE INDEX "site_orders_event_id_status_idx" ON "site_orders"("event_id", "status");
 
 -- CreateIndex
+CREATE INDEX "site_orders_coupon_id_status_idx" ON "site_orders"("coupon_id", "status");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "site_order_tickets_code_key" ON "site_order_tickets"("code");
 
 -- CreateIndex
@@ -435,6 +521,9 @@ CREATE INDEX "events_published_ends_at_idx" ON "events"("published", "ends_at");
 
 -- CreateIndex
 CREATE INDEX "lookup_attempts_key_created_at_idx" ON "lookup_attempts"("key", "created_at");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "coupons_code_key" ON "coupons"("code");
 
 -- AddForeignKey
 ALTER TABLE "delivery_locations" ADD CONSTRAINT "delivery_locations_area_id_fkey" FOREIGN KEY ("area_id") REFERENCES "delivery_areas"("id") ON DELETE SET NULL ON UPDATE CASCADE;
@@ -467,6 +556,9 @@ ALTER TABLE "conversation_categories" ADD CONSTRAINT "conversation_categories_ca
 ALTER TABLE "products" ADD CONSTRAINT "products_category_id_fkey" FOREIGN KEY ("category_id") REFERENCES "product_categories"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "site_orders" ADD CONSTRAINT "site_orders_coupon_id_fkey" FOREIGN KEY ("coupon_id") REFERENCES "coupons"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "site_orders" ADD CONSTRAINT "site_orders_event_id_fkey" FOREIGN KEY ("event_id") REFERENCES "events"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -480,4 +572,28 @@ ALTER TABLE "site_order_items" ADD CONSTRAINT "site_order_items_order_id_fkey" F
 
 -- AddForeignKey
 ALTER TABLE "site_order_items" ADD CONSTRAINT "site_order_items_product_id_fkey" FOREIGN KEY ("product_id") REFERENCES "products"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "coupon_categories" ADD CONSTRAINT "coupon_categories_coupon_id_fkey" FOREIGN KEY ("coupon_id") REFERENCES "coupons"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "coupon_categories" ADD CONSTRAINT "coupon_categories_category_id_fkey" FOREIGN KEY ("category_id") REFERENCES "product_categories"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "coupon_products" ADD CONSTRAINT "coupon_products_coupon_id_fkey" FOREIGN KEY ("coupon_id") REFERENCES "coupons"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "coupon_products" ADD CONSTRAINT "coupon_products_product_id_fkey" FOREIGN KEY ("product_id") REFERENCES "products"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "coupon_events" ADD CONSTRAINT "coupon_events_coupon_id_fkey" FOREIGN KEY ("coupon_id") REFERENCES "coupons"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "coupon_events" ADD CONSTRAINT "coupon_events_event_id_fkey" FOREIGN KEY ("event_id") REFERENCES "events"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "shipping_promotion_areas" ADD CONSTRAINT "shipping_promotion_areas_promotion_id_fkey" FOREIGN KEY ("promotion_id") REFERENCES "shipping_promotions"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "shipping_promotion_areas" ADD CONSTRAINT "shipping_promotion_areas_area_id_fkey" FOREIGN KEY ("area_id") REFERENCES "delivery_areas"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 

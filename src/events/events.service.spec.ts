@@ -92,6 +92,23 @@ describe('EventsService', () => {
 
   afterEach(() => jest.useRealTimers());
 
+  describe('findOne', () => {
+    it('returns the event with the sold and reserved spots, for the admin page', async () => {
+      mockTaken(3, 1);
+
+      await expect(service.findOne('e1')).resolves.toMatchObject({
+        id: 'e1',
+        sold: 3,
+        reserved: 1,
+      });
+    });
+
+    it('is a 404 for an unknown event', async () => {
+      prisma.event.findUnique.mockResolvedValue(null);
+      await expect(service.findOne('nope')).rejects.toThrow(NotFoundException);
+    });
+  });
+
   describe('create', () => {
     it('generates the slug from the title', async () => {
       await service.create({ ...dto, title: 'Oficina de Kokedama' });

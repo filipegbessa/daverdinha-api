@@ -13,6 +13,7 @@ describe('PublicCheckoutController', () => {
     orders = {
       quote: jest.fn().mockResolvedValue({ items: [] }),
       create: jest.fn().mockResolvedValue({
+        id: 'o1',
         code: 'DV-0001',
         token: 'tok',
         paymentUrl: 'https://checkout.pagar.me/pl_1',
@@ -28,15 +29,15 @@ describe('PublicCheckoutController', () => {
     controller = moduleRef.get(PublicCheckoutController);
   });
 
-  it('quotes the cart items and CEP', async () => {
+  it('quotes the cart items, the CEP and the coupon', async () => {
     const items = [{ productId: 'p1', quantity: 2 }];
 
-    await controller.quote({ items, cep: '22220-000' });
+    await controller.quote({ items, cep: '22220-000', couponCode: 'BEMVINDA' });
 
-    expect(orders.quote).toHaveBeenCalledWith(items, '22220-000');
+    expect(orders.quote).toHaveBeenCalledWith(items, '22220-000', 'BEMVINDA');
   });
 
-  it('creates the order and returns where to pay', async () => {
+  it('creates the order and returns where to pay, without the internal id', async () => {
     const dto = {
       items: [{ productId: 'p1', quantity: 1 }],
       customer: { name: 'Maria', email: 'm@x.com', phone: '21999998888' },

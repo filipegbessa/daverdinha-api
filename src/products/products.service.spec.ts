@@ -14,6 +14,9 @@ function row(overrides: Record<string, unknown> = {}) {
     slug: 'vaso-terracota-m',
     description: 'Terracota de 18 cm.',
     price: new Prisma.Decimal('89.90'),
+    promoPrice: null as Prisma.Decimal | null,
+    promoStartsAt: null as Date | null,
+    promoEndsAt: null as Date | null,
     images: [] as string[],
     categoryId: 'c1',
     category,
@@ -299,11 +302,23 @@ describe('ProductsService', () => {
         slug: 'vaso-terracota-m',
         description: 'Terracota de 18 cm.',
         price: 89.9,
+        listPrice: null,
         images: [],
         category: { id: 'c1', name: 'Vasos', slug: 'vasos' },
         availability: 'made_to_order',
         leadTimeDays: 10,
+        createdAt: expect.any(String),
       });
+    });
+
+    it('sells at the promo price, with the full price as the crossed-out one', async () => {
+      prisma.product.findMany.mockResolvedValue([
+        row({ promoPrice: new Prisma.Decimal('69.90') }),
+      ]);
+
+      const [product] = await service.listActive();
+
+      expect(product).toMatchObject({ price: 69.9, listPrice: 89.9 });
     });
 
     it('discounts pending reservations and hides the lead time of in-stock products', async () => {
@@ -432,6 +447,53 @@ describe('ProductsService', () => {
           },
         }),
       );
+    });
+  });
+
+  describe('promo price', () => {
+    it('refuses a promo price that is not below the price', async () => {
+      await expect(
+        service.create({ ...dto, promoPrice: 89.9 }, []),
+      ).rejects.toThrow('O preço promocional precisa ser menor que o preço.');
+    });
+
+    it('checks a price-only update against the saved promo', async () => {
+      prisma.product.findUnique.mockResolvedValue(
+        row({ promoPrice: new Prisma.Decimal('70.00') }),
+      );
+      await expect(service.update('p1', { price: 60 })).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('refuses a promo that ends before it starts', async () => {
+      await expect(
+        service.create(
+          {
+            ...dto,
+            promoPrice: 70,
+            promoStartsAt: '2026-12-10T03:00:00.000Z',
+            promoEndsAt: '2026-12-01T03:00:00.000Z',
+          },
+          [],
+        ),
+      ).rejects.toThrow('O fim da promoção precisa ser depois do início.');
+    });
+
+    it('saves the promo as Decimal and dates, and clears it with null', async () => {
+      prisma.product.findUnique.mockResolvedValue(row());
+      prisma.product.update.mockResolvedValue(row());
+
+      await service.update('p1', {
+        promoPrice: 70,
+        promoStartsAt: '2026-12-01T03:00:00.000Z',
+        promoEndsAt: null,
+      });
+
+      const { data } = prisma.product.update.mock.calls[0][0];
+      expect(data.promoPrice.toString()).toBe('70');
+      expect(data.promoStartsAt).toEqual(new Date('2026-12-01T03:00:00.000Z'));
+      expect(data.promoEndsAt).toBeNull();
     });
   });
 });

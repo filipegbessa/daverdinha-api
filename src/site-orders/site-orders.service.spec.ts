@@ -6,6 +6,8 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { CouponsService } from '../coupons/coupons.service';
+import { ShippingPromotionsService } from '../promotions/shipping-promotions.service';
 import { SiteOrdersService } from './site-orders.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { DeliveryLocationsService } from '../delivery-locations/delivery-locations.service';
@@ -22,6 +24,9 @@ function product(overrides: Record<string, unknown> = {}) {
     slug: 'vaso-m',
     description: 'd',
     price: new Prisma.Decimal('19.90'),
+    promoPrice: null as Prisma.Decimal | null,
+    promoStartsAt: null as Date | null,
+    promoEndsAt: null as Date | null,
     images: ['https://blob/vaso.jpg'],
     categoryId: 'c1',
     category: { active: true },
@@ -53,6 +58,11 @@ const settings = {
   updatedAt: new Date(),
 };
 
+/** Cupom: cada teste de cupom troca o `evaluate`; o padrão nunca é chamado sem código. */
+const coupons = { evaluate: jest.fn() };
+/** Frete grátis automático: sem promoção por padrão; os testes dela trocam. */
+const shippingPromotions = { threshold: jest.fn().mockResolvedValue(null) };
+
 describe('SiteOrdersService.quote', () => {
   let service: SiteOrdersService;
   let prisma: {
@@ -81,6 +91,8 @@ describe('SiteOrdersService.quote', () => {
         { provide: PAYMENT_GATEWAY, useValue: {} },
         { provide: PushNotificationsService, useValue: {} },
         { provide: EmailService, useValue: emailMock() },
+        { provide: CouponsService, useValue: coupons },
+        { provide: ShippingPromotionsService, useValue: shippingPromotions },
       ],
     }).compile();
     service = moduleRef.get(SiteOrdersService);
@@ -112,6 +124,40 @@ describe('SiteOrdersService.quote', () => {
     ]);
     expect(quote.subtotal).toBe(59.7);
     expect(quote.installments).toBe(1);
+  });
+
+  it('says how much is left for the automatic free shipping', async () => {
+    shippingPromotions.threshold.mockResolvedValueOnce(
+      new Prisma.Decimal('100'),
+    );
+
+    const quote = await service.quote([{ productId: 'p1', quantity: 3 }]);
+
+    // Sem CEP: só as promoções de todas as áreas.
+    expect(shippingPromotions.threshold).toHaveBeenCalledWith(
+      prisma,
+      null,
+      expect.any(Date),
+    );
+    expect(quote.freeShipping).toEqual({
+      minSubtotal: 100,
+      remaining: 40.3,
+      reached: false,
+    });
+  });
+
+  it('has no free shipping info without a promotion', async () => {
+    const quote = await service.quote([{ productId: 'p1', quantity: 1 }]);
+    expect(quote.freeShipping).toBeNull();
+  });
+
+  it('charges the promo price while the promo is on', async () => {
+    withProducts(product({ promoPrice: new Prisma.Decimal('14.90') }));
+
+    const quote = await service.quote([{ productId: 'p1', quantity: 2 }]);
+
+    expect(quote.items[0]).toMatchObject({ unitPrice: 14.9, lineTotal: 29.8 });
+    expect(quote.subtotal).toBe(29.8);
   });
 
   it('turns missing and inactive products into problems, out of the subtotal', async () => {
@@ -191,7 +237,7 @@ describe('SiteOrdersService.quote', () => {
       expect(quote.delivery).toEqual(expected);
     });
 
-    it('is unavailable, never free, for a covered bairro with no area', async () => {
+    it('is unavailable, never free, if the area disappears between the two reads', async () => {
       deliveryLocations.resolveCep.mockResolvedValue({
         status: 'covered',
         bairro: 'Catete',
@@ -207,7 +253,7 @@ describe('SiteOrdersService.quote', () => {
 
       expect(quote.delivery).toEqual({
         available: false,
-        reason: 'no_area',
+        reason: 'not_covered',
         bairro: 'Catete',
       });
     });
@@ -365,6 +411,8 @@ describe('SiteOrdersService orders', () => {
         { provide: PAYMENT_GATEWAY, useValue: gateway },
         { provide: PushNotificationsService, useValue: push },
         { provide: EmailService, useValue: email },
+        { provide: CouponsService, useValue: coupons },
+        { provide: ShippingPromotionsService, useValue: shippingPromotions },
       ],
     }).compile();
     service = moduleRef.get(SiteOrdersService);
@@ -508,7 +556,7 @@ describe('SiteOrdersService orders', () => {
       );
     });
 
-    it('searches by order code or buyer name, with status and kind', async () => {
+    it('searches by order code, buyer name or email, with status and kind', async () => {
       await service.list({
         q: 'DV-0042',
         status: 'pending_payment',
@@ -522,6 +570,7 @@ describe('SiteOrdersService orders', () => {
             kind: 'products',
             OR: [
               { customerName: { contains: 'DV-0042', mode: 'insensitive' } },
+              { customerEmail: { contains: 'DV-0042', mode: 'insensitive' } },
               { number: 42 },
             ],
           },
@@ -532,7 +581,10 @@ describe('SiteOrdersService orders', () => {
       expect(prisma.siteOrder.count).toHaveBeenLastCalledWith({
         where: {
           status: 'paid',
-          OR: [{ customerName: { contains: 'maria', mode: 'insensitive' } }],
+          OR: [
+            { customerName: { contains: 'maria', mode: 'insensitive' } },
+            { customerEmail: { contains: 'maria', mode: 'insensitive' } },
+          ],
         },
       });
     });
@@ -996,9 +1048,11 @@ describe('SiteOrdersService.create', () => {
       }),
     };
     deliveryAreas = {
-      feeForLocation: jest
-        .fn()
-        .mockResolvedValue({ fee: new Prisma.Decimal('12.50'), area: 'Perto' }),
+      feeForLocation: jest.fn().mockResolvedValue({
+        areaId: 'a1',
+        fee: new Prisma.Decimal('12.50'),
+        area: 'Perto',
+      }),
     };
     storeSettings = { get: jest.fn().mockResolvedValue(settings) };
     gateway = {
@@ -1017,6 +1071,8 @@ describe('SiteOrdersService.create', () => {
         { provide: PAYMENT_GATEWAY, useValue: gateway },
         { provide: PushNotificationsService, useValue: {} },
         { provide: EmailService, useValue: emailMock() },
+        { provide: CouponsService, useValue: coupons },
+        { provide: ShippingPromotionsService, useValue: shippingPromotions },
       ],
     }).compile();
     service = moduleRef.get(SiteOrdersService);
@@ -1052,6 +1108,7 @@ describe('SiteOrdersService.create', () => {
     const result = await service.create(dto(), now);
 
     expect(result).toEqual({
+      id: 'o9',
       code: 'DV-0007',
       token: 'tok9',
       paymentUrl: 'https://checkout.pagar.me/pl_9',
@@ -1116,6 +1173,112 @@ describe('SiteOrdersService.create', () => {
     );
   });
 
+  describe('automatic free shipping', () => {
+    afterEach(() => shippingPromotions.threshold.mockResolvedValue(null));
+
+    it('zeroes the delivery once the items reach the minimum of the area', async () => {
+      shippingPromotions.threshold.mockResolvedValue(new Prisma.Decimal('30'));
+
+      await service.create(dto(), now);
+
+      expect(shippingPromotions.threshold).toHaveBeenCalledWith(
+        prisma,
+        'a1',
+        now,
+      );
+      const data = prisma.siteOrder.create.mock.calls[0][0].data;
+      expect(data.deliveryFee.toString()).toBe('0');
+      expect(data.total.toString()).toBe('39.8');
+    });
+
+    it('keeps the delivery below the minimum', async () => {
+      shippingPromotions.threshold.mockResolvedValue(new Prisma.Decimal('100'));
+
+      await service.create(dto(), now);
+
+      const data = prisma.siteOrder.create.mock.calls[0][0].data;
+      expect(data.deliveryFee.toString()).toBe('12.5');
+    });
+  });
+
+  describe('coupon', () => {
+    afterEach(() => coupons.evaluate.mockReset());
+
+    it('takes the discount off the items and sends the gateway one item already discounted', async () => {
+      coupons.evaluate.mockResolvedValue({
+        ok: true,
+        discount: new Prisma.Decimal('9.80'),
+        freeShipping: false,
+        couponId: 'c1',
+        code: 'BEMVINDA',
+      });
+
+      await service.create(dto({ couponCode: 'BEMVINDA' }), now);
+
+      expect(coupons.evaluate).toHaveBeenCalledWith(
+        prisma,
+        'BEMVINDA',
+        {
+          kind: 'products',
+          lines: [expect.objectContaining({ productId: 'p1', onPromo: false })],
+        },
+        now,
+        { lock: true },
+      );
+      const data = prisma.siteOrder.create.mock.calls[0][0].data;
+      expect(data.discount.toString()).toBe('9.8');
+      expect(data.total.toString()).toBe('42.5');
+      expect(data).toEqual(
+        expect.objectContaining({ couponId: 'c1', couponCode: 'BEMVINDA' }),
+      );
+      const { items, deliveryFee } = gateway.createCheckout.mock.calls[0][0];
+      expect(items).toEqual([
+        {
+          id: 'o9',
+          description: 'Pedido DV-0007 (cupom BEMVINDA)',
+          quantity: 1,
+          unitPrice: new Prisma.Decimal('30.00'),
+        },
+      ]);
+      expect(deliveryFee.toString()).toBe('12.5');
+    });
+
+    it('zeroes the delivery with a free shipping coupon', async () => {
+      coupons.evaluate.mockResolvedValue({
+        ok: true,
+        discount: new Prisma.Decimal(0),
+        freeShipping: true,
+        couponId: 'c2',
+        code: 'FRETEGRATIS',
+      });
+
+      await service.create(dto({ couponCode: 'FRETEGRATIS' }), now);
+
+      const data = prisma.siteOrder.create.mock.calls[0][0].data;
+      expect(data.deliveryFee.toString()).toBe('0');
+      expect(data.total.toString()).toBe('39.8');
+    });
+
+    it('is a 422 with the reason when the coupon does not apply', async () => {
+      coupons.evaluate.mockResolvedValue({
+        ok: false,
+        error: 'Cupom expirado.',
+        code: 'VELHO',
+      });
+
+      const error = await service
+        .create(dto({ couponCode: 'VELHO' }), now)
+        .catch((e) => e);
+
+      expect(error).toBeInstanceOf(UnprocessableEntityException);
+      expect(error.getResponse()).toEqual({
+        message: 'Cupom expirado.',
+        reason: 'coupon_invalid',
+      });
+      expect(prisma.siteOrder.create).not.toHaveBeenCalled();
+    });
+  });
+
   it('locks the products and hands the gateway the order id, code and deadline', async () => {
     await service.create(dto(), now);
 
@@ -1154,7 +1317,7 @@ describe('SiteOrdersService.create', () => {
 
     expect(error).toBeInstanceOf(UnprocessableEntityException);
     expect(error.getResponse()).toEqual(
-      expect.objectContaining({ reason: 'no_area' }),
+      expect.objectContaining({ reason: 'not_covered' }),
     );
   });
 
@@ -1181,6 +1344,21 @@ describe('SiteOrdersService.create', () => {
     expect(data.total.toString()).toBe('39.8');
   });
 
+  it('creates an admin order even with the store closed or paused, holding it for 24 hours', async () => {
+    storeSettings.get.mockResolvedValue({
+      ...settings,
+      storeEnabled: false,
+      activePause: { message: 'Férias', until: null },
+    });
+
+    await service.create(dto(), now, { fromAdmin: true });
+
+    const data = prisma.siteOrder.create.mock.calls[0][0].data;
+    expect(data.expiresAt).toEqual(
+      new Date(now.getTime() + 24 * 60 * 60 * 1000),
+    );
+  });
+
   it('refuses orders while the store is switched off in the dashboard', async () => {
     storeSettings.get.mockResolvedValue({ ...settings, storeEnabled: false });
 
@@ -1189,6 +1367,24 @@ describe('SiteOrdersService.create', () => {
     expect(error).toBeInstanceOf(ConflictException);
     expect(error.getResponse()).toEqual(
       expect.objectContaining({ reason: 'store_closed' }),
+    );
+    expect(prisma.siteOrder.create).not.toHaveBeenCalled();
+  });
+
+  it('refuses the order with the pause message while the store is paused', async () => {
+    storeSettings.get.mockResolvedValue({
+      ...settings,
+      activePause: { message: 'De férias até dia 5!', until: null },
+    });
+
+    const error = await service.create(dto(), now).catch((e) => e);
+
+    expect(error).toBeInstanceOf(ConflictException);
+    expect(error.getResponse()).toEqual(
+      expect.objectContaining({
+        reason: 'store_paused',
+        message: 'De férias até dia 5!',
+      }),
     );
     expect(prisma.siteOrder.create).not.toHaveBeenCalled();
   });
@@ -1310,6 +1506,8 @@ describe('SiteOrdersService tickets', () => {
         { provide: PAYMENT_GATEWAY, useValue: gateway },
         { provide: PushNotificationsService, useValue: push },
         { provide: EmailService, useValue: emailMock() },
+        { provide: CouponsService, useValue: coupons },
+        { provide: ShippingPromotionsService, useValue: shippingPromotions },
       ],
     }).compile();
     service = moduleRef.get(SiteOrdersService);
@@ -1658,6 +1856,8 @@ describe('SiteOrdersService post-sale', () => {
         { provide: PAYMENT_GATEWAY, useValue: {} },
         { provide: PushNotificationsService, useValue: {} },
         { provide: EmailService, useValue: email },
+        { provide: CouponsService, useValue: coupons },
+        { provide: ShippingPromotionsService, useValue: shippingPromotions },
       ],
     }).compile();
     service = moduleRef.get(SiteOrdersService);

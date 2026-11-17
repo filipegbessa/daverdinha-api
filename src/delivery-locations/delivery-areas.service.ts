@@ -16,13 +16,13 @@ export interface DeliveryAreaAdmin {
   zone: string;
   name: string;
   fee: number;
-  locations: { id: string; regionName: string; covered: boolean }[];
+  locations: { id: string; regionName: string }[];
 }
 
 export interface DeliveryZoneAreas {
   zone: string;
   areas: DeliveryAreaAdmin[];
-  /** Bairros atendidos que ainda não estão em nenhuma área: o site não entrega neles. */
+  /** Bairros da zona fora de qualquer área: não são atendidos (nem pelo site, nem pelo bot). */
   unassigned: { id: string; regionName: string }[];
 }
 
@@ -30,13 +30,13 @@ const DUPLICATE_NAME = 'Já existe uma área com esse nome nessa zona.';
 
 type AreaRow = Prisma.DeliveryAreaGetPayload<{
   include: {
-    locations: { select: { id: true; regionName: true; covered: true } };
+    locations: { select: { id: true; regionName: true } };
   };
 }>;
 
 const WITH_LOCATIONS = {
   locations: {
-    select: { id: true, regionName: true, covered: true },
+    select: { id: true, regionName: true },
     orderBy: { regionName: 'asc' as const },
   },
 };
@@ -52,9 +52,10 @@ function toAdmin(row: AreaRow): DeliveryAreaAdmin {
 }
 
 /**
- * Áreas de entrega do site: subdivisões das zonas, cada uma com o seu valor.
- * Um bairro está em no máximo uma área, sempre da própria zona; bairro sem
- * área não recebe entrega pelo site (nunca vira frete grátis).
+ * Áreas de entrega: subdivisões das zonas, cada uma com o seu valor (zero =
+ * entrega grátis). Um bairro está em no máximo uma área, sempre da própria
+ * zona. Estar numa área é o que faz o bairro ser atendido, no site e no bot;
+ * bairro sem área não é atendido.
  */
 @Injectable()
 export class DeliveryAreasService {
@@ -75,7 +76,6 @@ export class DeliveryAreasService {
           id: true,
           zone: true,
           regionName: true,
-          covered: true,
           areaId: true,
         },
         orderBy: { regionName: 'asc' },
@@ -93,7 +93,7 @@ export class DeliveryAreasService {
       zone,
       areas: areas.filter((a) => a.zone === zone).map(toAdmin),
       unassigned: locations
-        .filter((l) => l.zone === zone && l.covered && !l.areaId)
+        .filter((l) => l.zone === zone && !l.areaId)
         .map(({ id, regionName }) => ({ id, regionName })),
     }));
   }
@@ -183,13 +183,14 @@ export class DeliveryAreasService {
   /** O frete de um bairro, ou `null` se ele não está em nenhuma área. */
   async feeForLocation(
     locationId: string,
-  ): Promise<{ area: string; fee: Prisma.Decimal } | null> {
+  ): Promise<{ areaId: string; area: string; fee: Prisma.Decimal } | null> {
     const location = await this.prisma.deliveryLocation.findUnique({
       where: { id: locationId },
-      select: { area: { select: { name: true, fee: true } } },
+      select: { area: { select: { id: true, name: true, fee: true } } },
     });
     if (!location?.area) return null;
     return {
+      areaId: location.area.id,
       area: location.area.name,
       fee: new Prisma.Decimal(location.area.fee),
     };

@@ -26,7 +26,7 @@ export class ListSiteOrdersDto extends PaginationQueryDto {
   @IsUUID()
   eventId?: string;
 
-  /** Código (`DV-0042`, `42`) ou nome do comprador. */
+  /** Código (`DV-0042`, `42`), nome ou e-mail do comprador (a lista de clientes linka por e-mail). */
   @IsOptional()
   @Transform(trim)
   @IsString()

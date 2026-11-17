@@ -139,6 +139,8 @@ const PRODUCTS = [
     leadTimeDays: null,
     category: 'vasos',
     price: '119.00',
+    // Em promoção, pra o local mostrar o "de/por" (o mesmo de `samples.ts` no site).
+    promoPrice: '99.00',
     featured: true,
     description:
       'Cerâmica de 14 cm pintada à mão no ateliê. Cada peça sai um pouco diferente da outra.',
@@ -208,6 +210,49 @@ const PRODUCTS = [
     description: 'Arranjo baixo pra centro de mesa, com suculentas e musgo.',
   },
 ];
+
+/**
+ * Cupons de exemplo pro ambiente local ("Promoções → Cupons"): 10% em tudo e
+ * frete grátis acima de R$ 150. Por `code` com `update: {}`, como o resto.
+ */
+async function seedCoupons() {
+  const coupons = [
+    {
+      code: 'BEMVINDA10',
+      description: 'Exemplo: 10% em todo o pedido',
+      type: 'percent' as const,
+      value: '10',
+      scope: 'order' as const,
+    },
+    {
+      code: 'FRETEGRATIS',
+      description: 'Exemplo: frete grátis acima de R$ 150',
+      type: 'free_shipping' as const,
+      value: null,
+      scope: 'order' as const,
+      minSubtotal: '150',
+    },
+  ];
+  for (const coupon of coupons) {
+    await prisma.coupon.upsert({
+      where: { code: coupon.code },
+      update: {},
+      create: coupon,
+    });
+  }
+}
+
+/**
+ * Uma promoção automática de exemplo: frete grátis acima de R$ 250 em todas
+ * as áreas. Sem chave natural: só cria se ainda não houver nenhuma, pra não
+ * duplicar nem desfazer o que foi editado no admin.
+ */
+async function seedShippingPromotions() {
+  if ((await prisma.shippingPromotion.count()) > 0) return;
+  await prisma.shippingPromotion.create({
+    data: { name: 'Exemplo: frete grátis acima de R$ 250', minSubtotal: '250' },
+  });
+}
 
 async function seedCatalog() {
   // `update: {}` em tudo: rodar o seed de novo nunca desfaz o que foi
@@ -794,6 +839,8 @@ async function main() {
   await seedConversations();
   await seedWhatsAppOrder();
   await seedCatalog();
+  await seedCoupons();
+  await seedShippingPromotions();
   await seedEvents();
   await seedStoreSettings();
   await seedDeliveryAreas();

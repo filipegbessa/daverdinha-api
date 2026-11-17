@@ -167,6 +167,7 @@ describe('Public catalog (e2e)', () => {
         slug: 'e2e-vaso',
         description: 'd',
         price: 89.9,
+        listPrice: null,
         images: [],
         category: {
           id: ids.categories[0],
@@ -175,6 +176,7 @@ describe('Public catalog (e2e)', () => {
         },
         availability: 'made_to_order',
         leadTimeDays: null,
+        createdAt: expect.any(String),
       },
     ]);
   });

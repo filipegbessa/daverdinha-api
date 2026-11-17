@@ -71,7 +71,7 @@ describe('DeliveryLocationsService', () => {
   });
 
   describe('listCoveredByZone()', () => {
-    it('returns only covered bairros, grouped under their zone', async () => {
+    it('returns only bairros in a delivery area, grouped under their zone', async () => {
       prisma.deliveryLocation.findMany.mockResolvedValue([
         { zone: 'Centro', regionName: 'Gamboa' },
         { zone: 'Centro', regionName: 'Santo Cristo' },
@@ -81,7 +81,7 @@ describe('DeliveryLocationsService', () => {
       const result = await service.listCoveredByZone();
 
       expect(prisma.deliveryLocation.findMany).toHaveBeenCalledWith({
-        where: { covered: true },
+        where: { areaId: { not: null } },
         orderBy: [{ zone: 'asc' }, { regionName: 'asc' }],
         select: { zone: true, regionName: true },
       });
@@ -104,21 +104,21 @@ describe('DeliveryLocationsService', () => {
         id: 'l1',
         zone: 'Zona Sul',
         regionName: 'Ipanema',
-        covered: true,
+        areaId: 'a1',
         cepRanges: [{ startCep: 22410000, endCep: 22471999 }],
       },
       {
         id: 'l2',
         zone: 'Zona Oeste',
         regionName: 'Barra da Tijuca',
-        covered: false,
+        areaId: null,
         cepRanges: [{ startCep: 22600000, endCep: 22799999 }],
       },
       {
         id: 'l3',
         zone: 'Zona Sul',
         regionName: 'Catete',
-        covered: true,
+        areaId: 'a1',
         cepRanges: [],
       },
     ];
@@ -137,7 +137,7 @@ describe('DeliveryLocationsService', () => {
       expect(cepLookup.lookup).not.toHaveBeenCalled();
     });
 
-    it('reports not_covered for a CepRange whose location is not covered', async () => {
+    it('reports not_covered for a CepRange whose bairro is in no delivery area', async () => {
       await expect(service.resolveCep('22640100')).resolves.toEqual({
         status: 'not_covered',
         bairro: 'Barra da Tijuca',

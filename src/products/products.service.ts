@@ -9,7 +9,7 @@ import { BlobStorageService } from '../media/blob-storage.service';
 import { pageBounds, paginated } from '../common/pagination';
 import { uniqueSlug } from '../common/slug';
 import type { UploadedFileData } from '../common/uploads';
-import { toDecimal, toMoney } from '../common/money';
+import { toDecimal, toMoney, toMoneyOrNull } from '../common/money';
 import {
   isForeignKeyViolation,
   isUniqueViolation,
@@ -22,6 +22,7 @@ import {
 } from '../site-orders/stock';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
+import { effectivePrice } from './effective-price';
 import { ListProductsDto } from './dto/list-products.dto';
 
 /** O que o upload de foto usa do arquivo do Multer. */
@@ -33,13 +34,18 @@ export interface ProductPublic {
   name: string;
   slug: string;
   description: string;
+  /** O preço que vale agora (o promocional, quando há promoção valendo). */
   price: number;
+  /** O preço cheio, o "de" riscado; só com promoção valendo, senão `null`. */
+  listPrice: number | null;
   images: string[];
   category: { id: string; name: string; slug: string };
   /** Já desconta as unidades reservadas por pedidos pendentes. */
   availability: Availability;
   /** Prazo de confecção; só vem preenchido quando é sob encomenda. */
   leadTimeDays: number | null;
+  /** Quando foi cadastrado (ISO): o "Novidades" do site ordena por ele. */
+  createdAt: string;
 }
 
 export interface ProductAdmin extends ProductPublic {
@@ -49,6 +55,11 @@ export interface ProductAdmin extends ProductPublic {
   order: number;
   /** O que está cadastrado, sem descontar reservas. `null` = sob encomenda. */
   stock: number | null;
+  /** O preço cheio cadastrado e a promoção como está salva (valendo ou não). */
+  regularPrice: number;
+  promoPrice: number | null;
+  promoStartsAt: string | null;
+  promoEndsAt: string | null;
   // `leadTimeDays` aqui é o prazo salvo, mesmo em pronta entrega: o admin
   // preenche o campo com ele se a cliente voltar pra sob encomenda.
 }
@@ -81,23 +92,34 @@ function toAdmin(row: ProductRow, reserved: Reserved): ProductAdmin {
     order: row.order,
     stock: row.stock,
     leadTimeDays: row.leadTimeDays,
+    regularPrice: toMoney(row.price),
+    promoPrice: toMoneyOrNull(row.promoPrice),
+    promoStartsAt: row.promoStartsAt?.toISOString() ?? null,
+    promoEndsAt: row.promoEndsAt?.toISOString() ?? null,
   };
 }
 
-function toPublic(row: ProductRow, reserved: Reserved): ProductPublic {
+function toPublic(
+  row: ProductRow,
+  reserved: Reserved,
+  now: Date = new Date(),
+): ProductPublic {
   const availability = availabilityOf(
     stockLeft(row.stock, reserved.get(row.id) ?? 0),
   );
+  const { price, listPrice } = effectivePrice(row, now);
   return {
     id: row.id,
     name: row.name,
     slug: row.slug,
     description: row.description,
-    price: toMoney(row.price),
+    price: toMoney(price),
+    listPrice: listPrice ? toMoney(listPrice) : null,
     images: row.images,
     category: row.category,
     availability,
     leadTimeDays: availability === 'made_to_order' ? row.leadTimeDays : null,
+    createdAt: row.createdAt.toISOString(),
   };
 }
 
@@ -117,6 +139,63 @@ function assertLeadTime(
   if (stock === null && leadTimeDays === null) {
     throw new BadRequestException('Informe o prazo de confecção.');
   }
+}
+
+/**
+ * A promoção tem que ficar abaixo do preço e acabar depois de começar.
+ * Confere com o que vai ficar salvo: um PATCH só do preço também pode
+ * deixar a promoção acima dele.
+ */
+function assertPromo(
+  dto: Pick<
+    UpdateProductDto,
+    'price' | 'promoPrice' | 'promoStartsAt' | 'promoEndsAt'
+  >,
+  current: {
+    price: Prisma.Decimal | number;
+    promoPrice: Prisma.Decimal | null;
+    promoStartsAt: Date | null;
+    promoEndsAt: Date | null;
+  },
+) {
+  const price = new Prisma.Decimal(dto.price ?? current.price);
+  const promo =
+    dto.promoPrice !== undefined ? dto.promoPrice : current.promoPrice;
+  if (promo !== null && !new Prisma.Decimal(promo).lessThan(price)) {
+    throw new BadRequestException(
+      'O preço promocional precisa ser menor que o preço.',
+    );
+  }
+  const startsAt =
+    dto.promoStartsAt !== undefined
+      ? dto.promoStartsAt && new Date(dto.promoStartsAt)
+      : current.promoStartsAt;
+  const endsAt =
+    dto.promoEndsAt !== undefined
+      ? dto.promoEndsAt && new Date(dto.promoEndsAt)
+      : current.promoEndsAt;
+  if (startsAt && endsAt && endsAt <= startsAt) {
+    throw new BadRequestException(
+      'O fim da promoção precisa ser depois do início.',
+    );
+  }
+}
+
+/** Os campos de promoção do DTO no formato do Prisma (só os que vieram). */
+function promoData(
+  dto: Pick<CreateProductDto, 'promoPrice' | 'promoStartsAt' | 'promoEndsAt'>,
+) {
+  return {
+    ...(dto.promoPrice !== undefined && {
+      promoPrice: dto.promoPrice === null ? null : toDecimal(dto.promoPrice),
+    }),
+    ...(dto.promoStartsAt !== undefined && {
+      promoStartsAt: dto.promoStartsAt ? new Date(dto.promoStartsAt) : null,
+    }),
+    ...(dto.promoEndsAt !== undefined && {
+      promoEndsAt: dto.promoEndsAt ? new Date(dto.promoEndsAt) : null,
+    }),
+  };
 }
 
 @Injectable()
@@ -168,6 +247,12 @@ export class ProductsService {
     files: UploadedPhoto[] = [],
   ): Promise<ProductAdmin> {
     assertLeadTime(dto, { stock: null, leadTimeDays: null });
+    assertPromo(dto, {
+      price: dto.price,
+      promoPrice: null,
+      promoStartsAt: null,
+      promoEndsAt: null,
+    });
     const images = await this.upload(files);
     try {
       return this.withReservations(await this.insert(dto, images));
@@ -189,6 +274,7 @@ export class ProductsService {
   ): Promise<ProductAdmin> {
     const current = await this.findRow(id);
     assertLeadTime(dto, current);
+    assertPromo(dto, current);
     const images = files.length > 0 ? await this.upload(files) : undefined;
 
     let updated: ProductRow;
@@ -198,6 +284,7 @@ export class ProductsService {
         data: {
           ...dto,
           ...(dto.price !== undefined && { price: toDecimal(dto.price) }),
+          ...promoData(dto),
           ...(images && { images }),
         },
         include: WITH_CATEGORY,
@@ -267,7 +354,13 @@ export class ProductsService {
     );
     try {
       return await this.prisma.product.create({
-        data: { ...dto, price: toDecimal(dto.price), slug, images },
+        data: {
+          ...dto,
+          price: toDecimal(dto.price),
+          ...promoData(dto),
+          slug,
+          images,
+        },
         include: WITH_CATEGORY,
       });
     } catch (error) {

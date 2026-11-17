@@ -140,7 +140,7 @@ describe('Checkout quote (e2e)', () => {
     });
   });
 
-  it('never charges zero for a covered bairro without an area', async () => {
+  it('does not deliver to a bairro in no delivery area, even one once marked as served', async () => {
     const { body } = await quote({
       items: [{ productId: ids.handmade, quantity: 1 }],
       cep: noAreaCep,
@@ -148,7 +148,7 @@ describe('Checkout quote (e2e)', () => {
 
     expect(body.delivery).toEqual({
       available: false,
-      reason: 'no_area',
+      reason: 'not_covered',
       bairro: 'E2E Bairro Sem Área',
     });
   });

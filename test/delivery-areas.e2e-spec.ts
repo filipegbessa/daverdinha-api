@@ -91,6 +91,7 @@ describe('Delivery areas and store settings (e2e)', () => {
       'pickupInstructions',
       'siteEnabled',
       'storeEnabled',
+      'storePause',
       'ticketsEnabled',
     ]);
   });

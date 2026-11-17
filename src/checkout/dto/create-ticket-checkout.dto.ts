@@ -3,14 +3,18 @@ import {
   ArrayMaxSize,
   ArrayMinSize,
   IsArray,
+  IsInt,
   IsOptional,
   IsString,
   IsUUID,
   Length,
+  Max,
   MaxLength,
+  Min,
   ValidateNested,
 } from 'class-validator';
 import { trim } from '../../common/transforms';
+import { normalizeCode } from '../../coupons/dto/coupon.dto';
 import { CustomerDto } from './customer.dto';
 
 export class AttendeeDto {
@@ -44,4 +48,29 @@ export class CreateTicketCheckoutDto {
   @IsString()
   @MaxLength(500)
   notes?: string;
+
+  /** Código do cupom de evento; inválido é 422. */
+  @IsOptional()
+  @Transform(normalizeCode)
+  @IsString()
+  @MaxLength(30)
+  couponCode?: string;
+}
+
+/** `POST /checkout/tickets/quote`: o total da compra de ingresso, com o cupom. */
+export class TicketQuoteDto {
+  @IsUUID()
+  eventId: string;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(50)
+  quantity: number;
+
+  @IsOptional()
+  @Transform(normalizeCode)
+  @IsString()
+  @MaxLength(30)
+  couponCode?: string;
 }

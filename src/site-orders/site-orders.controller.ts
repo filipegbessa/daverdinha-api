@@ -13,19 +13,41 @@ import {
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { ClerkAuthGuard } from '../common/auth/clerk-auth.guard';
 import { SiteOrdersService } from './site-orders.service';
+import { SalesSummaryService } from './sales-summary.service';
 import { ListSiteOrdersDto } from './dto/list-site-orders.dto';
 import { UpdateFulfillmentDto } from './dto/update-fulfillment.dto';
+import { CreateCheckoutDto } from '../checkout/dto/create-checkout.dto';
 
 @ApiTags('site-orders')
 @ApiBearerAuth()
 @Controller('site-orders')
 @UseGuards(ClerkAuthGuard)
 export class SiteOrdersController {
-  constructor(private readonly orders: SiteOrdersService) {}
+  constructor(
+    private readonly orders: SiteOrdersService,
+    private readonly sales: SalesSummaryService,
+  ) {}
 
   @Get()
   list(@Query() query: ListSiteOrdersDto) {
     return this.orders.list(query);
+  }
+
+  /**
+   * Pedido criado no admin, pra venda combinada no WhatsApp: as mesmas
+   * regras do checkout (preço, estoque e frete do banco), mas vale com a loja
+   * fechada ou em pausa e segura a reserva por 24 h. Devolve o link de
+   * pagamento pra mandar à cliente.
+   */
+  @Post()
+  create(@Body() dto: CreateCheckoutDto) {
+    return this.orders.create(dto, new Date(), { fromAdmin: true });
+  }
+
+  /** O resumo do Dashboard: vendas, o que preparar e o estoque baixo. Antes de `:id`. */
+  @Get('summary')
+  summary() {
+    return this.sales.summary();
   }
 
   @Get(':id')

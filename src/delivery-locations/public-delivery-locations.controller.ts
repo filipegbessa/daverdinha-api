@@ -7,14 +7,13 @@ import { toMoney } from '../common/money';
 
 /**
  * O que o site recebe: sem zona nem id. `fee` só vem com `covered`: o valor
- * da área de entrega da loja (o mesmo do `POST /checkout/quote`), ou `null`
- * quando o bairro é atendido pelo bot mas ainda não está numa área, e aí a
- * loja não entrega lá.
+ * da área de entrega do bairro (o mesmo do `POST /checkout/quote`; zero =
+ * entrega grátis).
  */
 export interface CepCheck {
   status: 'covered' | 'not_covered' | 'unresolved';
   bairro?: string;
-  fee?: number | null;
+  fee?: number;
 }
 
 /**
@@ -52,10 +51,8 @@ export class PublicDeliveryLocationsController {
       return { status: 'not_covered', bairro: result.bairro };
     }
     const area = await this.areas.feeForLocation(result.locationId);
-    return {
-      status: 'covered',
-      bairro: result.bairro,
-      fee: area ? toMoney(area.fee) : null,
-    };
+    // A área pode ter sido apagada entre as duas leituras: aí não atende.
+    if (!area) return { status: 'not_covered', bairro: result.bairro };
+    return { status: 'covered', bairro: result.bairro, fee: toMoney(area.fee) };
   }
 }

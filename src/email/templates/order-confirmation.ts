@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import * as QRCode from 'qrcode';
 import { formatOrderCode } from '../../site-orders/order-code';
 import { toMoney } from '../../common/money';
@@ -135,6 +136,11 @@ function productsEmail(
     <p>Oi, ${escapeHtml(firstName)}! Recebemos o pedido <strong>${code}</strong> e já vamos preparar.</p>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:16px 0;border-top:1px solid #e6dfd3;border-bottom:1px solid #e6dfd3">
       ${items}
+      ${
+        order.discount && !new Prisma.Decimal(order.discount).isZero()
+          ? `<tr><td style="padding:6px 0">Cupom ${escapeHtml(order.couponCode ?? '')}</td><td style="padding:6px 0;text-align:right">−${formatBrl(toMoney(order.discount))}</td></tr>`
+          : ''
+      }
       <tr><td style="padding:6px 0">Entrega</td><td style="padding:6px 0;text-align:right">${formatBrl(toMoney(order.deliveryFee))}</td></tr>
       <tr><td style="padding:6px 0;font-weight:600">Total</td><td style="padding:6px 0;text-align:right;font-weight:600">${formatBrl(toMoney(order.total))}</td></tr>
     </table>
@@ -145,6 +151,11 @@ function productsEmail(
     `Pedido confirmado! ${code}`,
     '',
     ...order.items.map((i) => `${i.quantity} × ${i.productName}`),
+    ...(order.discount && !new Prisma.Decimal(order.discount).isZero()
+      ? [
+          `Cupom ${order.couponCode ?? ''}: −${formatBrl(toMoney(order.discount))}`,
+        ]
+      : []),
     `Total: ${formatBrl(toMoney(order.total))}`,
     '',
     order.deliveryMethod === 'pickup'
