@@ -68,8 +68,8 @@ import * as m64 from './events/events.controller';
 import * as m65 from './events/public-events.controller';
 import * as m66 from './site-orders/site-order-tickets.controller';
 import * as m67 from './coupons/coupons.controller';
-import * as m68 from './openapi/openapi.controller';
-import * as m69 from './promotions/shipping-promotions.controller';
+import * as m68 from './promotions/shipping-promotions.controller';
+import * as m69 from './openapi/openapi.controller';
 
 export default async () => {
   const t = {
@@ -1320,9 +1320,8 @@ export default async () => {
             },
           },
         ],
-        [m68, { OpenApiController: { get: { type: Object } } }],
         [
-          m69,
+          m68,
           {
             ShippingPromotionsController: {
               list: { type: [Object] },
@@ -1332,6 +1331,7 @@ export default async () => {
             },
           },
         ],
+        [m69, { OpenApiController: { get: { type: Object } } }],
       ],
     },
   };
