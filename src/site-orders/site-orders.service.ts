@@ -4,6 +4,7 @@ import {
   type EvaluatedCoupon,
 } from '../coupons/coupons.service';
 import type { CouponLine } from '../coupons/apply-coupon';
+import { ShippingPromotionsService } from '../promotions/shipping-promotions.service';
 import {
   BadRequestException,
   ConflictException,
@@ -118,6 +119,7 @@ export interface QuoteDetails {
   delivery:
     | {
         available: true;
+        areaId: string;
         fee: Prisma.Decimal;
         bairro: string;
         zone: string;
@@ -157,6 +159,16 @@ export interface CheckoutQuote {
     | { code: string; discount: number; freeShipping: boolean }
     | { code: string; error: string }
     | null;
+  /**
+   * Frete grátis automático ("Promoções → Automáticas"): a partir de quanto
+   * vale pra área do CEP (sem CEP, só as promoções de todas as áreas), quanto
+   * falta (itens, já descontado o cupom) e se já chegou. `null` = nenhuma.
+   */
+  freeShipping: {
+    minSubtotal: number;
+    remaining: number;
+    reached: boolean;
+  } | null;
 }
 
 /** As linhas da cotação do jeito que o cupom olha pra elas. */
@@ -208,7 +220,27 @@ export class SiteOrdersService {
     private readonly push: PushNotificationsService,
     private readonly email: EmailService,
     private readonly coupons: CouponsService,
+    private readonly shippingPromotions: ShippingPromotionsService,
   ) {}
+
+  /**
+   * O frete grátis automático pra cotação: o menor mínimo que vale na área
+   * da entrega e se `base` (itens menos o cupom) já chegou nele.
+   */
+  private async promotionFreeShipping(
+    db: Db,
+    delivery: QuoteDetails['delivery'],
+    base: Prisma.Decimal,
+    now: Date,
+  ): Promise<{ threshold: Prisma.Decimal; reached: boolean } | null> {
+    const threshold = await this.shippingPromotions.threshold(
+      db,
+      delivery.available ? delivery.areaId : null,
+      now,
+    );
+    if (!threshold) return null;
+    return { threshold, reached: !base.lessThan(threshold) };
+  }
 
   /**
    * Preço, estoque e frete calculados no servidor a partir do banco. O
@@ -227,7 +259,14 @@ export class SiteOrdersService {
           lines: couponLines(details),
         })
       : null;
-    return toPublicQuote(details, coupon);
+    const discount = coupon?.ok ? coupon.discount : new Prisma.Decimal(0);
+    const promotion = await this.promotionFreeShipping(
+      this.prisma,
+      details.delivery,
+      details.subtotal.sub(discount),
+      new Date(),
+    );
+    return toPublicQuote(details, coupon, promotion, discount);
   }
 
   /**
@@ -411,9 +450,20 @@ export class SiteOrdersService {
       const fee = quote.delivery.available
         ? quote.delivery.fee
         : new Prisma.Decimal(0);
-      const deliveryFee =
-        isDelivery && !coupon?.freeShipping ? fee : new Prisma.Decimal(0);
       const discount = coupon?.ok ? coupon.discount : new Prisma.Decimal(0);
+      // Frete grátis automático: o mínimo é sobre os itens já descontados.
+      const promotion = isDelivery
+        ? await this.promotionFreeShipping(
+            tx,
+            quote.delivery,
+            quote.subtotal.sub(discount),
+            now,
+          )
+        : null;
+      const deliveryFee =
+        isDelivery && !coupon?.freeShipping && !promotion?.reached
+          ? fee
+          : new Prisma.Decimal(0);
       const { subtotal, total } = orderTotals(
         quote.lines.map((l) => l.lineTotal),
         deliveryFee,
@@ -1411,6 +1461,7 @@ export class SiteOrdersService {
     return {
       available: true,
       fee: area.fee,
+      areaId: area.areaId,
       bairro: resolution.bairro,
       zone: resolution.zone,
       area: area.area,
@@ -1434,6 +1485,8 @@ function toPublicCoupon(
 function toPublicQuote(
   details: QuoteDetails,
   coupon: EvaluatedCoupon | null = null,
+  promotion: { threshold: Prisma.Decimal; reached: boolean } | null = null,
+  discount: Prisma.Decimal = new Prisma.Decimal(0),
 ): CheckoutQuote {
   return {
     items: details.lines.map((line) => ({
@@ -1461,6 +1514,15 @@ function toPublicQuote(
       : details.delivery,
     problems: details.problems,
     coupon: toPublicCoupon(coupon),
+    freeShipping: promotion
+      ? {
+          minSubtotal: toMoney(promotion.threshold),
+          remaining: promotion.reached
+            ? 0
+            : toMoney(promotion.threshold.sub(details.subtotal.sub(discount))),
+          reached: promotion.reached,
+        }
+      : null,
   };
 }
 

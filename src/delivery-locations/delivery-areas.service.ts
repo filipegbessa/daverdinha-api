@@ -183,13 +183,14 @@ export class DeliveryAreasService {
   /** O frete de um bairro, ou `null` se ele não está em nenhuma área. */
   async feeForLocation(
     locationId: string,
-  ): Promise<{ area: string; fee: Prisma.Decimal } | null> {
+  ): Promise<{ areaId: string; area: string; fee: Prisma.Decimal } | null> {
     const location = await this.prisma.deliveryLocation.findUnique({
       where: { id: locationId },
-      select: { area: { select: { name: true, fee: true } } },
+      select: { area: { select: { id: true, name: true, fee: true } } },
     });
     if (!location?.area) return null;
     return {
+      areaId: location.area.id,
       area: location.area.name,
       fee: new Prisma.Decimal(location.area.fee),
     };

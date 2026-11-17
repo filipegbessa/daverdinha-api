@@ -242,6 +242,18 @@ async function seedCoupons() {
   }
 }
 
+/**
+ * Uma promoção automática de exemplo: frete grátis acima de R$ 250 em todas
+ * as áreas. Sem chave natural: só cria se ainda não houver nenhuma, pra não
+ * duplicar nem desfazer o que foi editado no admin.
+ */
+async function seedShippingPromotions() {
+  if ((await prisma.shippingPromotion.count()) > 0) return;
+  await prisma.shippingPromotion.create({
+    data: { name: 'Exemplo: frete grátis acima de R$ 250', minSubtotal: '250' },
+  });
+}
+
 async function seedCatalog() {
   // `update: {}` em tudo: rodar o seed de novo nunca desfaz o que foi
   // editado no admin, só recria o que foi apagado.
@@ -828,6 +840,7 @@ async function main() {
   await seedWhatsAppOrder();
   await seedCatalog();
   await seedCoupons();
+  await seedShippingPromotions();
   await seedEvents();
   await seedStoreSettings();
   await seedDeliveryAreas();

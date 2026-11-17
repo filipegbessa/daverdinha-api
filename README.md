@@ -321,6 +321,15 @@ A cor é escolhida livremente pelo operador num color picker. A API não tem pal
 - **Admin** (`ClerkAuthGuard`): `GET /coupons?q=` (paginado, mais novo primeiro, com `uses` pagos e `reserved` pendentes), `GET/PATCH /coupons/:id` (listas do escopo, quando vêm, substituem), `POST /coupons`, `DELETE /coupons/:id` (cupom já usado é só desativado: `{ deleted: false }`). Validações: porcentagem de 1 a 100, valor fixo maior que zero, teto só na porcentagem, escopo de categorias/produtos com pelo menos um, fim depois do início.
 - O seed cria `BEMVINDA10` (10% em tudo) e `FRETEGRATIS` (frete grátis acima de R$ 150).
 
+## Frete grátis automático (módulo `promotions`)
+
+"Promoções → Automáticas" no admin: frete grátis acima de um valor, sem código. `ShippingPromotion { minSubtotal, startsAt?, endsAt?, active, areas[] }` (áreas em `shipping_promotion_areas`; nenhuma = todas as áreas de entrega).
+
+- **Regra** (`src/promotions/free-shipping.ts`): vale o menor mínimo entre as promoções ativas, na validade (`endsAt` exclusivo) e da área de entrega do CEP. Sem CEP, só contam as que valem em todas as áreas, pra o carrinho nunca prometer frete grátis a um bairro que não tem. O mínimo é sobre os itens **já descontado o cupom**, pra o cupom não destravar o frete grátis sozinho. Não mexe na retirada (já é grátis).
+- **Cotação:** `freeShipping: { minSubtotal, remaining, reached } | null`. **Pedido:** com `reached`, `deliveryFee` é zero (avaliado dentro da transação, com a área do CEP). Área de entrega com valor R$ 0,00 continua sendo sempre grátis, e o cupom `free_shipping` também zera.
+- **Admin** (`ClerkAuthGuard`, sem paginação de propósito: são poucas): `GET/POST /shipping-promotions`, `PATCH/DELETE /shipping-promotions/:id` (as áreas, quando vêm, substituem). Fim antes do início é 400.
+- O seed cria "frete grátis acima de R$ 250" em todas as áreas, se ainda não houver nenhuma.
+
 ## Notificações push (módulo `push-notifications`)
 
 Dois serviços com responsabilidades separadas de propósito:

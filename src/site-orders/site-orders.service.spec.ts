@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { CouponsService } from '../coupons/coupons.service';
+import { ShippingPromotionsService } from '../promotions/shipping-promotions.service';
 import { SiteOrdersService } from './site-orders.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { DeliveryLocationsService } from '../delivery-locations/delivery-locations.service';
@@ -59,6 +60,8 @@ const settings = {
 
 /** Cupom: cada teste de cupom troca o `evaluate`; o padrão nunca é chamado sem código. */
 const coupons = { evaluate: jest.fn() };
+/** Frete grátis automático: sem promoção por padrão; os testes dela trocam. */
+const shippingPromotions = { threshold: jest.fn().mockResolvedValue(null) };
 
 describe('SiteOrdersService.quote', () => {
   let service: SiteOrdersService;
@@ -89,6 +92,7 @@ describe('SiteOrdersService.quote', () => {
         { provide: PushNotificationsService, useValue: {} },
         { provide: EmailService, useValue: emailMock() },
         { provide: CouponsService, useValue: coupons },
+        { provide: ShippingPromotionsService, useValue: shippingPromotions },
       ],
     }).compile();
     service = moduleRef.get(SiteOrdersService);
@@ -120,6 +124,31 @@ describe('SiteOrdersService.quote', () => {
     ]);
     expect(quote.subtotal).toBe(59.7);
     expect(quote.installments).toBe(1);
+  });
+
+  it('says how much is left for the automatic free shipping', async () => {
+    shippingPromotions.threshold.mockResolvedValueOnce(
+      new Prisma.Decimal('100'),
+    );
+
+    const quote = await service.quote([{ productId: 'p1', quantity: 3 }]);
+
+    // Sem CEP: só as promoções de todas as áreas.
+    expect(shippingPromotions.threshold).toHaveBeenCalledWith(
+      prisma,
+      null,
+      expect.any(Date),
+    );
+    expect(quote.freeShipping).toEqual({
+      minSubtotal: 100,
+      remaining: 40.3,
+      reached: false,
+    });
+  });
+
+  it('has no free shipping info without a promotion', async () => {
+    const quote = await service.quote([{ productId: 'p1', quantity: 1 }]);
+    expect(quote.freeShipping).toBeNull();
   });
 
   it('charges the promo price while the promo is on', async () => {
@@ -383,6 +412,7 @@ describe('SiteOrdersService orders', () => {
         { provide: PushNotificationsService, useValue: push },
         { provide: EmailService, useValue: email },
         { provide: CouponsService, useValue: coupons },
+        { provide: ShippingPromotionsService, useValue: shippingPromotions },
       ],
     }).compile();
     service = moduleRef.get(SiteOrdersService);
@@ -1014,9 +1044,11 @@ describe('SiteOrdersService.create', () => {
       }),
     };
     deliveryAreas = {
-      feeForLocation: jest
-        .fn()
-        .mockResolvedValue({ fee: new Prisma.Decimal('12.50'), area: 'Perto' }),
+      feeForLocation: jest.fn().mockResolvedValue({
+        areaId: 'a1',
+        fee: new Prisma.Decimal('12.50'),
+        area: 'Perto',
+      }),
     };
     storeSettings = { get: jest.fn().mockResolvedValue(settings) };
     gateway = {
@@ -1036,6 +1068,7 @@ describe('SiteOrdersService.create', () => {
         { provide: PushNotificationsService, useValue: {} },
         { provide: EmailService, useValue: emailMock() },
         { provide: CouponsService, useValue: coupons },
+        { provide: ShippingPromotionsService, useValue: shippingPromotions },
       ],
     }).compile();
     service = moduleRef.get(SiteOrdersService);
@@ -1100,6 +1133,34 @@ describe('SiteOrdersService.create', () => {
         }),
       }),
     );
+  });
+
+  describe('automatic free shipping', () => {
+    afterEach(() => shippingPromotions.threshold.mockResolvedValue(null));
+
+    it('zeroes the delivery once the items reach the minimum of the area', async () => {
+      shippingPromotions.threshold.mockResolvedValue(new Prisma.Decimal('30'));
+
+      await service.create(dto(), now);
+
+      expect(shippingPromotions.threshold).toHaveBeenCalledWith(
+        prisma,
+        'a1',
+        now,
+      );
+      const data = prisma.siteOrder.create.mock.calls[0][0].data;
+      expect(data.deliveryFee.toString()).toBe('0');
+      expect(data.total.toString()).toBe('39.8');
+    });
+
+    it('keeps the delivery below the minimum', async () => {
+      shippingPromotions.threshold.mockResolvedValue(new Prisma.Decimal('100'));
+
+      await service.create(dto(), now);
+
+      const data = prisma.siteOrder.create.mock.calls[0][0].data;
+      expect(data.deliveryFee.toString()).toBe('12.5');
+    });
   });
 
   describe('coupon', () => {
@@ -1408,6 +1469,7 @@ describe('SiteOrdersService tickets', () => {
         { provide: PushNotificationsService, useValue: push },
         { provide: EmailService, useValue: emailMock() },
         { provide: CouponsService, useValue: coupons },
+        { provide: ShippingPromotionsService, useValue: shippingPromotions },
       ],
     }).compile();
     service = moduleRef.get(SiteOrdersService);
@@ -1740,6 +1802,7 @@ describe('SiteOrdersService post-sale', () => {
         { provide: PushNotificationsService, useValue: {} },
         { provide: EmailService, useValue: email },
         { provide: CouponsService, useValue: coupons },
+        { provide: ShippingPromotionsService, useValue: shippingPromotions },
       ],
     }).compile();
     service = moduleRef.get(SiteOrdersService);

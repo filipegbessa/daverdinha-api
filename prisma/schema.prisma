@@ -81,6 +81,8 @@ model DeliveryArea {
   createdAt DateTime           @default(now()) @map("created_at")
   updatedAt DateTime           @updatedAt @map("updated_at")
 
+  promotions ShippingPromotionArea[]
+
   @@unique([zone, name])
   @@map("delivery_areas")
 }
@@ -610,4 +612,33 @@ model CouponEvent {
 
   @@id([couponId, eventId])
   @@map("coupon_events")
+}
+
+/// Promoção automática de frete grátis ("Promoções → Automáticas"): pedido
+/// de produtos com entrega, a partir de `minSubtotal` (já descontado o
+/// cupom), não paga frete. Sem áreas = vale em todas as áreas de entrega.
+model ShippingPromotion {
+  id          String                  @id @default(uuid())
+  /// Só pro admin ("Black Friday").
+  name        String?
+  minSubtotal Decimal                 @map("min_subtotal") @db.Decimal(10, 2)
+  startsAt    DateTime?               @map("starts_at")
+  /// Exclusivo: no instante do fim a promoção já não vale.
+  endsAt      DateTime?               @map("ends_at")
+  active      Boolean                 @default(true)
+  areas       ShippingPromotionArea[]
+  createdAt   DateTime                @default(now()) @map("created_at")
+  updatedAt   DateTime                @updatedAt @map("updated_at")
+
+  @@map("shipping_promotions")
+}
+
+model ShippingPromotionArea {
+  promotionId String            @map("promotion_id")
+  promotion   ShippingPromotion @relation(fields: [promotionId], references: [id], onDelete: Cascade)
+  areaId      String            @map("area_id")
+  area        DeliveryArea      @relation(fields: [areaId], references: [id], onDelete: Cascade)
+
+  @@id([promotionId, areaId])
+  @@map("shipping_promotion_areas")
 }

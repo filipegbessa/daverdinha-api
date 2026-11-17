@@ -404,6 +404,28 @@ CREATE TABLE "coupon_events" (
     CONSTRAINT "coupon_events_pkey" PRIMARY KEY ("coupon_id","event_id")
 );
 
+-- CreateTable
+CREATE TABLE "shipping_promotions" (
+    "id" TEXT NOT NULL,
+    "name" TEXT,
+    "min_subtotal" DECIMAL(10,2) NOT NULL,
+    "starts_at" TIMESTAMP(3),
+    "ends_at" TIMESTAMP(3),
+    "active" BOOLEAN NOT NULL DEFAULT true,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "shipping_promotions_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "shipping_promotion_areas" (
+    "promotion_id" TEXT NOT NULL,
+    "area_id" TEXT NOT NULL,
+
+    CONSTRAINT "shipping_promotion_areas_pkey" PRIMARY KEY ("promotion_id","area_id")
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "delivery_locations_region_name_key" ON "delivery_locations"("region_name");
 
@@ -568,4 +590,10 @@ ALTER TABLE "coupon_events" ADD CONSTRAINT "coupon_events_coupon_id_fkey" FOREIG
 
 -- AddForeignKey
 ALTER TABLE "coupon_events" ADD CONSTRAINT "coupon_events_event_id_fkey" FOREIGN KEY ("event_id") REFERENCES "events"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "shipping_promotion_areas" ADD CONSTRAINT "shipping_promotion_areas_promotion_id_fkey" FOREIGN KEY ("promotion_id") REFERENCES "shipping_promotions"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "shipping_promotion_areas" ADD CONSTRAINT "shipping_promotion_areas_area_id_fkey" FOREIGN KEY ("area_id") REFERENCES "delivery_areas"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
