@@ -62,9 +62,9 @@ Cada **pacote** junta itens de documentos diferentes que mexem nos mesmos arquiv
 
 - [x] **4.1 Promoções automáticas.** *(entregue em 2026-11-17)* [B] Fase C: frete grátis acima de R$ X, configurável em Promoções → Automáticas.
   - Depende de 3.3 (a tela de Promoções). O desconto no Pix ficou para o futuro.
-- [ ] **4.2 Catálogo e busca.** [C] M1 feed Google/Meta + [C] V1 busca + [C] V2 ordenar e filtrar.
+- [x] **4.2 Catálogo e busca.** *(entregue em 2026-11-17: busca com sugestões, ordenar e filtrar, feed em `/feed/produtos.xml`)* [C] M1 feed Google/Meta + [C] V1 busca + [C] V2 ordenar e filtrar.
   - Todos usam as mesmas consultas do catálogo.
-- [ ] **4.3 Clientes.** [C] L2 cliente ↔ conversa do WhatsApp + [C] L1 lista de clientes.
+- [x] **4.3 Clientes.** *(entregue em 2026-11-17: `/admin/clientes`, compras da cliente na conversa e "Abrir conversa" no pedido)* [C] L2 cliente ↔ conversa do WhatsApp + [C] L1 lista de clientes.
 - [ ] **4.4 Entregas, fase 2.** [A] 6 remoção da coluna `covered`.
   - É o único `DROP` do roteiro.
   - Alguns dias depois de 2.3 estável.
