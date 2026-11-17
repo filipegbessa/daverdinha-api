@@ -23,8 +23,17 @@ export interface CheckoutInput {
     name: string;
     email: string;
     phone: string;
-    document: string;
-    documentType: DocumentType;
+    /** Opcional: sem ele, o Pagar.me pede na própria página de pagamento. */
+    document?: string;
+    documentType?: DocumentType;
+    /** Só em pedido com entrega; na retirada não tem endereço pra mandar. */
+    address?: {
+      cep: string;
+      street: string;
+      number: string;
+      complement?: string;
+      bairro: string;
+    };
   };
   /** Pra onde o comprador volta depois de pagar (`<site>/pedido/<token>`). */
   successUrl: string;

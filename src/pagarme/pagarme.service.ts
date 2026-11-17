@@ -111,6 +111,20 @@ export class PagarmeService implements PaymentGateway {
           document: input.customer.document,
           document_type: input.customer.documentType,
           phones: { mobile_phone: splitPhone(input.customer.phone) },
+          ...(input.customer.address && {
+            // Site só entrega no Rio; país/estado/cidade não vêm do pedido.
+            address: {
+              country: 'BR',
+              state: 'RJ',
+              city: 'Rio de Janeiro',
+              zip_code: input.customer.address.cep,
+              // Ordem exigida pelo Pagar.me: "Número, Rua, Bairro".
+              line_1: `${input.customer.address.number}, ${input.customer.address.street}, ${input.customer.address.bairro}`,
+              ...(input.customer.address.complement && {
+                line_2: input.customer.address.complement,
+              }),
+            },
+          }),
         },
       },
       ...(logo && { layout_settings: { image_url: logo } }),

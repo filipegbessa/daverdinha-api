@@ -1029,8 +1029,23 @@ describe('SiteOrdersService.create', () => {
         dto({ customer: { ...dto().customer, document: '12345678900' } }),
         now,
       ),
-    ).rejects.toThrow('Informe um CPF, CNPJ ou passaporte válido.');
+    ).rejects.toThrow('Informe um CPF ou CNPJ válido.');
     expect(prisma.siteOrder.create).not.toHaveBeenCalled();
+  });
+
+  it('creates the order without a document when the buyer did not give one', async () => {
+    const { document: _document, ...customer } = dto().customer;
+    const result = await service.create(dto({ customer }), now);
+
+    expect(result.code).toBe('DV-0007');
+    const data = prisma.siteOrder.create.mock.calls[0][0].data;
+    expect(data.customerDocument).toBeNull();
+    expect(data.customerDocumentType).toBeNull();
+    expect(gateway.createCheckout).toHaveBeenCalledWith(
+      expect.objectContaining({
+        customer: expect.not.objectContaining({ document: expect.anything() }),
+      }),
+    );
   });
 
   it('creates the order from database prices and returns the payment link', async () => {
@@ -1077,7 +1092,26 @@ describe('SiteOrdersService.create', () => {
         customer: expect.objectContaining({
           document: '11144477735',
           documentType: 'CPF',
+          address: {
+            cep: '22220000',
+            street: 'Rua do Catete',
+            number: '100',
+            bairro: 'Catete',
+          },
         }),
+      }),
+    );
+  });
+
+  it('leaves the address out of the gateway call on a pickup order', async () => {
+    await service.create(
+      dto({ deliveryMethod: 'pickup', address: undefined }),
+      now,
+    );
+
+    expect(gateway.createCheckout).toHaveBeenCalledWith(
+      expect.objectContaining({
+        customer: expect.not.objectContaining({ address: expect.anything() }),
       }),
     );
   });
@@ -1292,8 +1326,25 @@ describe('SiteOrdersService tickets', () => {
           },
           new Date('2026-11-21T12:30:00Z'),
         ),
-      ).rejects.toThrow('Informe um CPF, CNPJ ou passaporte válido.');
+      ).rejects.toThrow('Informe um CPF ou CNPJ válido.');
       expect(prisma.siteOrder.create).not.toHaveBeenCalled();
+    });
+
+    it('creates the ticket order without a document when the buyer did not give one', async () => {
+      const { document: _document, ...customer } = dto().customer;
+      await service.createTickets(
+        { ...dto(), customer },
+        new Date('2026-11-21T12:30:00Z'),
+      );
+
+      const data = prisma.siteOrder.create.mock.calls[0][0].data;
+      expect(data.customerDocument).toBeNull();
+      expect(data.customerDocumentType).toBeNull();
+      expect(gateway.createCheckout).toHaveBeenCalledWith(
+        expect.objectContaining({
+          customer: expect.not.objectContaining({ document: expect.anything() }),
+        }),
+      );
     });
 
     it('sells paid tickets: one per name, price from the database, reservation capped by the start', async () => {

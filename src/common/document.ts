@@ -20,8 +20,10 @@ export function parseDocument(raw: string): ParsedDocument | null {
   if (digits.length === 14)
     return isValidCnpj(digits) ? { type: 'CNPJ', value: digits } : null;
 
+  // Exige ao menos uma letra: CPF/CNPJ só têm dígito, então um número de
+  // tamanho errado (ex. "12312") não deve colar como passaporte.
   const passport = raw.toUpperCase().replace(/[^A-Z0-9]/g, '');
-  return /^[A-Z0-9]{5,20}$/.test(passport)
+  return /^(?=.*[A-Z])[A-Z0-9]{5,20}$/.test(passport)
     ? { type: 'PASSPORT', value: passport }
     : null;
 }

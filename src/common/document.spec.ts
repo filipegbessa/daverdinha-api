@@ -50,6 +50,11 @@ describe('parseDocument', () => {
     expect(parseDocument('AB12')).toBeNull();
   });
 
+  it('rejects a number with the wrong length for a CPF or CNPJ, instead of falling back to passport', () => {
+    expect(parseDocument('12312')).toBeNull();
+    expect(parseDocument('123456789')).toBeNull();
+  });
+
   it('rejects empty input', () => {
     expect(parseDocument('')).toBeNull();
     expect(parseDocument('   ')).toBeNull();

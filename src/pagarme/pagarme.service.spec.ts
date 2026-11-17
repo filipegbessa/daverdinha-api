@@ -158,6 +158,60 @@ describe('PagarmeService', () => {
       });
     });
 
+    it('leaves document and document_type out when the buyer did not give one', async () => {
+      const { document: _document, documentType: _documentType, ...customer } = input().customer;
+      await service.createCheckout(input({ customer }));
+
+      const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+      expect(body.customer_settings.customer).toEqual({
+        code: 'o1',
+        name: 'Maria Souza',
+        email: 'maria@exemplo.com',
+        type: 'individual',
+        phones: {
+          mobile_phone: {
+            country_code: '55',
+            area_code: '21',
+            number: '999998888',
+          },
+        },
+      });
+    });
+
+    it('sends the delivery address when there is one', async () => {
+      await service.createCheckout(
+        input({
+          customer: {
+            ...input().customer,
+            address: {
+              cep: '22220000',
+              street: 'Rua do Catete',
+              number: '100',
+              complement: 'Apto 2',
+              bairro: 'Catete',
+            },
+          },
+        }),
+      );
+
+      const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+      expect(body.customer_settings.customer.address).toEqual({
+        country: 'BR',
+        state: 'RJ',
+        city: 'Rio de Janeiro',
+        zip_code: '22220000',
+        line_1: '100, Rua do Catete, Catete',
+        line_2: 'Apto 2',
+      });
+    });
+
+    it('leaves the address out on a pickup order', async () => {
+      await service.createCheckout(input());
+
+      const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+      expect(body.customer_settings.customer.address).toBeUndefined();
+    });
+
     it('sends the customer as a company when the document is a CNPJ', async () => {
       await service.createCheckout(
         input({

@@ -367,10 +367,10 @@ export default async () => {
                 pattern: '^(?:\\D*\\d){10,13}\\D*$',
               },
               document: {
-                required: true,
+                required: false,
                 type: () => String,
                 description:
-                  'CPF, CNPJ ou passaporte, com ou sem m\u00E1scara. S\u00F3 a forma \u00E9 checada aqui;\no d\u00EDgito verificador e a classifica\u00E7\u00E3o do tipo ficam em\n`parseDocument` (`src/common/document.ts`), chamado pelo service.',
+                  'CPF ou CNPJ, com ou sem m\u00E1scara (passaporte tamb\u00E9m passa, pra quem n\u00E3o\ntem documento brasileiro, mas n\u00E3o \u00E9 anunciado no formul\u00E1rio). Opcional:\nsem ele, o comprador preenche na pr\u00F3pria p\u00E1gina do Pagar.me. S\u00F3 a forma \u00E9\nchecada aqui; o d\u00EDgito verificador e a classifica\u00E7\u00E3o do tipo ficam em\n`parseDocument` (`src/common/document.ts`), chamado pelo service.',
                 minLength: 5,
                 maxLength: 32,
               },

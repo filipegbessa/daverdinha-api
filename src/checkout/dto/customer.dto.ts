@@ -1,4 +1,4 @@
-import { IsEmail, IsString, Length, Matches, MaxLength } from 'class-validator';
+import { IsEmail, IsOptional, IsString, Length, Matches, MaxLength } from 'class-validator';
 
 /**
  * Quem compra. Reaproveitado pela compra de ingresso. Nome e e-mail seguem o
@@ -24,11 +24,14 @@ export class CustomerDto {
   phone: string;
 
   /**
-   * CPF, CNPJ ou passaporte, com ou sem máscara. Só a forma é checada aqui;
-   * o dígito verificador e a classificação do tipo ficam em
+   * CPF ou CNPJ, com ou sem máscara (passaporte também passa, pra quem não
+   * tem documento brasileiro, mas não é anunciado no formulário). Opcional:
+   * sem ele, o comprador preenche na própria página do Pagar.me. Só a forma é
+   * checada aqui; o dígito verificador e a classificação do tipo ficam em
    * `parseDocument` (`src/common/document.ts`), chamado pelo service.
    */
+  @IsOptional()
   @IsString()
   @Length(5, 32)
-  document: string;
+  document?: string;
 }

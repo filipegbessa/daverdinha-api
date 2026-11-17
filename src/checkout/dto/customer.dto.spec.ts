@@ -34,10 +34,12 @@ describe('limites do Pagar.me no comprador', () => {
     expect(errorsOf(dto)).toEqual(['name', 'email']);
   });
 
-  it('recusa documento vazio ou curto demais', () => {
-    expect(
-      errorsOf(plainToInstance(CustomerDto, { ...valid, document: '' })),
-    ).toEqual(['document']);
+  it('aceita sem documento: é opcional', () => {
+    const { document: _document, ...rest } = valid;
+    expect(errorsOf(plainToInstance(CustomerDto, rest))).toEqual([]);
+  });
+
+  it('recusa documento curto demais quando ele é informado', () => {
     expect(
       errorsOf(plainToInstance(CustomerDto, { ...valid, document: 'AB1' })),
     ).toEqual(['document']);

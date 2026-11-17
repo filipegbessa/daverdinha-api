@@ -348,8 +348,8 @@ model SiteOrder {
   customerName       String            @map("customer_name")
   customerEmail      String            @map("customer_email")
   customerPhone      String            @map("customer_phone")
-  /// `null` só em pedido de antes desse campo existir; o service sempre exige
-  /// documento pra pedido novo (`parseDocument`, 400 se faltar ou for inválido).
+  /// Opcional: sem ele, o comprador preenche na própria página do Pagar.me.
+  /// Quando informado, o service confere com `parseDocument` (400 se inválido).
   customerDocument     String?               @map("customer_document")
   customerDocumentType CustomerDocumentType? @map("customer_document_type")
   /// `null` em pedido de ingresso (não tem entrega).

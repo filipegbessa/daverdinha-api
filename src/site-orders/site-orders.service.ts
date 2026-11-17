@@ -289,11 +289,10 @@ export class SiteOrdersService {
     }
     const phone = normalizePhone(dto.customer.phone);
     if (!phone) throw new BadRequestException('Telefone inválido.');
-    const document = parseDocument(dto.customer.document);
-    if (!document) {
-      throw new BadRequestException(
-        'Informe um CPF, CNPJ ou passaporte válido.',
-      );
+    const rawDocument = dto.customer.document?.trim();
+    const document = rawDocument ? parseDocument(rawDocument) : null;
+    if (rawDocument && !document) {
+      throw new BadRequestException('Informe um CPF ou CNPJ válido.');
     }
     const isDelivery = dto.deliveryMethod === 'delivery';
     const address = isDelivery ? dto.address : undefined;
@@ -345,8 +344,8 @@ export class SiteOrdersService {
           customerName: dto.customer.name.trim(),
           customerEmail: dto.customer.email.trim(),
           customerPhone: phone,
-          customerDocument: document.value,
-          customerDocumentType: document.type,
+          customerDocument: document?.value ?? null,
+          customerDocumentType: document?.type ?? null,
           deliveryMethod: dto.deliveryMethod,
           ...(address && {
             cep: address.cep.replace(/\D/g, ''),
@@ -413,11 +412,10 @@ export class SiteOrdersService {
     }
     const phone = normalizePhone(dto.customer.phone);
     if (!phone) throw new BadRequestException('Telefone inválido.');
-    const document = parseDocument(dto.customer.document);
-    if (!document) {
-      throw new BadRequestException(
-        'Informe um CPF, CNPJ ou passaporte válido.',
-      );
+    const rawDocument = dto.customer.document?.trim();
+    const document = rawDocument ? parseDocument(rawDocument) : null;
+    if (rawDocument && !document) {
+      throw new BadRequestException('Informe um CPF ou CNPJ válido.');
     }
     const quantity = dto.attendees.length;
 
@@ -470,8 +468,8 @@ export class SiteOrdersService {
             customerName: dto.customer.name.trim(),
             customerEmail: dto.customer.email.trim(),
             customerPhone: phone,
-            customerDocument: document.value,
-            customerDocumentType: document.type,
+            customerDocument: document?.value ?? null,
+            customerDocumentType: document?.type ?? null,
             deliveryMethod: null,
             notes: dto.notes?.trim() || null,
             subtotal,
@@ -539,10 +537,27 @@ export class SiteOrdersService {
           name: order.customerName,
           email: order.customerEmail,
           phone: order.customerPhone,
-          // `startPayment` só roda sobre o pedido recém-criado por `create`/
-          // `createTickets`, que sempre grava os dois campos.
-          document: order.customerDocument!,
-          documentType: order.customerDocumentType!,
+          // Opcional: sem ele, o Pagar.me pede na própria página de pagamento.
+          ...(order.customerDocument &&
+            order.customerDocumentType && {
+              document: order.customerDocument,
+              documentType: order.customerDocumentType,
+            }),
+          // Só em pedido com entrega: evita a página do Pagar.me mostrar um
+          // endereço antigo (de outra compra) em vez do que foi confirmado aqui.
+          ...(order.deliveryMethod === 'delivery' &&
+            order.cep &&
+            order.street &&
+            order.streetNumber &&
+            order.bairro && {
+              address: {
+                cep: order.cep,
+                street: order.street,
+                number: order.streetNumber,
+                bairro: order.bairro,
+                ...(order.complement && { complement: order.complement }),
+              },
+            }),
         },
         successUrl: `${siteUrl()}/pedido/${order.publicToken}`,
         maxInstallments: installmentsFor(order.total, settings),
