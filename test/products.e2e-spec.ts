@@ -176,6 +176,7 @@ describe('Public catalog (e2e)', () => {
         },
         availability: 'made_to_order',
         leadTimeDays: null,
+        createdAt: expect.any(String),
       },
     ]);
   });

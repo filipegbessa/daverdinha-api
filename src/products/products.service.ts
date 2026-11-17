@@ -44,6 +44,8 @@ export interface ProductPublic {
   availability: Availability;
   /** Prazo de confecção; só vem preenchido quando é sob encomenda. */
   leadTimeDays: number | null;
+  /** Quando foi cadastrado (ISO): o "Novidades" do site ordena por ele. */
+  createdAt: string;
 }
 
 export interface ProductAdmin extends ProductPublic {
@@ -117,6 +119,7 @@ function toPublic(
     category: row.category,
     availability,
     leadTimeDays: availability === 'made_to_order' ? row.leadTimeDays : null,
+    createdAt: row.createdAt.toISOString(),
   };
 }
 

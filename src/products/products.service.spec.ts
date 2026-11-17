@@ -307,6 +307,7 @@ describe('ProductsService', () => {
         category: { id: 'c1', name: 'Vasos', slug: 'vasos' },
         availability: 'made_to_order',
         leadTimeDays: 10,
+        createdAt: expect.any(String),
       });
     });
 
