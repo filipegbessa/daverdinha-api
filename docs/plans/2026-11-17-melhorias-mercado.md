@@ -89,7 +89,7 @@ Feito o inventário no código em 2026-11-17, para não propor o que já existe:
 
 | # | Melhoria | Por quê | Ref. | Impacto | Esforço |
 |---|---|---|---|---|---|
-| A1 | **Notificação de pedido novo** (push no celular, como já existe para conversa nova, com som diferente) | A cliente fica sabendo da venda na hora, sem abrir o admin. Reaproveita toda a infraestrutura de push. | Shopify (app), Nuvemshop (app) | Alto | P |
+| A1 | ~~**Notificação de pedido novo**~~ **(já existe:** a API manda push quando o pedido é pago**)** (push no celular, como já existe para conversa nova, com som diferente) | A cliente fica sabendo da venda na hora, sem abrir o admin. Reaproveita toda a infraestrutura de push. | Shopify (app), Nuvemshop (app) | Alto | P |
 | A2 | **Criar pedido pelo admin e gerar o link de pagamento** para mandar no WhatsApp | A cliente já vende pelo WhatsApp. Com isso a venda fechada na conversa vira pedido com pagamento, estoque e e-mail, igual ao do site. Reaproveita o fluxo de checkout. | Shopify (pedidos em rascunho), Nuvemshop (pedido manual) | Alto | M |
 | A3 | **Imprimir o pedido** (comanda de separação e etiqueta de entrega com endereço, telefone e observações) | Entrega própria: o entregador sai com o papel. CSS de impressão, sem PDF. | Todas | Médio | P |
 | A4 | **Entregas do dia**: lista dos pedidos a entregar agrupados por área ou bairro, com link do endereço no Maps | Monta a rota da entrega própria. Usa as áreas de entrega que já existem. | Apps de logística | Médio | M |
