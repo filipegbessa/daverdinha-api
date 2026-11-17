@@ -167,6 +167,7 @@ describe('Public catalog (e2e)', () => {
         slug: 'e2e-vaso',
         description: 'd',
         price: 89.9,
+        listPrice: null,
         images: [],
         category: {
           id: ids.categories[0],
