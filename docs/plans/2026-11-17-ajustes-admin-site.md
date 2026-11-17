@@ -46,7 +46,9 @@ Cada **pacote** junta itens de documentos diferentes que mexem nos mesmos arquiv
 
 ### Onda 3: vender mais
 
-- [ ] **3.1 Preço promocional.** [B] Fase A + [C] V3 selos "Últimas unidades" e "Sob encomenda" no card.
+- [~] **3.0 Carrinho em dropdown** *(pedido em 2026-11-17; implementado, aguardando commit e deploy)*. O ícone do carrinho abre um dropdown com os itens, a quantidade, o subtotal e "Finalizar compra"/"Ver carrinho". Abre sozinho ao adicionar só no computador. Pesquisa: dropdown no desktop é a convenção; no celular, abrir sozinho atrapalha (testes de mercado mostram queda de conversão no mobile com carrinho que abre sozinho).
+
+- [~] **3.1 Preço promocional.** *(implementado em 2026-11-17, aguardando a migração em produção, o commit e o deploy. Os selos de [C] V3 ficaram de fora: "Últimas unidades" precisa de a API expor o estoque restante no catálogo.)* [B] Fase A + [C] V3 selos "Últimas unidades" e "Sob encomenda" no card.
   - Usa o mesmo componente de preço e card.
   - Depende de 2.2.
 - [ ] **3.2 Pedido pelo admin.** [C] A2 criar pedido e gerar o link de pagamento + [C] A3 imprimir pedido.
