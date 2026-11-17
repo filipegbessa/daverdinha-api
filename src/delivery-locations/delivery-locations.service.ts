@@ -37,7 +37,8 @@ export class DeliveryLocationsService {
 
   /**
    * Sem paginação de propósito: é a lista fixa de bairros do seed (não cresce
-   * com o uso), e o admin liga e desliga a cobertura vendo todos juntos.
+   * com o uso), e o admin distribui os bairros da zona entre as áreas vendo
+   * todos juntos.
    */
   list() {
     return this.prisma.deliveryLocation.findMany({
@@ -47,14 +48,13 @@ export class DeliveryLocationsService {
   }
 
   /**
-   * What the public site advertises under "Onde entregamos", grouped by
-   * administrative zone. Reads the same `covered` flags the bot answers
-   * from, so the site can't promise a bairro the bot turns away — which is
-   * exactly what happened while that list was hardcoded in the frontend.
+   * O "Onde entregamos" do site, por zona: os bairros que estão numa área de
+   * entrega. É a mesma regra que o bot e o checkout usam (`resolveCep`), então
+   * o site nunca anuncia um bairro que o bot recusa.
    */
   async listCoveredByZone(): Promise<CoveredZone[]> {
     const locations = await this.prisma.deliveryLocation.findMany({
-      where: { covered: true },
+      where: { areaId: { not: null } },
       orderBy: [{ zone: 'asc' }, { regionName: 'asc' }],
       select: { zone: true, regionName: true },
     });
@@ -116,18 +116,24 @@ export class DeliveryLocationsService {
   }
 }
 
+/**
+ * Atendido = está numa área de entrega (com valor, que pode ser zero:
+ * entrega grátis). Desde 2026-11-17 a área é a única fonte da verdade, pro
+ * site, pro checkout e pro bot; o antigo `covered` ("Bairros atendidos")
+ * não é mais lido.
+ */
 function fromLocation(location: {
   id: string;
   zone: string;
   regionName: string;
-  covered: boolean;
+  areaId: string | null;
 }): CepResolution {
   const match = {
     bairro: location.regionName,
     zone: location.zone,
     locationId: location.id,
   };
-  return location.covered
+  return location.areaId
     ? { status: 'covered', ...match }
     : { status: 'not_covered', ...match };
 }

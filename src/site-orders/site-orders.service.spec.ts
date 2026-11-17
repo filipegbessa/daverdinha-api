@@ -207,7 +207,7 @@ describe('SiteOrdersService.quote', () => {
 
       expect(quote.delivery).toEqual({
         available: false,
-        reason: 'no_area',
+        reason: 'not_covered',
         bairro: 'Catete',
       });
     });
@@ -1120,7 +1120,7 @@ describe('SiteOrdersService.create', () => {
 
     expect(error).toBeInstanceOf(UnprocessableEntityException);
     expect(error.getResponse()).toEqual(
-      expect.objectContaining({ reason: 'no_area' }),
+      expect.objectContaining({ reason: 'not_covered' }),
     );
   });
 

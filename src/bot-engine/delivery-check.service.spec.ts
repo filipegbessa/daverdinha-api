@@ -36,14 +36,14 @@ describe('DeliveryCheckService', () => {
       id: 'l1',
       zone: 'Zona Sul',
       regionName: 'Ipanema',
-      covered: true,
+      areaId: 'a1',
       cepRanges: [{ startCep: 22410000, endCep: 22471999 }],
     },
     {
       id: 'l2',
       zone: 'Zona Oeste',
       regionName: 'Barra da Tijuca',
-      covered: false,
+      areaId: null,
       cepRanges: [{ startCep: 22600000, endCep: 22799999 }],
     },
   ];

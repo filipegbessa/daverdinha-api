@@ -79,8 +79,7 @@ export interface Attendee {
   };
 }
 
-export type DeliveryUnavailableReason =
-  'no_cep' | 'unresolved' | 'not_covered' | 'no_area';
+export type DeliveryUnavailableReason = 'no_cep' | 'unresolved' | 'not_covered';
 
 /** A cotação com `Decimal`: é ela que a criação do pedido reaproveita. */
 export interface QuoteDetails {
@@ -1201,8 +1200,9 @@ export class SiteOrdersService {
   }
 
   /**
-   * Entrega pro CEP: o bairro tem que estar atendido e numa área com valor.
-   * Qualquer outro caso é entrega indisponível, nunca frete zero.
+   * Entrega pro CEP: o bairro tem que estar numa área de entrega (é o que o
+   * torna atendido), e o frete é o valor dela. Qualquer outro caso é entrega
+   * indisponível.
    */
   private async deliveryFor(cep?: string): Promise<QuoteDetails['delivery']> {
     if (!cep?.trim()) return { available: false, reason: 'no_cep' };
@@ -1218,8 +1218,14 @@ export class SiteOrdersService {
       };
     }
     const area = await this.deliveryAreas.feeForLocation(resolution.locationId);
+    // Atendido já quer dizer "tem área"; sem ela (a área foi apagada entre as
+    // duas leituras), a entrega fica indisponível, nunca de graça.
     if (!area) {
-      return { available: false, reason: 'no_area', bairro: resolution.bairro };
+      return {
+        available: false,
+        reason: 'not_covered',
+        bairro: resolution.bairro,
+      };
     }
     return {
       available: true,
