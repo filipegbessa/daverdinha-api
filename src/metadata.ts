@@ -71,8 +71,8 @@ import * as m67 from './events/public-events.controller';
 import * as m68 from './site-orders/site-order-tickets.controller';
 import * as m69 from './coupons/coupons.controller';
 import * as m70 from './promotions/shipping-promotions.controller';
-import * as m71 from './openapi/openapi.controller';
-import * as m72 from './customers/customers.controller';
+import * as m71 from './customers/customers.controller';
+import * as m72 from './openapi/openapi.controller';
 
 export default async () => {
   const t = {
@@ -1368,8 +1368,8 @@ export default async () => {
             },
           },
         ],
-        [m71, { OpenApiController: { get: { type: Object } } }],
-        [m72, { CustomersController: { list: {}, byPhone: { type: Object } } }],
+        [m71, { CustomersController: { list: {}, byPhone: { type: Object } } }],
+        [m72, { OpenApiController: { get: { type: Object } } }],
       ],
     },
   };

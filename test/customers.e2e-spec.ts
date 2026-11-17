@@ -21,7 +21,7 @@ describe('Customers (e2e)', () => {
     total: string,
     status: SiteOrderStatus,
     createdAt: string,
-    phone = '5521977776666',
+    phone = '5521955501234',
   ) {
     const row = await prisma.siteOrder.create({
       data: {
@@ -70,12 +70,12 @@ describe('Customers (e2e)', () => {
       '300',
       'paid',
       '2026-01-15T10:00:00Z',
-      '5521966665555',
+      '5521955504321',
     );
 
     const conversation = await prisma.conversation.create({
       // A conversa sem o nono dígito, como o WhatsApp manda alguns números.
-      data: { phone: '552177776666', name: 'Ana WhatsApp' },
+      data: { phone: '552155501234', name: 'Ana WhatsApp' },
     });
     ids.conversations.push(conversation.id);
   });
@@ -96,7 +96,7 @@ describe('Customers (e2e)', () => {
       {
         name: 'Ana Souza',
         email: 'E2E-CLI-ANA@exemplo.com',
-        phone: '5521977776666',
+        phone: '5521955501234',
         ordersCount: 2,
         totalSpent: 150.5,
         lastOrderAt: '2026-02-01T10:00:00.000Z',
@@ -114,7 +114,7 @@ describe('Customers (e2e)', () => {
     const bySpent = await service.list({ q: 'e2e-cli-', sort: 'spent' });
     expect(bySpent.items.map((c) => c.name)).toEqual(['Bia', 'Ana Souza']);
 
-    const byPhone = await service.list({ q: '96666-5555' });
+    const byPhone = await service.list({ q: '95550-4321' });
     expect(byPhone.items.map((c) => c.name)).toEqual(['Bia']);
   });
 
@@ -124,7 +124,7 @@ describe('Customers (e2e)', () => {
   });
 
   it('finds the customer of a conversation phone without the ninth digit', async () => {
-    const result = await service.byPhone('552177776666');
+    const result = await service.byPhone('552155501234');
 
     expect(result.customer).toEqual(
       expect.objectContaining({
