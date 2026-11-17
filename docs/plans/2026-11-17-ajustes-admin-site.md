@@ -22,9 +22,9 @@ Cada **pacote** junta itens de documentos diferentes que mexem nos mesmos arquiv
 
 ### Onda 1: correções e base (sem mudança no banco)
 
-- [~] **1.1 Checkout.** *(implementado em 2026-11-17, aguardando commit e deploy)* [A] 1 tela de conclusão + [A] 2 nome completo + [C] C1 lembrar a compradora + [C] C2 `begin_checkout`/`view_item` na loja.
+- [x] **1.1 Checkout.** *(2026-11-17: API `8558598c`, site `dcd7198`)* [A] 1 tela de conclusão + [A] 2 nome completo + [C] C1 lembrar a compradora + [C] C2 `begin_checkout`/`view_item` na loja.
   - Arquivos: `CheckoutForm`, `TicketCheckout`, `checkout-form.ts`; na API, `customer.dto.ts`.
-- [~] **1.2 Menu.** *(implementado em 2026-11-17, aguardando commit e deploy)* [A] 3 grupos Loja/Site/Bot + "Agenda" → "Eventos".
+- [x] **1.2 Menu.** *(2026-11-17: site `a9b9f1d`; `/admin/agenda` redireciona com 308)* [A] 3 grupos Loja/Site/Bot + "Agenda" → "Eventos".
   - Arquivos: `admin/layout.tsx`, `admin/agenda` → `admin/eventos`.
 - [ ] **1.3 Entregas (visual).** [A] 5 modal com os bairros da área.
 - [ ] **1.4 Página do pedido.** [C] P1 linha do tempo + [C] P2 "Comprar de novo".
@@ -41,7 +41,7 @@ Cada **pacote** junta itens de documentos diferentes que mexem nos mesmos arquiv
   - Depende de 1.2 (o menu esconde o grupo Bot).
 - [ ] **2.2 Tela de produto.** [B] Fase 0 página própria + [B] "Duplicar" (da Fase E) + [C] K2 limite de estoque baixo no produto.
 - [ ] **2.3 Entregas, fase 1.** [A] 6, fases 0 e 1: a área passa a definir a cobertura; a coluna `covered` fica sem uso.
-  - **Espera:** a cliente revisar os bairros sem área.
+  - **Decidido (2026-11-17):** a lista "Bairros atendidos" morre no front e no banco. A única fonte da verdade é a área de entrega com valor. Área com valor R$ 0,00 = entrega grátis. Os bairros marcados como atendidos e fora de qualquer área deixam de ser atendidos (também pelo bot).
 
 ### Onda 3: vender mais
 
@@ -49,13 +49,14 @@ Cada **pacote** junta itens de documentos diferentes que mexem nos mesmos arquiv
   - Usa o mesmo componente de preço e card.
   - Depende de 2.2.
 - [ ] **3.2 Pedido pelo admin.** [C] A2 criar pedido e gerar o link de pagamento + [C] A3 imprimir pedido.
-  - **Espera:** as chaves de teste do Pagar.me, para validar no sandbox.
-- [ ] **3.3 Cupom.** [B] Fase B (com o menu Loja → Cupons).
-  - **Espera:** a resposta do Pagar.me sobre desconto no link e as respostas da cliente (seção 4 de [B]).
+  - Chaves de teste do Pagar.me já disponíveis para validar no sandbox.
+- [ ] **3.3 Cupom.** [B] Fase B: cupom com escopo (pedido, produtos, categorias, eventos), valor mínimo, desconto máximo e limite total, na nova área Loja → **Promoções**.
+  - Decisões da cliente em [B] seção 4. Antes de começar: o teste do item único no sandbox ([B] seção 5).
 
 ### Onda 4: alcance
 
-- [ ] **4.1 Promoções da loja.** [B] Fase C frete grátis acima de R$ X + desconto no Pix (se o Pagar.me permitir).
+- [ ] **4.1 Promoções automáticas.** [B] Fase C: frete grátis acima de R$ X, configurável em Promoções → Automáticas.
+  - Depende de 3.3 (a tela de Promoções). O desconto no Pix ficou para o futuro.
 - [ ] **4.2 Catálogo e busca.** [C] M1 feed Google/Meta + [C] V1 busca + [C] V2 ordenar e filtrar.
   - Todos usam as mesmas consultas do catálogo.
 - [ ] **4.3 Clientes.** [C] L2 cliente ↔ conversa do WhatsApp + [C] L1 lista de clientes.
@@ -65,7 +66,7 @@ Cada **pacote** junta itens de documentos diferentes que mexem nos mesmos arquiv
 
 ### Backlog (sem onda ainda)
 
-- [B] Fase D: cupom restrito a categorias e produtos, limite por cliente, relatório.
+- [B] Fase D: relatório por cupom e por promoção. Desconto no Pix (futuro).
 - [B] Fase E, o que sobrou: guia de configuração, variações, agendamento de entrega, mensagem de presente, carrinho abandonado, "Avise-me".
 - [C]:
   - **Vitrine e checkout:** C4 checkout transparente, C5 pedido mínimo, V4 produtos relacionados, V7 e P3 avaliações.
@@ -77,12 +78,14 @@ Cada **pacote** junta itens de documentos diferentes que mexem nos mesmos arquiv
 
 | Pendência | Com quem | Bloqueia |
 |---|---|---|
-| Chaves de teste (sandbox) do Pagar.me | Pagar.me | 3.2, 3.3, 4.1 (testes de pagamento) |
-| O link de pagamento aceita desconto (no carrinho ou só no Pix)? | Pagar.me | 3.3, 4.1 |
-| Revisar os bairros "atendidos sem área" e "com área e não atendidos" | Cliente | 2.3 |
-| Respostas sobre o cupom (acumular com promoção, ingressos, limite por cliente) | Cliente | 3.3 |
-| Valor do frete grátis | Cliente | 4.1 |
-| Chave e DNS do Resend | Cliente / nós | Nenhum pacote. Só liga os e-mails, que já estão prontos. |
+| ~~Chaves de teste (sandbox) do Pagar.me~~ | — | Já temos (2026-11-17). |
+| O link de pagamento aceita desconto nativo? (Desconto no Pix ficou para o futuro.) | Pagar.me | 3.3, só se quisermos o desconto nativo; o rateio não depende disso |
+| ~~Revisar os bairros sem área~~ | — | Decidido em 2026-11-17: só a área de entrega vale. |
+| ~~Respostas sobre o cupom~~ | — | Respondido em 2026-11-17 (ver [B], seção 4). |
+| Valor do frete grátis | Cliente, **no admin** | Nada: o valor é configurável em Promoções (4.1). |
+| Testar no sandbox se o link aceita itens com valor ajustado (rateio do desconto) | Nós (já temos as chaves de teste) | 3.3 |
+| Resend: conferir no painel o status dos e-mails que "não chegam" e adicionar o DMARC | Nós | Nenhum pacote. O domínio já tem DKIM e SPF. |
+| Respostas dos questionários de políticas e de ingressos | Cliente | As páginas de trocas e de cancelamento de ingressos e a revisão da privacidade. |
 
 ## Resumo dos ajustes deste documento
 
@@ -217,8 +220,8 @@ Hoje `src/app/admin/layout.tsx` tem uma lista plana (`NAV_ITEMS`) com 11 itens. 
   - o grupo Bot só aparece com `whatsappModuleEnabled`;
   - o layout já lê `/conversations` a cada 15 s para o badge, e passa a ler `/bot-settings` uma vez;
   - com o módulo desligado, a leitura de `/conversations` (badge) para.
-- [ ] **Rotas escondidas:** acessar `/admin/conversas` direto com o módulo desligado mostra a página normalmente. Não é segurança, só organização do menu. Decisão a confirmar; a alternativa é redirecionar para o Dashboard.
-- [ ] **Notificações push** de mensagem nova com o módulo desligado: **sugestão**, não enviar (`ConversationNotifierService` checa a flag). A confirmar.
+- [ ] **Rotas escondidas:** com o módulo desligado, abrir direto `/admin/conversas`, `/admin/menu`, `/admin/mensagens` ou `/admin/marcadores` **redireciona para o Dashboard** (decidido em 2026-11-17). Não é segurança (a API continua protegida pelo Clerk), só organização.
+- [ ] **Notificações push** de mensagem nova com o módulo desligado: **não enviar** (decidido em 2026-11-17). `ConversationNotifierService` checa a flag antes de mandar.
 
 **Decisões (confirmadas em 2026-11-17):**
 
@@ -251,7 +254,7 @@ Hoje `src/app/admin/layout.tsx` tem uma lista plana (`NAV_ITEMS`) com 11 itens. 
 - `DeliveryLocation.covered`, a lista "Bairros atendidos" com checkbox. É dela que **o bot** e o "Onde entregamos" do site leem.
 - `DeliveryLocation.areaId`, a área com valor, que é de onde **o checkout** lê. Bairro atendido sem área = "no_area" (o site não entrega e a tela mostra o aviso vermelho).
 
-**Regra nova:** um bairro é atendido **se e só se está numa área de entrega**. O valor da área vale para o site, e o bot responde "entregamos" para os mesmos bairros. A lista "Bairros atendidos" e o campo `covered` deixam de existir.
+**Regra nova (decidida em 2026-11-17):** um bairro é atendido **se e só se está numa área de entrega**. Área com valor **R$ 0,00 = entrega grátis**: o checkout já mostra "Grátis" e não manda frete ao Pagar.me. Falta mostrar "Entrega grátis" no "Entregamos no seu CEP?" e "Grátis" na lista de áreas do admin, no lugar de "R$ 0,00". O valor da área vale para o site, e o bot responde "entregamos" para os mesmos bairros. A lista "Bairros atendidos" e o campo `covered` deixam de existir.
 
 ### Todos os pontos que mudam
 
@@ -290,13 +293,13 @@ Hoje `src/app/admin/layout.tsx` tem uma lista plana (`NAV_ITEMS`) com 11 itens. 
 
 O risco: um bairro marcado "atendido" que **não está em nenhuma área** deixa de ser atendido pelo bot no dia da troca. Por isso a mudança sai em duas fases.
 
-- [ ] **Fase 0, conferência (antes de qualquer deploy).** Listar em produção, só com leitura:
+- [ ] **Fase 0, conferência (antes de qualquer deploy).** *Decidido:* bairro fora de área deixa de ser atendido. A conferência continua valendo, mas só para avisar a cliente de quais bairros o bot vai parar de atender. Listar em produção, só com leitura:
   - os bairros com `covered = true AND area_id IS NULL`: hoje o bot entrega neles e o site não;
   - os bairros com `covered = false AND area_id IS NOT NULL`: hoje o site entrega neles e o bot diz que não.
 
-  Mandar a lista para a cliente decidir: entra numa área (com valor) ou deixa de ser atendido.
+  Mandar a lista para a cliente como aviso: se quiser continuar atendendo algum desses bairros, basta colocá-lo numa área antes do deploy.
 
-  O admin já mostra o primeiro grupo no aviso vermelho de cada zona, então dá para a própria cliente resolver por lá antes do deploy.
+  O primeiro grupo já aparece no admin: é a frase em vermelho "Sem entrega pelo site até entrarem numa área: …" embaixo de cada zona, em `/admin/entregas`.
 - [ ] **Fase 1, código (deploy 1).** API e site param de ler e escrever `covered`, e a regra nova vale. A coluna continua no banco, sem uso. Assim dá para voltar o deploy sem perder dado.
 - [ ] **Fase 2, limpeza (deploy 2, alguns dias depois).** Remover `covered` do schema, re-squash do `_init` e aplicar no banco pelo caminho seguro do README:
   1. `migrate diff --from-url <prod> --to-schema-datamodel`;

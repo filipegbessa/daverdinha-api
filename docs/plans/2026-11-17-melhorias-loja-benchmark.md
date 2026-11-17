@@ -68,9 +68,9 @@ Este quadro é um resumo do que as plataformas mais usadas no Brasil oferecem ho
 
 - **Preço sempre do banco.** O checkout recalcula tudo na API (`POST /checkout/quote` e a criação do pedido). Desconto também: o site só manda o **código** do cupom, e a API decide.
 - **Link de pagamento do Pagar.me.** Hoje mandamos `cart_settings.items` (preço de cada item) + `shipping_cost`, e o total cobrado é a soma. **Falta verificar na doc ou com o suporte** se `POST /paymentlinks` aceita um campo de desconto.
-  - **Se não aceitar:** o desconto é **rateado** no preço dos itens enviados ao Pagar.me, proporcional ao valor de cada um, e a sobra dos centavos vai no último item. O nosso pedido guarda o preço cheio, o desconto e o código do cupom. Só o que vai ao Pagar.me é rateado.
+  - **Decidido (2026-11-17), sem depender do Pagar.me:** pedido com desconto manda os produtos como **um item só**, já descontado (ver Fase B). Evita o rateio de centavos entre itens. O nosso pedido guarda os itens, o preço cheio, o desconto e o código do cupom.
   - **Frete grátis:** é `shipping_cost` zero.
-  - **Desconto no Pix:** só dá se o link permitir valor diferente por meio de pagamento. **Verificar.** Se não permitir, fica fora (a alternativa seria criar o pedido Pix pela API de pedidos, fora do link, o que é um projeto maior).
+  - **Desconto no Pix:** para o futuro (decidido em 2026-11-17). Só dá se o link permitir valor diferente por meio de pagamento; senão, exige criar o pedido Pix pela API de pedidos, fora do link.
 - **Cache do site.** Produto e vitrine são cacheados (ISR). Promoção com data de início e fim precisa:
   - revalidar na virada, por um cron que chama `refreshPublicSite`, ou
   - aceitar alguns minutos de atraso na vitrine.
@@ -168,7 +168,33 @@ Celular: uma coluna, na ordem Status → Informações → Fotos → Preço → 
   - componente único `ProductPrice`, no design system do site.
 - [ ] **Lista de produtos no admin:** marcador "Em promoção".
 
-### Fase B: cupom de desconto básico
+### Benchmark de cupons e promoções (pesquisado em 2026-11-17)
+
+| Referência | Como funciona |
+|---|---|
+| **Shopify** | Quatro tipos de desconto: valor ou % nos **produtos** (um produto, uma coleção ou o pedido), **compre X leve Y**, valor ou % no **pedido** e **frete grátis**. Cada um vira cupom (com código) **ou** desconto automático (sem código). Requisito mínimo: valor ou quantidade. O frete grátis pode valer só para algumas regiões. A combinação entre descontos é configurada em cada um. |
+| **Nuvemshop** | Em "Marketing → Cupons": porcentagem, valor fixo ou frete grátis. **Valor mínimo** (soma dos produtos, sem o frete), validade, limite de usos, restrição por **categorias** e, no %, um **valor máximo de desconto** ("até R$ X"). Um cupom dá um benefício só (não existe "5% + frete grátis"). Por padrão o cupom acumula com produto em promoção e com frete grátis automático, mas dá para desmarcar. As **promoções** sem código (frete grátis, "leve 3 pague 2") ficam em outra tela. |
+
+**O que adotamos:** a separação da Nuvemshop e da Shopify entre **cupom** (com código, a cliente divulga) e **promoção automática** (sem código, vale para todo mundo que cumpre a regra), as duas na mesma área do admin, "Promoções". Do cupom, ficam valor mínimo, desconto máximo no %, escopo (produtos, categorias, eventos), validade e limite total. Um benefício por cupom, e um cupom por pedido.
+
+### Fase B: cupom de desconto
+
+Decisões da seção 4 aplicadas: não acumula com preço promocional; o escopo é escolhido em cada cupom (pedido, produtos, categorias ou eventos); o limite é só o total; desconto no Pix fica para o futuro.
+
+**Regras do cupom**
+
+| Regra | Como funciona |
+|---|---|
+| **Benefício** (um por cupom) | `percent` (com **desconto máximo** opcional, "15% até R$ 50"), `fixed` (R$) ou `free_shipping`. |
+| **Escopo** | `order`: todos os produtos do pedido · `categories`: só os itens dessas categorias · `products`: só esses produtos · `events`: ingressos desses eventos (lista vazia = todos os eventos). Cupom de produtos nunca vale em ingresso, e vice-versa. |
+| **Base do desconto** | A soma dos itens **elegíveis** (os do escopo), **sem** os itens em preço promocional e **sem** o frete. |
+| **Valor mínimo** ("acima de") | Opcional. Comparado com a base do desconto. |
+| **Validade** | Início e fim opcionais. |
+| **Limite** | Só o **total** de usos (decidido: sem limite por cliente). |
+| **Valor fixo maior que a base** | O desconto para na base: o pedido nunca fica negativo, e o frete nunca é descontado (só pelo `free_shipping`). |
+| **Um cupom por pedido** | Aplicar outro troca o anterior. |
+
+Mensagens de erro do cupom (aparecem no campo): "Cupom não encontrado", "Cupom expirado", "Este cupom começa em DD/MM", "Este cupom esgotou", "Pedido mínimo de R$ X para este cupom", "Este cupom não vale para os itens do carrinho", "Este cupom não vale para produtos em promoção".
 
 **API**
 
@@ -178,16 +204,19 @@ Celular: uma coluna, na ordem Status → Informações → Fotos → Preço → 
   |---|---|
   | `id` | |
   | `code` | Único, sempre em maiúsculas |
+  | `description` | Opcional, só para o admin ("Instagram de novembro") |
   | `type` | `percent` / `fixed` / `free_shipping` |
-  | `value` | Decimal |
+  | `value` | Decimal; vazio no `free_shipping` |
+  | `maxDiscount` | Opcional, só no `percent` |
+  | `scope` | `order` / `categories` / `products` / `events` |
   | `minSubtotal` | Opcional |
   | `startsAt?`, `endsAt?` | Validade |
-  | `maxUses?` | Limite de usos total |
+  | `maxUses?` | Limite total |
   | `active` | |
-  | `excludePromoItems` | Default `true`: não acumula com preço promocional |
   | `createdAt`, `updatedAt` | |
 
-  - Seed com um cupom de exemplo.
+  - Tabelas de ligação `CouponCategory`, `CouponProduct` e `CouponEvent`, usadas conforme o `scope`.
+  - Migração aditiva. Seed com um cupom de exemplo de cada escopo.
 - [ ] **`SiteOrder`:**
   - novos campos `couponId?`, `couponCode?` (cópia do código) e `discount Decimal @default(0)`;
   - `total = subtotal − discount + deliveryFee`;
@@ -195,13 +224,14 @@ Celular: uma coluna, na ordem Status → Informações → Fotos → Preço → 
 - [ ] **CRUD `/coupons`:**
   - admin, paginado, com `?q=` por código;
   - excluir um cupom já usado = desativar, porque os pedidos guardam o código.
-- [ ] **Cotação e criação do pedido aceitam `couponCode`.**
+- [ ] **Cálculo num lugar só** (`src/coupons/apply-coupon.ts`), puro e com testes de todas as regras da tabela acima.
+- [ ] **Cotação, criação do pedido e compra de ingresso aceitam `couponCode`.**
   - A cotação responde `coupon: { code, discount } | { code, error }`.
-  - Mensagens de erro claras: "Cupom não encontrado", "Cupom expirado", "Pedido mínimo de R$ X para este cupom", "Este cupom esgotou".
-  - Na criação do pedido, o limite de usos é checado **na mesma transação** da reserva de estoque.
-- [ ] **Pagar.me:**
-  - rateio do desconto nos itens (ver seção 2), se o link não aceitar desconto nativo;
-  - teste unitário garantindo que a soma enviada == `total` do pedido, centavo a centavo.
+  - Na criação do pedido, o limite de usos é checado **na mesma transação** da reserva de estoque ou de vagas.
+- [ ] **Pagar.me (decidido pelo nosso lado; testar no sandbox):**
+  - pedido **sem** desconto: como hoje, um item por produto;
+  - pedido **com** desconto: os produtos vão como **um item só**, "Pedido DV-XXXX (cupom CODIGO)", com o valor já descontado, e o frete continua em `shipping_cost`. Assim não há rateio de centavos entre itens nem risco de valor mínimo por item. O nosso pedido guarda os itens, o preço cheio e o desconto;
+  - teste unitário garantindo que o valor enviado == `total` do pedido, centavo a centavo.
 - [ ] **Uso do cupom:**
   - conta quando o pedido é pago (`paid`);
   - pedido pendente reserva o uso; vencido ou cancelado libera.
@@ -209,27 +239,38 @@ Celular: uma coluna, na ordem Status → Informações → Fotos → Preço → 
 
 **Site**
 
-- [ ] **Checkout:**
+- [ ] **Checkout da loja e do ingresso:**
   - campo "Tem um cupom?", que abre input + "Aplicar" e recalcula pela cotação;
   - o resumo mostra a linha de desconto;
-  - o cupom vai no `createCheckout`.
-- [ ] **Admin, menu Loja → Cupons:**
-  - lista com código, desconto, validade, usos e situação (ativo, agendado, expirado, esgotado);
-  - formulário com prévia em texto ("15% de desconto em pedidos acima de R$ 100, até 30/11, máximo 50 usos").
+  - o cupom vai no `createCheckout` / `createTicketCheckout`.
+- [ ] **Admin, menu Loja → Promoções**, com duas abas:
+  - **Cupons:** lista com código, benefício, escopo, validade, usos e situação (ativo, agendado, expirado, esgotado);
+  - **Automáticas:** as promoções sem código da Fase C.
+- [ ] **Formulário do cupom**, na ordem de quem cadastra:
+  1. código (com "Gerar" aleatório) e descrição interna;
+  2. benefício: porcentagem (+ "desconto máximo"), valor fixo ou frete grátis;
+  3. vale para: todo o pedido de produtos, categorias, produtos ou eventos (com busca para escolher);
+  4. condições: valor mínimo;
+  5. validade e limite total;
+  6. **prévia em texto**: "15% de desconto, até R$ 50, nos produtos da categoria Vasos, em pedidos acima de R$ 100, até 30/11, máximo 50 usos".
 - [ ] **Link com cupom** (`?cupom=CODIGO`) que já aplica no carrinho: bom para divulgar no Instagram e no WhatsApp.
 
-### Fase C: promoções da loja
+### Fase C: promoções automáticas (frete grátis)
 
-- [ ] **Frete grátis acima de R$ X.** Em `StoreSettings`, criar `freeShippingMinSubtotal Decimal?`. O carrinho mostra "Faltam R$ Y para frete grátis".
-- [ ] **Desconto no Pix.** Só se o Pagar.me permitir (verificação da seção 2).
-- [ ] **Cupom de frete grátis.** Já coberto pelo `type`, e entra na UI nesta fase se não entrar na B.
+- [ ] **Frete grátis acima de R$ X**, cadastrado em **Promoções → Automáticas** (decidido: configurável no admin, sem valor fixo no código).
+  - Campos: valor mínimo, áreas de entrega onde vale (todas, ou escolher), validade opcional, ativo.
+  - O mínimo é comparado com o subtotal **depois** do cupom, para o cupom não destravar frete grátis sozinho.
+  - Não vale na retirada (já é grátis).
+  - Model `ShippingPromotion` (uma tabela, para caber outras regras depois), ou campos em `StoreSettings` se for uma regra só. Recomendação: a tabela.
+- [ ] **Carrinho e checkout:** "Faltam R$ Y para frete grátis" quando houver regra ativa. Antes de saber o CEP, o texto diz "em pedidos acima de R$ X para os bairros atendidos".
+- [ ] **Área com valor R$ 0,00 = entrega sempre grátis** naquela área. Já funciona no checkout; o "Entregamos no seu CEP?" passa a dizer "Entrega grátis" (ajuste 6 do outro plano).
+- [ ] **Cupom de frete grátis:** é o `type` `free_shipping` da Fase B.
 
-### Fase D: restrições e relatórios
+### Fase D: relatórios
 
-- [ ] **Cupom restrito a categorias ou produtos.** Tabelas `CouponCategory` e `CouponProduct`. O desconto incide só sobre os itens elegíveis.
-- [ ] **Limite por cliente** (por e-mail normalizado). Sem conta, é um limite "boa-fé": quem trocar de e-mail burla.
-- [ ] **Cupom nos ingressos**, se a cliente quiser.
-- [ ] **Relatório por cupom:** usos, receita e desconto total.
+- [ ] **Relatório por cupom e por promoção:** usos, receita e desconto total.
+- ~~Limite por cliente~~: decidido que não precisa (2026-11-17).
+- **Desconto no Pix:** fica para o futuro (2026-11-17). Depende de o Pagar.me permitir valor diferente por meio de pagamento no link.
 
 ### Fase E: experiência de configuração (backlog)
 
@@ -241,16 +282,26 @@ Pela ordem de valor percebido para a cliente:
 4. Carrinho abandonado e "Avise-me quando chegar".
 5. Variações de produto. É a maior: muda o estoque e o carrinho.
 
-## 4. Perguntas para a cliente antes da Fase B
+## 4. Decisões da cliente (2026-11-17)
 
-1. Cupom e preço promocional podem se somar no mesmo item? (Recomendação: **não**, que é o padrão das plataformas e protege a margem.)
-2. Quer frete grátis acima de um valor? Qual valor?
-3. Desconto no Pix interessa? (Depende de o Pagar.me permitir no link.)
-4. Cupom vale também para ingressos de eventos?
-5. Precisa de limite de uso por cliente, ou basta o limite total?
+1. **Cupom e preço promocional não se somam:** item em promoção fica fora da base do desconto.
+2. **O escopo é escolhido em cada cupom:** pedido, produtos, categorias ou eventos, com valor mínimo ("acima de"). Cupom de produtos não vale em ingresso.
+3. **Limite de uso:** só o total.
+4. **Frete grátis:** sim, configurável no admin numa área de **Promoções**, junto com os cupons. Área de entrega com valor zero também é entrega grátis.
+5. **Desconto no Pix:** para o futuro.
+6. **Desconto sobre toda a compra**, com valor mínimo e desconto máximo opcionais, como nas plataformas pesquisadas.
 
 ## 5. Verificações técnicas antes de começar
 
-- [ ] **Pagar.me, desconto no link.** `POST /paymentlinks` aceita desconto nativo (no carrinho ou por meio de pagamento)? Perguntar ao contato do Pagar.me junto com as chaves.
-- [ ] **Pagar.me, valor por item.** O link aceita item com valor ajustado (rateio) sem regra de valor mínimo por item?
+- [ ] **Pagar.me, item único com desconto (sandbox).** Criar um link com um item só, no valor já descontado, mais `shipping_cost`, e conferir a tela de pagamento e o valor cobrado. Já temos as chaves de teste.
+- [ ] **Pagar.me, desconto nativo no link (opcional).** Se o suporte confirmar um campo de desconto em `POST /paymentlinks`, a tela de pagamento pode mostrar os itens e o desconto separados. Não bloqueia a Fase B.
+- [ ] **Pagar.me, recibo ao comprador.** Num teste a cliente não recebeu e-mail do Pagar.me. Conferir no sandbox e no painel se o envio do recibo é uma configuração. Se não for possível, o total pago entra no nosso e-mail de confirmação.
 - [ ] **Cache das promoções agendadas.** Definir como a vitrine revalida na virada de uma promoção: cron de 5 min ou aceitar o `revalidate` atual.
+
+## Fontes do benchmark de cupons
+
+- [Shopify, tipos de desconto](https://help.shopify.com/manual/discounts/discount-types)
+- [Shopify, exemplos de combinação de descontos](https://help.shopify.com/cs/manual/discounts/combining-discounts/examples)
+- [Nuvemshop, como criar cupons de desconto](https://atendimento.nuvemshop.com.br/cupons/como-criar-cupons-de-desconto)
+- [Nuvemshop, como oferecer promoções e descontos](https://atendimento.nuvemshop.com.br/como-oferecer-promocoes-e-descontos)
+- [Nuvemshop, perguntas frequentes sobre promoções](https://atendimento.nuvemshop.com.br/funcionamento/perguntas-frequentes-sobre-promocoes-e-descontos)
