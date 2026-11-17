@@ -46,15 +46,17 @@ Cada **pacote** junta itens de documentos diferentes que mexem nos mesmos arquiv
 
 ### Onda 3: vender mais
 
-- [~] **3.0 Carrinho em dropdown** *(pedido em 2026-11-17; implementado, aguardando commit e deploy)*. O ícone do carrinho abre um dropdown com os itens, a quantidade, o subtotal e "Finalizar compra"/"Ver carrinho". Abre sozinho ao adicionar só no computador. Pesquisa: dropdown no desktop é a convenção; no celular, abrir sozinho atrapalha (testes de mercado mostram queda de conversão no mobile com carrinho que abre sozinho).
+- [~] **3.0 Carrinho em dropdown** *(pedido em 2026-11-17; primeira versão em produção, site `bc6bf3f`; ajuste pedido em seguida, aguardando commit: abre no hover e é mais compacto, e no celular o ícone só leva pro carrinho)*. No computador, um resumo compacto no hover, com os itens, o subtotal e "Finalizar compra"; abre sozinho por uns segundos ao adicionar. Pesquisa: dropdown no desktop é a convenção; no celular, abrir sozinho atrapalha (testes de mercado mostram queda de conversão no mobile com carrinho que abre sozinho).
 
-- [~] **3.1 Preço promocional.** *(implementado em 2026-11-17, aguardando a migração em produção, o commit e o deploy. Os selos de [C] V3 ficaram de fora: "Últimas unidades" precisa de a API expor o estoque restante no catálogo.)* [B] Fase A + [C] V3 selos "Últimas unidades" e "Sob encomenda" no card.
+- [x] **3.1 Preço promocional.** *(2026-11-17: API `6f13aeba`, site `1f77dbe`. Os selos de [C] V3 ficaram de fora: "Últimas unidades" precisa de a API expor o estoque restante no catálogo.)* [B] Fase A + [C] V3 selos "Últimas unidades" e "Sob encomenda" no card.
   - Usa o mesmo componente de preço e card.
   - Depende de 2.2.
-- [ ] **3.2 Pedido pelo admin.** [C] A2 criar pedido e gerar o link de pagamento + [C] A3 imprimir pedido.
+- [~] **3.2 Pedido pelo admin.** *(implementado em 2026-11-17, aguardando commit e deploy; sem migração)* [C] A2 criar pedido e gerar o link de pagamento + [C] A3 imprimir pedido.
   - Chaves de teste do Pagar.me já disponíveis para validar no sandbox.
-- [ ] **3.3 Cupom.** [B] Fase B: cupom com escopo (pedido, produtos, categorias, eventos), valor mínimo, desconto máximo e limite total, na nova área Loja → **Promoções**.
+- [~] **3.3 Cupom.** *(implementado em 2026-11-17, aguardando a migração em produção, o commit e o deploy; falta o teste no sandbox do item único)* [B] Fase B: cupom com escopo (pedido, produtos, categorias, eventos), valor mínimo, desconto máximo e limite total, na nova área Loja → **Promoções**.
   - Decisões da cliente em [B] seção 4. Antes de começar: o teste do item único no sandbox ([B] seção 5).
+
+- [~] **3.4 Tela própria de evento** *(pedido em 2026-11-17; implementado, aguardando commit e deploy)*. Criar e editar evento saem do modal e vão pra páginas próprias (`/admin/eventos/novo` e `/admin/eventos/[id]`), no mesmo padrão da tela de produto: cards por assunto, prévia, barra de salvar e aviso de alterações não salvas.
 
 ### Onda 4: alcance
 
