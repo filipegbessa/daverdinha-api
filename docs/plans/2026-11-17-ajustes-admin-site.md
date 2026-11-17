@@ -26,22 +26,22 @@ Cada **pacote** junta itens de documentos diferentes que mexem nos mesmos arquiv
   - Arquivos: `CheckoutForm`, `TicketCheckout`, `checkout-form.ts`; na API, `customer.dto.ts`.
 - [x] **1.2 Menu.** *(2026-11-17: site `a9b9f1d`; `/admin/agenda` redireciona com 308)* [A] 3 grupos Loja/Site/Bot + "Agenda" → "Eventos".
   - Arquivos: `admin/layout.tsx`, `admin/agenda` → `admin/eventos`.
-- [~] **1.3 Entregas (visual).** *(implementado em 2026-11-17, aguardando commit e deploy)* [A] 5 modal com os bairros da área.
-- [~] **1.4 Página do pedido.** *(implementado em 2026-11-17, aguardando commit e deploy)* [C] P1 linha do tempo + [C] P2 "Comprar de novo".
+- [x] **1.3 Entregas (visual).** *(2026-11-17: site `6a7c40a`)* [A] 5 modal com os bairros da área.
+- [x] **1.4 Página do pedido.** *(2026-11-17: site `5839959`)* [C] P1 linha do tempo + [C] P2 "Comprar de novo".
   - Arquivos: `/pedido/[token]`, `OrderStatus`.
 - [x] **1.5 Aviso de pedido novo.** [C] A1 push quando um pedido é pago. *(Já existia: `PushNotificationsService.notifyNewOrder`, chamado quando o pedido é pago. O inventário de [C] errou ao listar como melhoria.)*
   - Arquivos: API `push-notifications` + `site-orders`.
-- [~] **1.6 Página do produto.** *(implementado em 2026-11-17, aguardando commit e deploy)* [C] V6 "Dúvida sobre este produto?" no WhatsApp + [C] V5 galeria com zoom.
-- [~] **1.7 Pedido não encontrado** *(pedido em 2026-11-17, fora do plano original; implementado, aguardando commit)*. `/pedido/<token>` com link inválido mostra "Pedido não encontrado", com "Receber os links por e-mail" e WhatsApp, e continua respondendo 404. Com a API fora do ar, mostra "Não conseguimos abrir seu pedido agora" com "Tentar de novo", em vez de um 404.
+- [x] **1.6 Página do produto.** *(2026-11-17: site `be7f9ba`)* [C] V6 "Dúvida sobre este produto?" no WhatsApp + [C] V5 galeria com zoom.
+- [x] **1.7 Pedido não encontrado** *(pedido em 2026-11-17, fora do plano original; site `5839959`)*. `/pedido/<token>` com link inválido mostra "Pedido não encontrado", com "Receber os links por e-mail" e WhatsApp, e continua respondendo 404. Com a API fora do ar, mostra "Não conseguimos abrir seu pedido agora" com "Tentar de novo", em vez de um 404.
 
 ### Onda 2: estrutura do admin
 
-- [~] **2.1 Dashboard novo.** *(implementado em 2026-11-17; aguardando a migração em produção, o commit e o deploy)* [A] 4 interruptor "WhatsApp bot" + [C] R1 resumo de vendas + [C] K2 aviso de estoque baixo + [C] S1 loja em férias.
+- [x] **2.1 Dashboard novo.** *(2026-11-17: API `e910b2a7`, site `2fa61d6`; colunas aplicadas em produção)* [A] 4 interruptor "WhatsApp bot" + [C] R1 resumo de vendas + [C] K2 aviso de estoque baixo + [C] S1 loja em férias.
   - A tela é desenhada uma vez só.
   - Banco: campos novos em `BotSettings` e `StoreSettings`, migração aditiva.
   - Depende de 1.2 (o menu esconde o grupo Bot).
-- [~] **2.2 Tela de produto.** [B] Fase 0 página própria + [B] "Duplicar" (da Fase E). *(implementado em 2026-11-17, aguardando commit e deploy. O limite de estoque baixo ficou um só, nas configurações da loja, em vez de um por produto. Duplicar não copia as fotos: a API não copia fotos entre produtos.)*
-- [~] **2.3 Entregas, fase 1.** *(implementado em 2026-11-17, aguardando commit e deploy. Sem migração: a coluna `covered` fica sem uso até a 4.4.)* [A] 6, fases 0 e 1: a área passa a definir a cobertura; a coluna `covered` fica sem uso.
+- [x] **2.2 Tela de produto.** [B] Fase 0 página própria + [B] "Duplicar" (da Fase E). *(2026-11-17: site `0625587`)*
+- [x] **2.3 Entregas, fase 1.** *(2026-11-17: API `345acf33`, site `6a7c40a`)* [A] 6, fases 0 e 1: a área passa a definir a cobertura; a coluna `covered` fica sem uso.
   - **Decidido (2026-11-17):** a lista "Bairros atendidos" morre no front e no banco. A única fonte da verdade é a área de entrega com valor. Área com valor R$ 0,00 = entrega grátis. Os bairros marcados como atendidos e fora de qualquer área deixam de ser atendidos (também pelo bot).
 
 ### Onda 3: vender mais
