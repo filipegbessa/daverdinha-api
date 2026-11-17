@@ -60,7 +60,7 @@ Cada **pacote** junta itens de documentos diferentes que mexem nos mesmos arquiv
 
 ### Onda 4: alcance
 
-- [ ] **4.1 Promoções automáticas.** [B] Fase C: frete grátis acima de R$ X, configurável em Promoções → Automáticas.
+- [x] **4.1 Promoções automáticas.** *(entregue em 2026-11-17)* [B] Fase C: frete grátis acima de R$ X, configurável em Promoções → Automáticas.
   - Depende de 3.3 (a tela de Promoções). O desconto no Pix ficou para o futuro.
 - [ ] **4.2 Catálogo e busca.** [C] M1 feed Google/Meta + [C] V1 busca + [C] V2 ordenar e filtrar.
   - Todos usam as mesmas consultas do catálogo.
@@ -68,6 +68,9 @@ Cada **pacote** junta itens de documentos diferentes que mexem nos mesmos arquiv
 - [ ] **4.4 Entregas, fase 2.** [A] 6 remoção da coluna `covered`.
   - É o único `DROP` do roteiro.
   - Alguns dias depois de 2.3 estável.
+
+- [ ] **4.5 Produto em mais de uma categoria** *(pedido em 2026-11-17)*. Um vaso pode estar em "Vasos" e em "Presentes", por exemplo. Detalhes em "Produto em mais de uma categoria", no fim deste documento.
+  - **Precisa de migração**, com a cópia da categoria atual de cada produto pra tabela nova (só acréscimo; a coluna antiga sai numa fase 2, como a do `covered`).
 
 ### Backlog (sem onda ainda)
 
@@ -324,3 +327,51 @@ Na fase 1, a API sai antes do site. O admin antigo ainda chamaria `PATCH /delive
 
 - Cupom, preço promocional e outras configurações da loja: `2026-11-17-melhorias-loja-benchmark.md`.
 - As tarefas pendentes já conhecidas (chaves do Pagar.me e do Resend, teste no sandbox, QR no celular): `docs/configurar-chaves.md` e `2026-11-12-pos-venda.md`.
+
+---
+
+## Produto em mais de uma categoria (pacote 4.5)
+
+**Hoje:** cada produto tem uma categoria só (`Product.categoryId`, obrigatória, com `RESTRICT` ao apagar a categoria). Ela decide:
+
+- a URL do produto: `/produtos/[categoria]/[produto]` (o site redireciona quando a categoria da URL está desatualizada);
+- o breadcrumb, o rótulo do card e o JSON-LD (`category`);
+- em quais páginas de categoria o produto aparece, e a contagem de produtos de cada categoria no admin;
+- o escopo "Categorias" do cupom;
+- o filtro por categoria na lista de produtos do admin.
+
+**Proposta: várias categorias, uma principal.** O padrão das plataformas (Shopify com coleções, Nuvemshop com categorias múltiplas) é o produto aparecer em várias listas, mas ter um endereço só. Por isso:
+
+- **Categoria principal** (`Product.categoryId`, como hoje): continua decidindo a URL, o breadcrumb, o rótulo do card e o JSON-LD. Nada muda nos links que já existem, nem no Google.
+- **Categorias adicionais** (tabela nova `ProductCategoryLink { productId, categoryId }`, chave composta, `CASCADE` dos dois lados): o produto também aparece nas páginas dessas categorias.
+
+### O que muda
+
+**API**
+
+| Onde | Mudança |
+|---|---|
+| `prisma/schema.prisma` | Tabela `product_category_links`. A principal também entra na tabela (fica mais simples consultar "produtos da categoria X"). |
+| Produtos (`products.service.ts`) | `categoryIds` no criar e editar (multipart, como os outros campos); a principal sempre faz parte da lista. `listActive(categorySlug)` passa a filtrar pela tabela. O admin recebe `categoryIds` e as categorias com nome. |
+| Filtro do admin | `?categoryId=` filtra pela tabela (aparece em qualquer categoria em que o produto esteja). |
+| Categorias (`product-categories.service.ts`) | A contagem de produtos e "categorias ativas com produto" passam a contar pela tabela. Apagar uma categoria continua recusado se ela for a **principal** de algum produto; se for só adicional, o vínculo sai junto. |
+| Cupom (`apply-coupon.ts`) | `CouponLine.categoryId` vira `categoryIds`: o item entra no escopo se **qualquer** categoria dele estiver no cupom. |
+| Seed | Um produto de exemplo em duas categorias. |
+| Migração | Fase 1: cria a tabela e copia `(id, category_id)` de todo produto (`INSERT … SELECT`), só acréscimo. A coluna `category_id` fica (é a principal). |
+
+**Site e admin**
+
+| Onde | Mudança |
+|---|---|
+| Tela de produto (`ProductForm`) | Card "Organização": "Categoria principal" (a de hoje) + "Também aparece em" (caixas de seleção com as outras categorias). |
+| Lista de produtos do admin | Mostra a principal e "+N" quando há outras. |
+| Página de categoria (`/produtos/[categoria]`) | Lista os produtos que estão nela, principais ou adicionais. O link do card continua apontando pra URL da categoria principal. |
+| Página do produto | Sem mudança de URL. Opcional: "Também em: Presentes" com link. |
+| Sitemap e JSON-LD | Sem mudança (URL única pela principal). |
+| Cupom no admin | Sem mudança na tela; a regra nova é só na API. |
+
+### Perguntas antes de começar
+
+1. Tem um limite de categorias por produto? Recomendação: até 5, pra lista do admin continuar legível.
+2. A categoria principal precisa ser escolhida explicitamente, ou pode ser a primeira marcada? Recomendação: explícita, porque ela define o endereço do produto.
+
