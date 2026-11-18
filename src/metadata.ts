@@ -45,34 +45,42 @@ import * as m41 from './site-orders/dto/check-in-by-code.dto';
 import * as m42 from './promotions/dto/shipping-promotion.dto';
 import * as m43 from './customers/dto/list-customers.dto';
 import * as m44 from './customers/dto/customer-by-phone.dto';
-import * as m45 from './app.controller';
-import * as m46 from './bot-settings/bot-settings.controller';
-import * as m47 from './menu-items/menu-items.controller';
-import * as m48 from './delivery-locations/delivery-locations.controller';
-import * as m49 from './delivery-locations/public-delivery-locations.controller';
-import * as m50 from './delivery-locations/delivery-areas.controller';
-import * as m51 from './whatsapp/webhook.controller';
-import * as m52 from './push-subscriptions/push-subscriptions.controller';
-import * as m53 from './conversations/conversations.controller';
-import * as m54 from './categories/categories.controller';
-import * as m55 from './media/media-retention.controller';
-import * as m56 from './openapi/docs-page.controller';
-import * as m57 from './product-categories/product-categories.controller';
-import * as m58 from './product-categories/public-product-categories.controller';
-import * as m59 from './products/products.controller';
-import * as m60 from './products/public-products.controller';
-import * as m61 from './store-settings/store-settings.controller';
-import * as m62 from './store-settings/public-store-settings.controller';
-import * as m63 from './checkout/public-checkout.controller';
-import * as m64 from './site-orders/site-orders.controller';
-import * as m65 from './checkout/pagarme-webhook.controller';
-import * as m66 from './events/events.controller';
-import * as m67 from './events/public-events.controller';
-import * as m68 from './site-orders/site-order-tickets.controller';
-import * as m69 from './coupons/coupons.controller';
-import * as m70 from './promotions/shipping-promotions.controller';
-import * as m71 from './customers/customers.controller';
-import * as m72 from './openapi/openapi.controller';
+import * as m45 from './hero-slides/dto/create-hero-slide.dto';
+import * as m46 from './hero-slides/dto/update-hero-slide.dto';
+import * as m47 from './hero-slides/dto/reorder-hero-slides.dto';
+import * as m48 from './site-content/dto/update-about.dto';
+import * as m49 from './app.controller';
+import * as m50 from './bot-settings/bot-settings.controller';
+import * as m51 from './menu-items/menu-items.controller';
+import * as m52 from './delivery-locations/delivery-locations.controller';
+import * as m53 from './delivery-locations/public-delivery-locations.controller';
+import * as m54 from './delivery-locations/delivery-areas.controller';
+import * as m55 from './whatsapp/webhook.controller';
+import * as m56 from './push-subscriptions/push-subscriptions.controller';
+import * as m57 from './conversations/conversations.controller';
+import * as m58 from './categories/categories.controller';
+import * as m59 from './media/media-retention.controller';
+import * as m60 from './openapi/docs-page.controller';
+import * as m61 from './product-categories/product-categories.controller';
+import * as m62 from './product-categories/public-product-categories.controller';
+import * as m63 from './products/products.controller';
+import * as m64 from './products/public-products.controller';
+import * as m65 from './store-settings/store-settings.controller';
+import * as m66 from './store-settings/public-store-settings.controller';
+import * as m67 from './checkout/public-checkout.controller';
+import * as m68 from './site-orders/site-orders.controller';
+import * as m69 from './checkout/pagarme-webhook.controller';
+import * as m70 from './events/events.controller';
+import * as m71 from './events/public-events.controller';
+import * as m72 from './site-orders/site-order-tickets.controller';
+import * as m73 from './coupons/coupons.controller';
+import * as m74 from './promotions/shipping-promotions.controller';
+import * as m75 from './customers/customers.controller';
+import * as m76 from './openapi/openapi.controller';
+import * as m77 from './hero-slides/hero-slides.controller';
+import * as m78 from './hero-slides/public-hero-slides.controller';
+import * as m79 from './site-content/site-content.controller';
+import * as m80 from './site-content/public-site-content.controller';
 
 export default async () => {
   const t = {
@@ -1077,11 +1085,129 @@ export default async () => {
             },
           },
         ],
-      ],
-      controllers: [
-        [m45, { AppController: { health: {} } }],
+        [
+          m45,
+          {
+            CreateHeroSlideDto: {
+              eyebrow: {
+                required: false,
+                type: () => String,
+                nullable: true,
+                maxLength: 60,
+              },
+              title: { required: true, type: () => String, maxLength: 80 },
+              description: {
+                required: false,
+                type: () => String,
+                nullable: true,
+                maxLength: 200,
+              },
+              linkLabel: {
+                required: false,
+                type: () => String,
+                nullable: true,
+                description:
+                  'Texto do bot\u00E3o principal. S\u00F3 aparece com o link tamb\u00E9m preenchido.',
+                maxLength: 30,
+              },
+              linkUrl: {
+                required: false,
+                type: () => String,
+                nullable: true,
+                maxLength: 500,
+              },
+              whatsappLabel: {
+                required: false,
+                type: () => String,
+                nullable: true,
+                description: 'Sem texto, o site escreve "Falar no WhatsApp".',
+                maxLength: 30,
+              },
+              whatsappMessage: {
+                required: false,
+                type: () => String,
+                nullable: true,
+                description:
+                  'A mensagem que j\u00E1 vai escrita na conversa. Sem ela, n\u00E3o h\u00E1 bot\u00E3o.',
+                maxLength: 500,
+              },
+              active: { required: false, type: () => Boolean },
+              startsAt: {
+                required: false,
+                type: () => String,
+                nullable: true,
+                description:
+                  'ISO 8601 com fuso. Vazio = sem data de in\u00EDcio.',
+              },
+              endsAt: {
+                required: false,
+                type: () => String,
+                nullable: true,
+                description: 'ISO 8601 com fuso. Vazio = sem data de fim.',
+              },
+            },
+          },
+        ],
         [
           m46,
+          {
+            UpdateHeroSlideDto: {
+              removeImage: {
+                required: false,
+                type: () => Boolean,
+                description:
+                  '`true` apaga a imagem atual sem mandar outra (o slide fica com o fundo da marca).',
+              },
+            },
+          },
+        ],
+        [
+          m47,
+          {
+            ReorderHeroSlidesDto: {
+              orderedIds: {
+                required: true,
+                type: () => [String],
+                description:
+                  'Todos os slides, na ordem nova. O teto \u00E9 folgado: s\u00E3o poucos slides.',
+                format: 'uuid',
+                maxItems: 50,
+              },
+            },
+          },
+        ],
+        [
+          m48,
+          {
+            UpdateAboutDto: {
+              title: { required: true, type: () => String, maxLength: 100 },
+              text: {
+                required: true,
+                type: () => String,
+                description: 'Par\u00E1grafos separados por linha em branco.',
+                maxLength: 2000,
+              },
+              instagramLabel: {
+                required: false,
+                type: () => String,
+                nullable: true,
+                description:
+                  'Texto do link pro Instagram. Vazio, o "Sobre" fica sem o link.',
+                maxLength: 40,
+              },
+              removeImage: {
+                required: false,
+                type: () => Boolean,
+                description: '`true` apaga a foto atual sem mandar outra.',
+              },
+            },
+          },
+        ],
+      ],
+      controllers: [
+        [m49, { AppController: { health: {} } }],
+        [
+          m50,
           {
             BotSettingsController: {
               get: { type: Object },
@@ -1090,7 +1216,7 @@ export default async () => {
           },
         ],
         [
-          m47,
+          m51,
           {
             MenuItemsController: {
               list: { type: Object },
@@ -1103,13 +1229,13 @@ export default async () => {
           },
         ],
         [
-          m48,
+          m52,
           {
             DeliveryLocationsController: { list: { type: Object }, update: {} },
           },
         ],
         [
-          m49,
+          m53,
           {
             PublicDeliveryLocationsController: {
               listCovered: { type: [Object] },
@@ -1122,7 +1248,7 @@ export default async () => {
           },
         ],
         [
-          m50,
+          m54,
           {
             DeliveryAreasController: {
               list: { type: [Object] },
@@ -1133,10 +1259,10 @@ export default async () => {
             },
           },
         ],
-        [m51, { WebhookController: { verify: { type: String }, receive: {} } }],
-        [m52, { PushSubscriptionsController: { save: {}, remove: {} } }],
+        [m55, { WebhookController: { verify: { type: String }, receive: {} } }],
+        [m56, { PushSubscriptionsController: { save: {}, remove: {} } }],
         [
-          m53,
+          m57,
           {
             ConversationsController: {
               list: {},
@@ -1164,7 +1290,7 @@ export default async () => {
           },
         ],
         [
-          m54,
+          m58,
           {
             CategoriesController: {
               list: {},
@@ -1175,7 +1301,7 @@ export default async () => {
           },
         ],
         [
-          m55,
+          m59,
           {
             MediaRetentionController: {
               run: {
@@ -1185,9 +1311,9 @@ export default async () => {
             },
           },
         ],
-        [m56, { DocsPageController: { page: { type: String } } }],
+        [m60, { DocsPageController: { page: { type: String } } }],
         [
-          m57,
+          m61,
           {
             ProductCategoriesController: {
               list: { type: Object },
@@ -1198,7 +1324,7 @@ export default async () => {
           },
         ],
         [
-          m58,
+          m62,
           {
             PublicProductCategoriesController: {
               listActive: { type: [Object] },
@@ -1206,7 +1332,7 @@ export default async () => {
           },
         ],
         [
-          m59,
+          m63,
           {
             ProductsController: {
               list: {},
@@ -1218,7 +1344,7 @@ export default async () => {
           },
         ],
         [
-          m60,
+          m64,
           {
             PublicProductsController: {
               listActive: { type: [Object] },
@@ -1227,7 +1353,7 @@ export default async () => {
           },
         ],
         [
-          m61,
+          m65,
           {
             StoreSettingsController: {
               get: { type: Object },
@@ -1236,11 +1362,11 @@ export default async () => {
           },
         ],
         [
-          m62,
+          m66,
           { PublicStoreSettingsController: { getPublic: { type: Object } } },
         ],
         [
-          m63,
+          m67,
           {
             PublicCheckoutController: {
               quote: {
@@ -1270,7 +1396,7 @@ export default async () => {
           },
         ],
         [
-          m64,
+          m68,
           {
             SiteOrdersController: {
               list: {},
@@ -1299,9 +1425,9 @@ export default async () => {
             },
           },
         ],
-        [m65, { PagarmeWebhookController: { handle: {} } }],
+        [m69, { PagarmeWebhookController: { handle: {} } }],
         [
-          m66,
+          m70,
           {
             EventsController: {
               list: {},
@@ -1317,7 +1443,7 @@ export default async () => {
           },
         ],
         [
-          m67,
+          m71,
           {
             PublicEventsController: {
               listUpcoming: { type: [Object] },
@@ -1326,7 +1452,7 @@ export default async () => {
           },
         ],
         [
-          m68,
+          m72,
           {
             SiteOrderTicketsController: {
               listAttendees: {
@@ -1343,7 +1469,7 @@ export default async () => {
           },
         ],
         [
-          m69,
+          m73,
           {
             CouponsController: {
               list: {},
@@ -1358,7 +1484,7 @@ export default async () => {
           },
         ],
         [
-          m70,
+          m74,
           {
             ShippingPromotionsController: {
               list: { type: [Object] },
@@ -1368,8 +1494,27 @@ export default async () => {
             },
           },
         ],
-        [m71, { CustomersController: { list: {}, byPhone: { type: Object } } }],
-        [m72, { OpenApiController: { get: { type: Object } } }],
+        [m75, { CustomersController: { list: {}, byPhone: { type: Object } } }],
+        [m76, { OpenApiController: { get: { type: Object } } }],
+        [
+          m77,
+          {
+            HeroSlidesController: {
+              list: { type: [Object] },
+              findOne: { type: Object },
+              create: { type: Object },
+              reorder: { type: [Object] },
+              update: { type: Object },
+              remove: {},
+            },
+          },
+        ],
+        [
+          m78,
+          { PublicHeroSlidesController: { listActive: { type: [Object] } } },
+        ],
+        [m79, { SiteContentController: { updateAbout: { type: Object } } }],
+        [m80, { PublicSiteContentController: { getAbout: { type: Object } } }],
       ],
     },
   };

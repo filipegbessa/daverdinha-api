@@ -280,6 +280,14 @@ Eventos (oficinas, feirinhas, aulas) que a cliente cadastra no admin e o site mo
 - O slug sai do título na criação, nunca muda e nunca é `upcoming`. O evento não pode terminar antes de começar, inclusive numa edição que muda só uma das datas.
 - **Ingressos** (detalhes em "Loja online"): `ticketSales` liga a venda pelo site em cada evento e `maxTicketsPerOrder` limita a compra (1 a 50, padrão 10). No público, `ticketSales` já vem combinado com o interruptor `ticketsEnabled` do Dashboard e traz `spotsLeft`/`soldOut`; no admin vem o valor do evento, com `sold` (pagos) e `reserved` (pendentes válidos). A lotação (`spots`) nunca é decrementada: ocupado é contado dos pedidos (`src/site-orders/spots.ts`), numa consulta agrupada pra lista inteira. Reduzir `spots` abaixo do ocupado responde 400, e excluir evento que tem ingresso responde 409 (despublicar em vez de excluir).
 
+## Conteúdo da home (módulos `hero-slides` e `site-content`)
+
+O que a cliente edita na home do site sem mexer em código: os destaques do topo e a seção "Sobre".
+
+- **Destaques** (`hero_slides`): `GET /hero-slides/active` é público (`PublicHeroSlidesController`, registrado antes do admin) e traz os slides ativos dentro da validade (`startsAt`/`endsAt` opcionais, filtrados no Postgres com `now` a cada chamada), na ordem. O admin (`ClerkAuthGuard`) tem `GET /hero-slides` (todos, com `live` = na home agora; sem paginação, são poucos), `GET /hero-slides/:id`, `POST`/`PATCH /hero-slides/:id` (multipart, uma imagem em `image` no Vercel Blob, prefixo `hero/`; `removeImage=true` tira), `PATCH /hero-slides/reorder` (`orderedIds` com todos, numa transação, como o menu do bot) e `DELETE`. Slide novo entra no fim da fila.
+- **Botões do slide:** o principal precisa de texto e link juntos (400 se vier um só, conferido contra o slide salvo numa edição parcial), e o link é um caminho do site (`/produtos/vasos`) ou `http(s)://`. O do WhatsApp aparece com `whatsappMessage`; `whatsappLabel` vazio vira "Falar no WhatsApp" no site.
+- **Sobre** (`site_content`, linha única id 1, como `StoreSettings`): `GET /site-content/about` público e `PUT /site-content/about` com Clerk (multipart: `title` e `text` obrigatórios, `instagramLabel` vazio = sem link, foto em `image` com prefixo `site/`). Antes do primeiro salvamento, a resposta tem `configured: false` e o site usa o texto do código.
+
 ## Loja online (módulos `checkout` e `site-orders`)
 
 O que a loja tem hoje e o que falta: `docs/estado-da-loja.md`. As rotas:

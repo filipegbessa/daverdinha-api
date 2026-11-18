@@ -21,6 +21,16 @@ export class BlobStorageService {
     return this.upload('events', buffer, mimeType);
   }
 
+  /** Imagem de um destaque do topo da home. */
+  uploadHeroImage(buffer: Buffer, mimeType: string): Promise<string> {
+    return this.upload('hero', buffer, mimeType);
+  }
+
+  /** Foto da seção "Sobre" da home. */
+  uploadSiteImage(buffer: Buffer, mimeType: string): Promise<string> {
+    return this.upload('site', buffer, mimeType);
+  }
+
   async deleteImage(url: string): Promise<void> {
     await del(url);
   }

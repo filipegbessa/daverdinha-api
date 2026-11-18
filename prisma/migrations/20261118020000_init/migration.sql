@@ -597,3 +597,40 @@ ALTER TABLE "shipping_promotion_areas" ADD CONSTRAINT "shipping_promotion_areas_
 -- AddForeignKey
 ALTER TABLE "shipping_promotion_areas" ADD CONSTRAINT "shipping_promotion_areas_area_id_fkey" FOREIGN KEY ("area_id") REFERENCES "delivery_areas"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
+
+-- CreateTable
+CREATE TABLE "hero_slides" (
+    "id" TEXT NOT NULL,
+    "eyebrow" TEXT,
+    "title" TEXT NOT NULL,
+    "description" TEXT,
+    "image_url" TEXT,
+    "link_label" TEXT,
+    "link_url" TEXT,
+    "whatsapp_label" TEXT,
+    "whatsapp_message" TEXT,
+    "order" INTEGER NOT NULL DEFAULT 0,
+    "active" BOOLEAN NOT NULL DEFAULT true,
+    "starts_at" TIMESTAMP(3),
+    "ends_at" TIMESTAMP(3),
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "hero_slides_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "site_content" (
+    "id" INTEGER NOT NULL DEFAULT 1,
+    "about_title" TEXT,
+    "about_text" TEXT,
+    "about_image_url" TEXT,
+    "about_instagram_label" TEXT,
+    "updated_at" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "site_content_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateIndex
+CREATE INDEX "hero_slides_active_order_idx" ON "hero_slides"("active", "order");
+

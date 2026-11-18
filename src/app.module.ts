@@ -14,6 +14,8 @@ import { OpenApiModule } from './openapi/openapi.module';
 import { ProductCategoriesModule } from './product-categories/product-categories.module';
 import { ProductsModule } from './products/products.module';
 import { EventsModule } from './events/events.module';
+import { HeroSlidesModule } from './hero-slides/hero-slides.module';
+import { SiteContentModule } from './site-content/site-content.module';
 import { StoreSettingsModule } from './store-settings/store-settings.module';
 import { CouponsModule } from './coupons/coupons.module';
 import { PromotionsModule } from './promotions/promotions.module';
@@ -37,6 +39,8 @@ import { CheckoutModule } from './checkout/checkout.module';
     ProductCategoriesModule,
     ProductsModule,
     EventsModule,
+    HeroSlidesModule,
+    SiteContentModule,
     StoreSettingsModule,
     CouponsModule,
     PromotionsModule,

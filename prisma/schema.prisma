@@ -644,3 +644,48 @@ model ShippingPromotionArea {
   @@id([promotionId, areaId])
   @@map("shipping_promotion_areas")
 }
+
+/// Os destaques do topo da home (o slideshow). Poucos por natureza: a lista
+/// do admin não é paginada.
+model HeroSlide {
+  id              String    @id @default(uuid())
+  /// Linha pequena acima do título, ex.: "Santo Cristo · Rio de Janeiro".
+  eyebrow         String?
+  /// O título do primeiro slide é o H1 da home.
+  title           String
+  description     String?
+  imageUrl        String?   @map("image_url")
+  /// Botão principal: só aparece com os dois preenchidos.
+  linkLabel       String?   @map("link_label")
+  /// Do próprio site (`/produtos/vasos`) ou externo (`https://...`).
+  linkUrl         String?   @map("link_url")
+  /// Botão do WhatsApp: só aparece com a mensagem. Sem texto, "Falar no WhatsApp".
+  whatsappLabel   String?   @map("whatsapp_label")
+  whatsappMessage String?   @map("whatsapp_message")
+  order           Int       @default(0)
+  active          Boolean   @default(true)
+  /// Validade opcional, pra slide de campanha. Sem datas, vale sempre.
+  startsAt        DateTime? @map("starts_at")
+  endsAt          DateTime? @map("ends_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  @@index([active, order])
+  @@map("hero_slides")
+}
+
+/// Textos do site editados no admin: linha única (id 1), como
+/// `StoreSettings`. Sem linha (ou sem título do "Sobre"), o site usa o texto
+/// que está no código.
+model SiteContent {
+  id                  Int      @id @default(1)
+  aboutTitle          String?  @map("about_title")
+  /// Parágrafos separados por linha em branco.
+  aboutText           String?  @map("about_text")
+  aboutImageUrl       String?  @map("about_image_url")
+  /// Texto do link pro Instagram. Vazio, o "Sobre" fica sem o link.
+  aboutInstagramLabel String?  @map("about_instagram_label")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  @@map("site_content")
+}

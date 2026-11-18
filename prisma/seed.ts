@@ -86,8 +86,8 @@ async function seedCategories() {
 
 /**
  * Catálogo de exemplo pra desenvolver o site e o admin localmente. Mesmos
- * produtos de `src/features/site/data/samples.ts` no `daverdinha`, então a
- * vitrine local fica igual à prévia. Sem fotos: elas moram no Vercel Blob,
+ * produtos de `src/features/site/test-fixtures/catalog.ts` no `daverdinha`,
+ * o catálogo dos testes de página do site. Sem fotos: elas moram no Vercel Blob,
  * e o site mostra o placeholder. Os destaques são 6 de propósito, mais do
  * que cabe numa linha, pra vitrine da home virar carrossel. O estoque cobre
  * os três estados do site: pronta entrega (`stock` com número), esgotado
@@ -139,7 +139,7 @@ const PRODUCTS = [
     leadTimeDays: null,
     category: 'vasos',
     price: '119.00',
-    // Em promoção, pra o local mostrar o "de/por" (o mesmo de `samples.ts` no site).
+    // Em promoção, pra o local mostrar o "de/por" (o mesmo das fixtures do catálogo no site).
     promoPrice: '99.00',
     featured: true,
     description:
@@ -282,7 +282,7 @@ async function seedCatalog() {
 }
 
 /**
- * Os mesmos eventos de `sampleEvents()` do site (`daverdinha/src/features/site/data/samples.ts`),
+ * Os mesmos eventos das fixtures do site (`daverdinha/src/features/site/test-fixtures/catalog.ts`),
  * com datas relativas a hoje: dois futuros e um passado, pra ver "Este evento
  * já aconteceu". Por `slug` com `update: {}`, como o catálogo: as datas ficam
  * as da primeira vez que o seed rodou.
@@ -817,6 +817,72 @@ async function seedWhatsAppOrder() {
   });
 }
 
+/**
+ * Os destaques do topo da home, os mesmos que o site mostrava de exemplo antes
+ * do cadastro no admin (5.3). Sem chave natural, os ids são fixos: rodar de
+ * novo não duplica nem desfaz o que foi editado.
+ */
+const HERO_SLIDES = [
+  {
+    id: '6f1d1c2e-0000-4000-8000-000000000001',
+    eyebrow: 'Santo Cristo · Rio de Janeiro',
+    title: 'Ateliê de plantas, vasos e oficinas no Rio de Janeiro',
+    description:
+      'Mudas, vasos e arranjos feitos no ateliê, com entrega em bairros do Rio.',
+    linkLabel: 'Ver produtos',
+    linkUrl: '/produtos',
+    whatsappMessage: 'Oi! Gostaria de saber mais sobre a Daverdinha 🌱',
+    order: 0,
+  },
+  {
+    id: '6f1d1c2e-0000-4000-8000-000000000002',
+    eyebrow: 'Oficina no ateliê',
+    title: 'Monte seu terrário com a gente',
+    description:
+      'Duas horas, todo o material incluso, e o terrário vai pra casa com você.',
+    linkLabel: 'Ver agenda',
+    linkUrl: '/agenda',
+    whatsappMessage: 'Oi! Queria saber da próxima oficina de terrário.',
+    order: 1,
+  },
+  {
+    id: '6f1d1c2e-0000-4000-8000-000000000003',
+    eyebrow: 'Presentes',
+    title: 'Kits prontos pra presentear',
+    description: 'Vaso, planta e o passo a passo numa caixa só.',
+    linkLabel: 'Ver kits',
+    linkUrl: '/produtos/kits',
+    order: 2,
+    // Desligado, pra ter no local um slide fora do ar.
+    active: false,
+  },
+];
+
+async function seedHeroSlides() {
+  for (const slide of HERO_SLIDES) {
+    await prisma.heroSlide.upsert({
+      where: { id: slide.id },
+      update: {},
+      create: slide,
+    });
+  }
+}
+
+/** O "Sobre" com o texto que o site mostrava fixo antes do 5.4. */
+async function seedSiteContent() {
+  await prisma.siteContent.upsert({
+    where: { id: 1 },
+    update: {},
+    create: {
+      id: 1,
+      aboutTitle: 'Um espaço pra plantar, criar e brindar',
+      aboutText:
+        'Daverdinha é um ateliê de plantas no Santo Cristo 🌱 Atendimento e entrega combinados direto pelo WhatsApp — é só chamar a gente por lá.',
+      aboutInstagramLabel: '@daverdinha_',
+    },
+  });
+}
+
 async function main() {
   await prisma.botSettings.upsert({
     where: { id: 1 },
@@ -843,6 +909,8 @@ async function main() {
   await seedShippingPromotions();
   await seedEvents();
   await seedStoreSettings();
+  await seedHeroSlides();
+  await seedSiteContent();
   await seedDeliveryAreas();
   await seedSiteOrders();
   await seedTicketOrders();
