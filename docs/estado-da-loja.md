@@ -22,7 +22,7 @@ O detalhe de como cada parte funciona fica nos READMEs: `daverdinha-api/README.m
 
 ### Site (vitrine)
 
-- **Modo de prévia.** Com o interruptor "Site completo" desligado, `/` mostra "Em breve" e o site inteiro fica em `/site`, com `noindex`. É assim hoje em produção. A prévia mostra só o que está cadastrado; a exceção são os 2 destaques de exemplo do topo da home, até o 5.3.
+- **Modo de prévia.** Com o interruptor "Site completo" desligado, `/` mostra "Em breve" e o site inteiro fica em `/site`, com `noindex`. É assim hoje em produção. A prévia mostra só o que está cadastrado: o site não tem mais dados de exemplo.
 - **Catálogo:**
   - categorias com página própria e texto de abertura;
   - produtos em destaque na home;
@@ -37,6 +37,7 @@ O detalhe de como cada parte funciona fica nos READMEs: `daverdinha-api/README.m
   - "Entregamos no seu CEP?";
   - "Dúvida sobre este produto?" no WhatsApp;
   - JSON-LD de produto e breadcrumb.
+- **Topo da home** com os destaques do admin (slideshow com botão principal e WhatsApp, ordem e validade) e a seção **"Sobre"** editável. Sem destaque no ar, o slide padrão.
 - **Agenda de eventos** com página por evento.
 - **SEO:** sitemap, robots e canonical; `noindex` na prévia, no carrinho, no checkout, no pedido e na busca.
 - **Medição:** GA4 com `view_item`, `add_to_cart`, `begin_checkout` e `purchase`.
@@ -99,6 +100,7 @@ O detalhe de como cada parte funciona fica nos READMEs: `daverdinha-api/README.m
   - destaque;
   - duplicar.
 - **Categorias, entregas** (áreas, valores e bairros), **Promoções** (cupons e frete grátis automático), **Configurações da loja** (retirada e parcelas) e **Eventos** em tela própria.
+- **Site:** **Destaques** do topo da home (ordem pelas setas, liga e desliga, validade) e **Sobre**.
 - **Bot do WhatsApp:**
   - conversas com push;
   - menu, mensagens e marcadores;
@@ -148,9 +150,9 @@ Os pacotes estão em ordem: primeiro os que não mexem no banco, depois o conte�
   - selo de desconto em cima da foto no card;
   - mais perguntas no FAQ.
 - [x] **5.2 Lista de produtos do admin no celular** *(feito em 2026-11-18)* (sem migração): cards organizados no lugar da linha espremida.
-- [ ] **5.3 Destaques da home pelo admin** (migração: tabela nova). O slideshow do topo da home, com botão principal com link, WhatsApp opcional com a mensagem pronta, e ordem dos slides.
-- [ ] **5.4 "Sobre" pelo admin** (migração: tabela nova). Texto e foto da seção "Sobre" da home.
-- [~] **5.5 Tirar os produtos, eventos e destaques de exemplo** (sem migração). *(2026-11-18: saíram os produtos, eventos, carrinho, checkout, compra de ingresso e pedido de exemplo. Falta só tirar os 2 destaques de exemplo, junto com o 5.3.)*
+- [x] **5.3 Destaques da home pelo admin** *(feito em 2026-11-18)* (migração: tabela nova). O slideshow do topo da home, com botão principal com link, WhatsApp opcional com a mensagem pronta, e ordem dos slides.
+- [x] **5.4 "Sobre" pelo admin** *(feito em 2026-11-18)* (migração: tabela nova). Texto e foto da seção "Sobre" da home.
+- [x] **5.5 Tirar os produtos, eventos e destaques de exemplo** *(feito em 2026-11-18)* (sem migração). Os 2 últimos destaques de exemplo saíram com o 5.3.
 - [ ] **5.6 FAQ pelo admin** (migração: tabela nova). Só se a cliente quiser editar as perguntas sozinha. Até lá, as perguntas de 5.1 ficam no código.
 
 ### Depois do lançamento, para vender mais (backlog)
@@ -288,7 +290,7 @@ No computador, a mesma marcação vira uma linha só, como as outras listas.
 
 ### 5.3 Destaques da home pelo admin
 
-**Hoje:** o site já busca `GET /hero-slides/active` (`HeroSlide` em `daverdinha/src/features/site/types/hero-slide.ts`), mas a rota não existe na API. A home mostra os slides de exemplo na prévia e o slide padrão (`DEFAULT_HERO_SLIDE`) no site completo.
+**Antes:** o site já buscava `GET /hero-slides/active`, mas a rota não existia na API. A home mostrava slides de exemplo na prévia e o slide padrão no site completo.
 
 **Cadastro** (admin, grupo "Site" → "Destaques"), um slide por linha, na ordem de exibição:
 
@@ -307,13 +309,15 @@ No computador, a mesma marcação vira uma linha só, como as outras listas.
 
 - tabela `hero_slides`;
 - `GET /hero-slides/active` público, só os ativos dentro da validade, na ordem;
-- CRUD com Clerk e `PATCH /hero-slides/order`;
+- CRUD com Clerk e `PATCH /hero-slides/reorder`;
 - imagem no Vercel Blob, como a dos produtos;
 - seed com os slides de exemplo de hoje.
 
 O contrato `HeroSlide` ganha `whatsappLabel` e `whatsappMessage`.
 
 **Site:** o slideshow mostra os dois botões. Sem slide cadastrado, continua o slide padrão, com o texto que já está no código. Com um slide só, não roda.
+
+**Como ficou (2026-11-18):** como desenhado, com a ordem pelas setas (como o menu do bot) em vez de arrastar. A lista do admin diz se cada slide está na home agora, desligado, agendado ou encerrado. Cada botão do slide só aparece com o que precisa; link de fora do site abre em outra aba. A faixa "Prévia do site" saiu junto com os exemplos. Detalhes no README, "Conteúdo da home".
 
 ### 5.4 "Sobre" pelo admin
 
@@ -328,9 +332,11 @@ O contrato `HeroSlide` ganha `whatsappLabel` e `whatsappMessage`.
 
 Um registro só. **API:** tabela `site_content` com uma linha, `GET /site-content/about` público e `PATCH` com Clerk. Sem cadastro, o site usa o texto de hoje.
 
+**Como ficou (2026-11-18):** o salvamento é `PUT /site-content/about`, com o formulário inteiro de uma vez. Antes do primeiro salvamento, a tela do admin já vem com o texto que o site mostra hoje. No texto, uma linha em branco separa os parágrafos.
+
 ### 5.5 Tirar os exemplos
 
-**Hoje:** com a API vazia e o site em prévia, aparecem produtos, categorias, eventos e destaques de exemplo (`daverdinha/src/features/site/data/samples.ts`). O carrinho e a página do pedido têm um modo de exemplo para a cliente testar a loja sem pagamento (`preview-quote.ts`, `preview-order.ts`, `/pedido/exemplo`). Os exemplos alcançam 15 arquivos.
+**Antes:** com a API vazia e o site em prévia, aparecem produtos, categorias, eventos e destaques de exemplo (`daverdinha/src/features/site/data/samples.ts`). O carrinho e a página do pedido têm um modo de exemplo para a cliente testar a loja sem pagamento (`preview-quote.ts`, `preview-order.ts`, `/pedido/exemplo`). Os exemplos alcançam 15 arquivos.
 
 **Proposta:**
 
