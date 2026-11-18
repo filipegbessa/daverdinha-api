@@ -1250,7 +1250,7 @@ export default async () => {
               },
               create: {
                 summary:
-                  'Cria o pedido e devolve o link de pagamento. 409 = carrinho mudou\n(`problems`), 422 = entrega/retirada indispon\u00EDvel (`reason`), 503 = o\npagamento n\u00E3o p\u00F4de ser iniciado.',
+                  'Cria o pedido e devolve o link de pagamento. 409 = carrinho mudou\n(`problems`), 422 = entrega/retirada indispon\u00EDvel (`reason`), 503 = o\npagamento n\u00E3o p\u00F4de ser iniciado, 429 = muitas tentativas do mesmo IP.',
               },
               quoteTickets: {
                 summary:

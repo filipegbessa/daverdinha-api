@@ -103,6 +103,15 @@ export class PushNotificationsService implements OnModuleInit {
     });
   }
 
+  /** Algo na venda falhou (ver `AlertsService`): vai pros mesmos aparelhos do pedido novo. */
+  async notifyAlert(alert: {
+    title: string;
+    body: string;
+    url: string;
+  }): Promise<void> {
+    await this.sendToAll({ ...alert, body: truncateBody(alert.body) });
+  }
+
   private async sendToAll(notification: {
     title: string;
     body: string;

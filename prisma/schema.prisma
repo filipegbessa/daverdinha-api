@@ -523,12 +523,14 @@ model Event {
   @@map("events")
 }
 
-/// Tentativas do "Meus pedidos" (`POST /checkout/orders/lookup`), pra limitar
+/// Tentativas do "Meus pedidos" (`POST /checkout/orders/lookup`) e das
+/// compras pelo site (`POST /checkout` e `/checkout/tickets`), pra limitar
 /// por e-mail e por IP sem memória entre chamadas (serverless). Linhas de
-/// mais de um dia são apagadas na própria rota.
+/// mais de um dia são apagadas nas próprias rotas.
 model LookupAttempt {
   id        String   @id @default(uuid())
-  /// `email:<endereço>` ou `ip:<endereço>`.
+  /// `email:<endereço>` ou `ip:<endereço>` ("Meus pedidos"), ou
+  /// `checkout-ip:<endereço>` (limite de compras pelo site).
   key       String
   createdAt DateTime @default(now()) @map("created_at")
 

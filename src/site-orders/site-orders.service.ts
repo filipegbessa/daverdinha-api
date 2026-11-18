@@ -43,6 +43,7 @@ import {
   type PaymentGateway,
 } from '../pagarme/payment-gateway';
 import { PushNotificationsService } from '../push-notifications/push-notifications.service';
+import { AlertsService } from '../alerts/alerts.service';
 import { EmailService, type OutgoingEmail } from '../email/email.service';
 import { orderConfirmationEmail } from '../email/templates/order-confirmation';
 import { orderLinksEmail } from '../email/templates/order-links';
@@ -194,6 +195,15 @@ function mergeItems(items: CartItemDto[]): Map<string, number> {
 const LOOKUP_LIMIT_PER_EMAIL = 3;
 const LOOKUP_LIMIT_PER_IP = 20;
 
+/**
+ * Compras pelo site (produtos e ingressos) por IP, por hora. Cada pedido
+ * pendente segura o estoque (e as vagas) por uma hora; sem limite, um robô
+ * esgota a loja sem pagar. Dez cobre quem erra o cartão algumas vezes ou
+ * compra pra família inteira da mesma rede.
+ */
+export const CHECKOUT_LIMIT_PER_IP = 10;
+const LOOPBACK = /^(127\.|::1$|::ffff:127\.)/;
+
 /** Quanto tempo o pedido pendente (e o link de pagamento) seguram a reserva. */
 export const ORDER_TTL_MS = 60 * 60 * 1000;
 /**
@@ -221,6 +231,7 @@ export class SiteOrdersService {
     private readonly email: EmailService,
     private readonly coupons: CouponsService,
     private readonly shippingPromotions: ShippingPromotionsService,
+    private readonly alerts: AlertsService,
   ) {}
 
   /**
@@ -806,6 +817,12 @@ export class SiteOrdersService {
         where: { id: order.id, status: 'pending_payment' },
         data: { status: 'cancelled' },
       });
+      await this.alerts.alert({
+        kind: 'payment_link',
+        title: 'Uma compra não conseguiu ir pro pagamento',
+        detail: `${code}: o Pagar.me não criou o link (${(error as Error).message}). A compradora viu "tente de novo".`,
+        url: `/admin/pedidos/${order.id}`,
+      });
       throw new ServiceUnavailableException(PAYMENT_UNAVAILABLE);
     }
   }
@@ -837,6 +854,12 @@ export class SiteOrdersService {
           this.logger.error(
             `${code}: valor pago (${charge.amountCents} centavos) diferente do total (${toCents(order.total)}). Pedido não marcado como pago.`,
           );
+          await this.alerts.alert({
+            kind: 'amount_mismatch',
+            title: 'Pagamento com valor diferente do pedido',
+            detail: `${code}: pago R$ ${(charge.amountCents / 100).toFixed(2)}, o pedido é de R$ ${order.total.toFixed(2)}. O pedido não foi marcado como pago: confira no Pagar.me.`,
+            url: `/admin/pedidos/${order.id}`,
+          });
           await this.prisma.siteOrder.updateMany({
             where: { id: order.id },
             data: base,
@@ -1215,6 +1238,12 @@ export class SiteOrdersService {
         `E-mail de confirmação do pedido ${orderId} falhou: ${(error as Error).message}`,
       );
       await release();
+      await this.alerts.alert({
+        kind: 'confirmation_email',
+        title: 'O e-mail de confirmação de um pedido não saiu',
+        detail: `${(error as Error).message}. No pedido, use "Reenviar confirmação".`,
+        url: `/admin/pedidos/${orderId}`,
+      });
       return false;
     }
   }
@@ -1304,6 +1333,38 @@ export class SiteOrdersService {
       });
     }
     return toAttendee({ ...ticket, checkedInAt: now });
+  }
+
+  /**
+   * Barra o checkout público depois de `CHECKOUT_LIMIT_PER_IP` tentativas na
+   * última hora, contadas na mesma tabela do "Meus pedidos" (com a chave
+   * `checkout-ip:`). Conta a tentativa, não o pedido criado: quem insiste
+   * com cartão recusado também conta. Sem IP conhecido, ou da própria
+   * máquina (desenvolvimento local e os testes e2e), não limita: em produção
+   * a Vercel sempre manda o IP de quem compra.
+   */
+  async assertCheckoutAllowed(ip: string, now: Date = new Date()) {
+    if (!ip || ip === 'unknown' || LOOPBACK.test(ip)) return;
+    const key = `checkout-ip:${ip}`;
+    const hourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+    const attempts = await this.prisma.lookupAttempt.count({
+      where: { key, createdAt: { gt: hourAgo } },
+    });
+    if (attempts >= CHECKOUT_LIMIT_PER_IP) {
+      throw new HttpException(
+        'Muitas tentativas de compra seguidas. Tente de novo em uma hora ou fale com a gente pelo WhatsApp.',
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+    await this.prisma.$transaction([
+      this.prisma.lookupAttempt.create({ data: { key } }),
+      // Faxina, como no "Meus pedidos": tentativa com mais de um dia não serve.
+      this.prisma.lookupAttempt.deleteMany({
+        where: {
+          createdAt: { lt: new Date(now.getTime() - 24 * 60 * 60 * 1000) },
+        },
+      }),
+    ]);
   }
 
   /**

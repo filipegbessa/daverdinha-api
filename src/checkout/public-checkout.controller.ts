@@ -7,7 +7,9 @@ import {
   Param,
   Post,
   Req,
+  UseInterceptors,
 } from '@nestjs/common';
+import { AlertOnErrorInterceptor } from '../alerts/alert-on-error.interceptor';
 import type { Request } from 'express';
 import { ApiTags } from '@nestjs/swagger';
 import { SiteOrdersService } from '../site-orders/site-orders.service';
@@ -25,6 +27,7 @@ import { LookupOrdersDto } from './dto/lookup-orders.dto';
  */
 @ApiTags('checkout')
 @Controller('checkout')
+@UseInterceptors(AlertOnErrorInterceptor)
 export class PublicCheckoutController {
   constructor(private readonly orders: SiteOrdersService) {}
 
@@ -38,10 +41,11 @@ export class PublicCheckoutController {
   /**
    * Cria o pedido e devolve o link de pagamento. 409 = carrinho mudou
    * (`problems`), 422 = entrega/retirada indisponível (`reason`), 503 = o
-   * pagamento não pôde ser iniciado.
+   * pagamento não pôde ser iniciado, 429 = muitas tentativas do mesmo IP.
    */
   @Post()
-  async create(@Body() dto: CreateCheckoutDto) {
+  async create(@Body() dto: CreateCheckoutDto, @Req() req: Request) {
+    await this.orders.assertCheckoutAllowed(clientIp(req));
     // O id interno fica só pro admin; o site usa o token do link.
     const { code, token, paymentUrl } = await this.orders.create(dto);
     return { code, token, paymentUrl };
@@ -60,7 +64,11 @@ export class PublicCheckoutController {
   }
 
   @Post('tickets')
-  createTickets(@Body() dto: CreateTicketCheckoutDto) {
+  async createTickets(
+    @Body() dto: CreateTicketCheckoutDto,
+    @Req() req: Request,
+  ) {
+    await this.orders.assertCheckoutAllowed(clientIp(req));
     return this.orders.createTickets(dto);
   }
 

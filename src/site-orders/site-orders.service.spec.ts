@@ -8,7 +8,10 @@ import {
 import { Prisma } from '@prisma/client';
 import { CouponsService } from '../coupons/coupons.service';
 import { ShippingPromotionsService } from '../promotions/shipping-promotions.service';
-import { SiteOrdersService } from './site-orders.service';
+import {
+  CHECKOUT_LIMIT_PER_IP,
+  SiteOrdersService,
+} from './site-orders.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { DeliveryLocationsService } from '../delivery-locations/delivery-locations.service';
 import { DeliveryAreasService } from '../delivery-locations/delivery-areas.service';
@@ -16,6 +19,11 @@ import { StoreSettingsService } from '../store-settings/store-settings.service';
 import { PAYMENT_GATEWAY } from '../pagarme/payment-gateway';
 import { PushNotificationsService } from '../push-notifications/push-notifications.service';
 import { EmailService } from '../email/email.service';
+import { AlertsService } from '../alerts/alerts.service';
+
+/** Os alertas (push e e-mail pra loja) não fazem parte destes testes. */
+const alerts = { alert: jest.fn() };
+beforeEach(() => alerts.alert.mockClear());
 
 function product(overrides: Record<string, unknown> = {}) {
   return {
@@ -91,6 +99,7 @@ describe('SiteOrdersService.quote', () => {
         { provide: PAYMENT_GATEWAY, useValue: {} },
         { provide: PushNotificationsService, useValue: {} },
         { provide: EmailService, useValue: emailMock() },
+        { provide: AlertsService, useValue: alerts },
         { provide: CouponsService, useValue: coupons },
         { provide: ShippingPromotionsService, useValue: shippingPromotions },
       ],
@@ -411,6 +420,7 @@ describe('SiteOrdersService orders', () => {
         { provide: PAYMENT_GATEWAY, useValue: gateway },
         { provide: PushNotificationsService, useValue: push },
         { provide: EmailService, useValue: email },
+        { provide: AlertsService, useValue: alerts },
         { provide: CouponsService, useValue: coupons },
         { provide: ShippingPromotionsService, useValue: shippingPromotions },
       ],
@@ -723,6 +733,12 @@ describe('SiteOrdersService orders', () => {
       });
       expect(prisma.product.updateMany).not.toHaveBeenCalled();
       expect(push.notifyNewOrder).not.toHaveBeenCalled();
+      expect(alerts.alert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          kind: 'amount_mismatch',
+          url: '/admin/pedidos/o1',
+        }),
+      );
     });
 
     it('ignores a charge that is not ours', async () => {
@@ -1071,6 +1087,7 @@ describe('SiteOrdersService.create', () => {
         { provide: PAYMENT_GATEWAY, useValue: gateway },
         { provide: PushNotificationsService, useValue: {} },
         { provide: EmailService, useValue: emailMock() },
+        { provide: AlertsService, useValue: alerts },
         { provide: CouponsService, useValue: coupons },
         { provide: ShippingPromotionsService, useValue: shippingPromotions },
       ],
@@ -1399,6 +1416,9 @@ describe('SiteOrdersService.create', () => {
       where: { id: 'o9', status: 'pending_payment' },
       data: { status: 'cancelled' },
     });
+    expect(alerts.alert).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'payment_link' }),
+    );
   });
 });
 
@@ -1506,6 +1526,7 @@ describe('SiteOrdersService tickets', () => {
         { provide: PAYMENT_GATEWAY, useValue: gateway },
         { provide: PushNotificationsService, useValue: push },
         { provide: EmailService, useValue: emailMock() },
+        { provide: AlertsService, useValue: alerts },
         { provide: CouponsService, useValue: coupons },
         { provide: ShippingPromotionsService, useValue: shippingPromotions },
       ],
@@ -1540,7 +1561,9 @@ describe('SiteOrdersService tickets', () => {
       expect(data.customerDocumentType).toBeNull();
       expect(gateway.createCheckout).toHaveBeenCalledWith(
         expect.objectContaining({
-          customer: expect.not.objectContaining({ document: expect.anything() }),
+          customer: expect.not.objectContaining({
+            document: expect.anything(),
+          }),
         }),
       );
     });
@@ -1835,6 +1858,7 @@ describe('SiteOrdersService post-sale', () => {
       },
       lookupAttempt: {
         count: jest.fn().mockResolvedValue(0),
+        create: jest.fn(),
         createMany: jest.fn(),
         deleteMany: jest.fn(),
       },
@@ -1856,6 +1880,7 @@ describe('SiteOrdersService post-sale', () => {
         { provide: PAYMENT_GATEWAY, useValue: {} },
         { provide: PushNotificationsService, useValue: {} },
         { provide: EmailService, useValue: email },
+        { provide: AlertsService, useValue: alerts },
         { provide: CouponsService, useValue: coupons },
         { provide: ShippingPromotionsService, useValue: shippingPromotions },
       ],
@@ -1893,6 +1918,11 @@ describe('SiteOrdersService post-sale', () => {
         (c) => c[0].data.confirmationSentAt === null,
       );
       expect(releases).toHaveLength(2);
+      // Só a falha do Resend alerta; e-mail desligado é configuração.
+      expect(alerts.alert).toHaveBeenCalledTimes(1);
+      expect(alerts.alert).toHaveBeenCalledWith(
+        expect.objectContaining({ kind: 'confirmation_email' }),
+      );
     });
 
     it('resends only paid orders, and says when email is not set up', async () => {
@@ -2014,6 +2044,41 @@ describe('SiteOrdersService post-sale', () => {
         service.sendOrderLinks('maria@exemplo.com', '1.2.3.4'),
       ).rejects.toMatchObject({ status: 429 });
       expect(prisma.siteOrder.findMany).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('assertCheckoutAllowed', () => {
+    it('records the attempt under the checkout key of the IP', async () => {
+      prisma.lookupAttempt.count.mockResolvedValueOnce(9);
+
+      await service.assertCheckoutAllowed('200.1.2.3');
+
+      expect(prisma.lookupAttempt.count).toHaveBeenCalledWith({
+        where: {
+          key: 'checkout-ip:200.1.2.3',
+          createdAt: { gt: expect.any(Date) },
+        },
+      });
+      expect(prisma.lookupAttempt.create).toHaveBeenCalledWith({
+        data: { key: 'checkout-ip:200.1.2.3' },
+      });
+    });
+
+    it('answers 429 from the tenth attempt in an hour', async () => {
+      prisma.lookupAttempt.count.mockResolvedValueOnce(CHECKOUT_LIMIT_PER_IP);
+
+      await expect(
+        service.assertCheckoutAllowed('200.1.2.3'),
+      ).rejects.toMatchObject({ status: 429 });
+      expect(prisma.lookupAttempt.create).not.toHaveBeenCalled();
+    });
+
+    it('does not limit an unknown or local IP', async () => {
+      await service.assertCheckoutAllowed('unknown');
+      await service.assertCheckoutAllowed('::ffff:127.0.0.1');
+      await service.assertCheckoutAllowed('127.0.0.1');
+
+      expect(prisma.lookupAttempt.count).not.toHaveBeenCalled();
     });
   });
 });

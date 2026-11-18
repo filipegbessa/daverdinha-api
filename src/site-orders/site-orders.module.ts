@@ -5,6 +5,7 @@ import { ClerkAuthModule } from '../common/auth/clerk-auth.module';
 import { PagarmeModule } from '../pagarme/pagarme.module';
 import { PushNotificationsModule } from '../push-notifications/push-notifications.module';
 import { EmailModule } from '../email/email.module';
+import { AlertsModule } from '../alerts/alerts.module';
 import { SiteOrdersService } from './site-orders.service';
 import { CouponsModule } from '../coupons/coupons.module';
 import { PromotionsModule } from '../promotions/promotions.module';
@@ -20,6 +21,7 @@ import { SiteOrderTicketsController } from './site-order-tickets.controller';
     PagarmeModule,
     PushNotificationsModule,
     EmailModule,
+    AlertsModule,
     CouponsModule,
     PromotionsModule,
   ],

@@ -6,6 +6,10 @@ import {
 } from './pagarme-webhook.controller';
 import { SiteOrdersService } from '../site-orders/site-orders.service';
 import { PAYMENT_GATEWAY } from '../pagarme/payment-gateway';
+import { AlertsService } from '../alerts/alerts.service';
+
+const alerts = { alert: jest.fn() };
+beforeEach(() => alerts.alert.mockClear());
 
 const auth = `Basic ${Buffer.from('hook:s3cr3t').toString('base64')}`;
 
@@ -34,6 +38,7 @@ describe('PagarmeWebhookController', () => {
       providers: [
         { provide: SiteOrdersService, useValue: orders },
         { provide: PAYMENT_GATEWAY, useValue: gateway },
+        { provide: AlertsService, useValue: alerts },
       ],
     }).compile();
     controller = moduleRef.get(PagarmeWebhookController);
@@ -51,6 +56,9 @@ describe('PagarmeWebhookController', () => {
       ),
     ).rejects.toThrow(UnauthorizedException);
     expect(gateway.getCharge).not.toHaveBeenCalled();
+    expect(alerts.alert).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'webhook_auth' }),
+    );
   });
 
   it('trusts the status read from the gateway, not the one in the body', async () => {

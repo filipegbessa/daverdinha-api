@@ -7,7 +7,10 @@ import {
   Inject,
   Post,
   UnauthorizedException,
+  UseInterceptors,
 } from '@nestjs/common';
+import { AlertsService } from '../alerts/alerts.service';
+import { AlertOnErrorInterceptor } from '../alerts/alert-on-error.interceptor';
 import { ApiExcludeController } from '@nestjs/swagger';
 import { SiteOrdersService } from '../site-orders/site-orders.service';
 import {
@@ -54,10 +57,12 @@ export function extractChargeId(body: unknown): string | null {
  */
 @ApiExcludeController()
 @Controller('webhooks/pagarme')
+@UseInterceptors(AlertOnErrorInterceptor)
 export class PagarmeWebhookController {
   constructor(
     private readonly orders: SiteOrdersService,
     @Inject(PAYMENT_GATEWAY) private readonly gateway: PaymentGateway,
+    private readonly alerts: AlertsService,
   ) {}
 
   @Post()
@@ -72,7 +77,17 @@ export class PagarmeWebhookController {
       process.env.PAGARME_WEBHOOK_USER ?? '',
       process.env.PAGARME_WEBHOOK_PASSWORD ?? '',
     );
-    if (!valid) throw new UnauthorizedException();
+    if (!valid) {
+      // Senha do webhook diferente entre o painel e a Vercel: os pagamentos
+      // só se confirmam pela consulta da página do pedido, com atraso.
+      await this.alerts.alert({
+        kind: 'webhook_auth',
+        title: 'O aviso de pagamento do Pagar.me foi recusado',
+        detail:
+          'Usuário ou senha do webhook diferentes dos da Vercel (PAGARME_WEBHOOK_USER e PAGARME_WEBHOOK_PASSWORD). Os pagamentos ainda se confirmam pela página do pedido, mas com atraso.',
+      });
+      throw new UnauthorizedException();
+    }
     const chargeId = extractChargeId(body);
     if (!chargeId) return;
     const charge = await this.gateway.getCharge(chargeId);
