@@ -58,4 +58,4 @@ Migrations are squashed into a single `prisma/migrations/*_init` folder that is 
 
 ## Conventions
 
-Commit messages use Conventional Commits in English (`feat(scope): …`, `fix(scope): …`). README and code-adjacent docs are in Portuguese. Implementation plans live in `docs/plans/`. Unit specs sit next to the code as `*.spec.ts`.
+Commit messages use Conventional Commits in English (`feat(scope): …`, `fix(scope): …`). README and code-adjacent docs are in Portuguese. Implementation plans live in `docs/plans/` and are deleted once shipped (git keeps them). `docs/estado-da-loja.md` is the map of what the store has, what's missing before launch and the backlog; update it when something ships. Unit specs sit next to the code as `*.spec.ts`.

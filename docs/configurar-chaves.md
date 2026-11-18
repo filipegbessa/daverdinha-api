@@ -43,9 +43,9 @@ consultam o Pagar.me sozinhos (no máximo uma vez por minuto), e o botão
 
 1. **Sandbox primeiro, fora da produção.** Com a chave `sk_test_…`, rode a API
    e o site localmente (`.env` da API com `PAGARME_SECRET_KEY`) e faça o
-   roteiro do Step 3 da Tarefa 6 em `docs/plans/2026-11-05-loja-online-v1.md`.
-   Cartão aprovado `4000000000000010`, recusado `4000000000000028`, qualquer
-   CVV, validade futura; Pix de teste pelo painel. Localmente o webhook não
+   roteiro do sandbox, logo abaixo. Cartão aprovado `4000000000000010`,
+   recusado `4000000000000028`, qualquer CVV, validade futura; Pix de teste
+   pelo painel. Localmente o webhook não
    chega (o Pagar.me não alcança o seu computador), e tudo bem: a página do
    pedido confirma sozinha.
    Não ponha a chave de teste na produção com a loja ligada: qualquer
@@ -57,6 +57,33 @@ consultam o Pagar.me sozinhos (no máximo uma vez por minuto), e o botão
    some. Ligue "Venda pelo site" (e/ou "Venda de ingressos"), faça uma compra
    real de valor baixo e estorne pelo painel do Pagar.me. O pedido deve
    aparecer pago e depois estornado no admin.
+
+### Roteiro do sandbox
+
+Uma compra de cada tipo, conferindo o pedido no admin e na página `/pedido/<token>`:
+
+1. Produto com cartão aprovado: o pedido fica pago, o estoque baixa e sai o e-mail de confirmação.
+2. Cartão recusado: o pedido continua pendente e vence em 1 hora, devolvendo o estoque.
+3. Pix: pago pelo painel do sandbox, o pedido vira pago sem clicar em "Já paguei".
+4. **Pedido com cupom:** com desconto, o link vai ao Pagar.me como **um item só** (o total já descontado). Conferir que o link mostra esse valor e que o pedido fica pago.
+5. Ingresso pago e inscrição gratuita: o e-mail chega com o QR, e o check-in pela câmera funciona.
+6. Estorno pelo painel: o pedido vira estornado no admin e sai o e-mail.
+
+**Suposições do código a confirmar nesse teste** (estão isoladas em `src/pagarme/`; se alguma falhar, só esse módulo muda):
+
+1. **Autenticação do webhook = Basic Auth** configurado no painel (`webhook-auth.ts`). Se for assinatura, trocar só essa função.
+2. **A cobrança traz `order.code = DV-…`** (o `order_code` do link) ou `order.id`, que é como `applyGatewayCharge` acha o pedido. Se não trouxer nenhum dos dois, o pedido não é achado: fica pendente e vence. Conferir antes de tudo.
+3. **Reconciliação por `GET /orders?code=DV-…`** (`findChargesForLink`), porque a documentação não descreve `GET /paymentlinks/:id`.
+4. **Estorno = cobrança `canceled` com `paid_at`** (tratado como `refunded`); `overpaid` e `underpaid` contam como pagos e caem na conferência de valor.
+5. O sandbox é um só para todos os ambientes: dois bancos (local e homologação) geram `DV-0001` repetido. A conferência de valor segura a maioria dos casos; em homologação, usar uma conta sandbox só dela.
+
+## Alertas (opcional)
+
+| Variável | De onde vem | Padrão se ficar vazia |
+| --- | --- | --- |
+| `ALERT_EMAIL` | Um e-mail de quem cuida do site | Os alertas saem só pelo push do admin e pelo log |
+
+Quando a venda falha em silêncio (link de pagamento que não sai, valor pago diferente, webhook recusado, e-mail de confirmação que falhou, erro inesperado no checkout), a API avisa pelo push do admin e, com esta variável, por e-mail. Precisa do Resend configurado. Detalhes em "Alertas da venda" no README.
 
 ## Resend (e-mails de confirmação e "Meus pedidos")
 
