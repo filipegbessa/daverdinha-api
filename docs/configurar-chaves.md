@@ -19,15 +19,18 @@ variável nova num deploy novo). Nunca coloque chave no repositório nem no site
 | `PAGARME_WEBHOOK_PASSWORD` | Vocês inventam (senha longa e aleatória); a mesma do webhook no painel | 32+ caracteres |
 | `SITE_URL` | Já existe | `https://www.daverdinha.com.br` |
 
-Teste e produção usam o mesmo endereço (`api.pagar.me/core/v5`): é a chave
-que decide. `sk_test_…` (aba "Teste" do Dash) só simula, `sk_live_…` cobra de
-verdade. O sandbox antigo (`sdx-api.pagar.me`) recusa as chaves de teste do
-Dash com o erro "1000 - Não foi possível efetuar o pagamento".
+O ambiente sai da própria chave: `sk_test_…` usa o sandbox
+(`sdx-api.pagar.me`) e `sk_live_…` usa produção (`api.pagar.me`).
 `PAGARME_API_URL` só é necessária pra forçar outro endereço; deixe sem.
+Testado em 2026-11-19: com `sk_test_…`, `api.pagar.me` aceita `/orders`, mas
+recusa `/paymentlinks` com 401 sem corpo; o link só sai no sandbox.
 
 Cartões de teste (com `sk_test_…`): final `0010` aprova
 (`4000000000000010`), final `0028` recusa (`4000000000000028`); qualquer CVV
-de 3 dígitos e validade futura.
+de 3 dígitos e validade futura. Lista completa no simulador de cartão da
+documentação do Pagar.me. Se o pagamento de teste der "1000 - Não foi
+possível efetuar o pagamento", o meio de pagamento não está habilitado no
+simulador da Loja de teste: é o suporte do Pagar.me que liga ("simulator").
 
 ### Webhook no painel do Pagar.me
 

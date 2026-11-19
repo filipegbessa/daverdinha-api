@@ -80,7 +80,7 @@ describe('PagarmeService', () => {
         paymentUrl: 'https://checkout.pagar.me/pl_123',
       });
       const [url, init] = fetchMock.mock.calls[0];
-      expect(url).toBe('https://api.pagar.me/core/v5/paymentlinks');
+      expect(url).toBe('https://sdx-api.pagar.me/core/v5/paymentlinks');
       expect(init.method).toBe('POST');
       expect(init.headers.Authorization).toBe(
         `Basic ${Buffer.from('sk_test_abc:').toString('base64')}`,
@@ -274,7 +274,7 @@ describe('PagarmeService', () => {
       const charge = await service.getCharge('ch_1');
 
       expect(fetchMock.mock.calls[0][0]).toBe(
-        'https://api.pagar.me/core/v5/charges/ch_1',
+        'https://sdx-api.pagar.me/core/v5/charges/ch_1',
       );
       expect(charge).toEqual({
         id: 'ch_1',
@@ -319,7 +319,7 @@ describe('PagarmeService', () => {
       const charges = await service.findChargesForLink('pl_123', 'DV-0042');
 
       expect(fetchMock.mock.calls[0][0]).toBe(
-        'https://api.pagar.me/core/v5/orders?code=DV-0042',
+        'https://sdx-api.pagar.me/core/v5/orders?code=DV-0042',
       );
       expect(charges.map((c) => [c.id, c.status, c.orderId])).toEqual([
         ['ch_1', 'failed', 'or_1'],
@@ -337,12 +337,15 @@ describe('PagarmeService', () => {
 });
 
 describe('pagarmeBaseUrl', () => {
-  it('uses the same address for test and live keys', () => {
-    expect(pagarmeBaseUrl()).toBe('https://api.pagar.me/core/v5');
+  it('picks the sandbox for test keys and production for the rest', () => {
+    expect(pagarmeBaseUrl('sk_test_abc')).toBe(
+      'https://sdx-api.pagar.me/core/v5',
+    );
+    expect(pagarmeBaseUrl('sk_live_abc')).toBe('https://api.pagar.me/core/v5');
   });
 
   it('lets PAGARME_API_URL win, without a trailing slash', () => {
-    expect(pagarmeBaseUrl('https://outra.api/core/v5/')).toBe(
+    expect(pagarmeBaseUrl('sk_live_abc', 'https://outra.api/core/v5/')).toBe(
       'https://outra.api/core/v5',
     );
   });
