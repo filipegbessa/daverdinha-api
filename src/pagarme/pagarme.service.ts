@@ -11,8 +11,12 @@ import type {
   PaymentGateway,
 } from './payment-gateway';
 
-const PRODUCTION_URL = 'https://api.pagar.me/core/v5';
-const SANDBOX_URL = 'https://sdx-api.pagar.me/core/v5';
+/**
+ * Um endereço só: a chave decide se é simulação (`sk_test_…`, gerada na aba
+ * "Teste" do Dash) ou cobrança de verdade (`sk_live_…`). O sandbox antigo
+ * (`sdx-api.pagar.me`) recusa essas chaves de teste com o erro 1000.
+ */
+const API_URL = 'https://api.pagar.me/core/v5';
 /** Nome na fatura do cartão (até 13 caracteres). */
 const STATEMENT_DESCRIPTOR = 'DAVERDINHA';
 /** O valor que a skill de integração do Pagar.me pede em toda chamada. */
@@ -183,7 +187,7 @@ export class PagarmeService implements PaymentGateway {
         'Pagamento não configurado (PAGARME_SECRET_KEY).',
       );
     }
-    const baseUrl = pagarmeBaseUrl(secretKey, process.env.PAGARME_API_URL);
+    const baseUrl = pagarmeBaseUrl(process.env.PAGARME_API_URL);
     const response = await fetch(`${baseUrl}${path}`, {
       method,
       headers: {
@@ -206,16 +210,9 @@ export class PagarmeService implements PaymentGateway {
   }
 }
 
-/**
- * O ambiente sai da chave: `sk_test_…` só funciona no sandbox e `sk_live_…`
- * só em produção, então colar a chave basta. `PAGARME_API_URL` ainda manda,
- * se estiver configurada.
- */
-export function pagarmeBaseUrl(secretKey: string, configured?: string): string {
-  const url =
-    configured ||
-    (secretKey.startsWith('sk_test_') ? SANDBOX_URL : PRODUCTION_URL);
-  return url.replace(/\/$/, '');
+/** O endereço da API; `PAGARME_API_URL` só serve pra forçar outro. */
+export function pagarmeBaseUrl(configured?: string): string {
+  return (configured || API_URL).replace(/\/$/, '');
 }
 
 /**
