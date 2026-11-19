@@ -31,17 +31,30 @@ de 3 dígitos e validade futura.
 
 ### Webhook no painel do Pagar.me
 
-Painel → Configurações → Webhooks → novo webhook. Só um usuário com perfil
-de **admin** na conta vê a opção de criar; os outros só veem o histórico de
-eventos. Cadastre nos dois modos do Dash (Teste e Produção):
+Painel → **Configurações → Webhooks** → "+ Criar webhook". (O item
+**WEBHOOKS** do menu principal é outro: só mostra o histórico de eventos.) O
+webhook vale só para o modo em que foi criado: um na Loja de teste (faixa roxa
+no topo) e outro igual na produção quando a chave virar `sk_live_…`.
 
-- **URL:** `https://<domínio da API>/webhooks/pagarme`
-- **Autenticação:** Basic Auth com o mesmo usuário e senha de
-  `PAGARME_WEBHOOK_USER` e `PAGARME_WEBHOOK_PASSWORD`. Sem eles a API recusa
-  todo aviso (401).
-- **Eventos:** `order.paid`, `order.payment_failed`, `charge.paid`,
-  `charge.payment_failed`, `charge.refunded`, `chargeback.received`.
+- **Status:** Ativo.
+- **URL:** `https://<domínio da API>/webhooks/pagarme` (em produção hoje,
+  `https://daverdinha-api.vercel.app/webhooks/pagarme`).
+- **Máximo de tentativas:** pode ficar em 3.
+- **Habilitar autenticação:** ligado, com "Usuário do Webhook" e "Senha do
+  Webhook" iguais a `PAGARME_WEBHOOK_USER` e `PAGARME_WEBHOOK_PASSWORD` na
+  Vercel. Sem eles a API recusa todo aviso (401).
+- **Eventos** (abra cada grupo pelo "+"; não use "Marcar todos"):
+  - PEDIDO: `order.paid`, `order.payment_failed`
+  - COBRANÇA: `charge.paid`, `charge.payment_failed`, `charge.refunded`
+  - CHARGEBACK: `chargeback.received`
+
   (`checkout.canceled` pode ficar de fora: o vencimento é controlado pela API.)
+- **Confirmar criação → Senha:** é a senha do **login no Dash** de quem está
+  cadastrando, não a do webhook.
+
+Pra conferir: faça uma compra de teste e veja no histórico (menu WEBHOOKS) os
+eventos com resposta 200. 401 é usuário/senha diferentes dos da Vercel; 404 é
+URL errada.
 
 Se o webhook falhar ou atrasar, nada se perde: a página do pedido e o admin
 consultam o Pagar.me sozinhos (no máximo uma vez por minuto), e o botão
