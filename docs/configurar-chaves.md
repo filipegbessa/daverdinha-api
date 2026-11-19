@@ -19,11 +19,13 @@ variável nova num deploy novo). Nunca coloque chave no repositório nem no site
 | `PAGARME_WEBHOOK_PASSWORD` | Vocês inventam (senha longa e aleatória); a mesma do webhook no painel | 32+ caracteres |
 | `SITE_URL` | Já existe | `https://www.daverdinha.com.br` |
 
-O ambiente sai da própria chave: `sk_test_…` usa o sandbox
-(`sdx-api.pagar.me`) e `sk_live_…` usa produção (`api.pagar.me`).
-`PAGARME_API_URL` só é necessária pra forçar outro endereço; deixe sem.
-Testado em 2026-11-19: com `sk_test_…`, `api.pagar.me` aceita `/orders`, mas
-recusa `/paymentlinks` com 401 sem corpo; o link só sai no sandbox.
+O endereço sai da própria chave. Com `sk_live_…`, tudo vai pra produção
+(`api.pagar.me`). Com `sk_test_…`, o Pagar.me divide (testado em 2026-11-19):
+o link de pagamento só é criado no sandbox (`sdx-api.pagar.me`; em
+`api.pagar.me` dá 401 sem corpo), mas os pedidos e cobranças que ele gera
+ficam em `api.pagar.me` (no sandbox, `GET /orders` e `/charges` dão 404). A
+API já faz essa divisão sozinha. `PAGARME_API_URL` só é necessária pra forçar
+outro endereço em tudo; deixe sem.
 
 Cartões de teste (com `sk_test_…`): final `0010` aprova
 (`4000000000000010`), final `0028` recusa (`4000000000000028`); qualquer CVV

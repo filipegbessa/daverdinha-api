@@ -183,7 +183,11 @@ export class PagarmeService implements PaymentGateway {
         'Pagamento não configurado (PAGARME_SECRET_KEY).',
       );
     }
-    const baseUrl = pagarmeBaseUrl(secretKey, process.env.PAGARME_API_URL);
+    const baseUrl = pagarmeBaseUrl(
+      secretKey,
+      path,
+      process.env.PAGARME_API_URL,
+    );
     const response = await fetch(`${baseUrl}${path}`, {
       method,
       headers: {
@@ -207,14 +211,21 @@ export class PagarmeService implements PaymentGateway {
 }
 
 /**
- * O ambiente sai da chave: `sk_test_…` só funciona no sandbox e `sk_live_…`
- * só em produção, então colar a chave basta. `PAGARME_API_URL` ainda manda,
- * se estiver configurada.
+ * Com `sk_live_…` tudo vai pra produção. Com `sk_test_…` (Loja de teste do
+ * Dash) o Pagar.me divide: o link de pagamento só é criado no sandbox
+ * (`api.pagar.me` responde 401 a `POST /paymentlinks`), mas os pedidos e as
+ * cobranças que ele gera ficam em `api.pagar.me` (o sandbox responde 404 a
+ * `GET /orders` e `/charges`). Conferido em 2026-11-19. `PAGARME_API_URL`
+ * ainda manda em tudo, se estiver configurada.
  */
-export function pagarmeBaseUrl(secretKey: string, configured?: string): string {
-  const url =
-    configured ||
-    (secretKey.startsWith('sk_test_') ? SANDBOX_URL : PRODUCTION_URL);
+export function pagarmeBaseUrl(
+  secretKey: string,
+  path: string,
+  configured?: string,
+): string {
+  const sandbox =
+    secretKey.startsWith('sk_test_') && path.startsWith('/paymentlinks');
+  const url = configured || (sandbox ? SANDBOX_URL : PRODUCTION_URL);
   return url.replace(/\/$/, '');
 }
 

@@ -159,7 +159,11 @@ describe('PagarmeService', () => {
     });
 
     it('leaves document and document_type out when the buyer did not give one', async () => {
-      const { document: _document, documentType: _documentType, ...customer } = input().customer;
+      const {
+        document: _document,
+        documentType: _documentType,
+        ...customer
+      } = input().customer;
       await service.createCheckout(input({ customer }));
 
       const body = JSON.parse(fetchMock.mock.calls[0][1].body);
@@ -274,7 +278,7 @@ describe('PagarmeService', () => {
       const charge = await service.getCharge('ch_1');
 
       expect(fetchMock.mock.calls[0][0]).toBe(
-        'https://sdx-api.pagar.me/core/v5/charges/ch_1',
+        'https://api.pagar.me/core/v5/charges/ch_1',
       );
       expect(charge).toEqual({
         id: 'ch_1',
@@ -319,7 +323,7 @@ describe('PagarmeService', () => {
       const charges = await service.findChargesForLink('pl_123', 'DV-0042');
 
       expect(fetchMock.mock.calls[0][0]).toBe(
-        'https://sdx-api.pagar.me/core/v5/orders?code=DV-0042',
+        'https://api.pagar.me/core/v5/orders?code=DV-0042',
       );
       expect(charges.map((c) => [c.id, c.status, c.orderId])).toEqual([
         ['ch_1', 'failed', 'or_1'],
@@ -337,17 +341,35 @@ describe('PagarmeService', () => {
 });
 
 describe('pagarmeBaseUrl', () => {
-  it('picks the sandbox for test keys and production for the rest', () => {
-    expect(pagarmeBaseUrl('sk_test_abc')).toBe(
+  it('creates payment links in the sandbox with a test key', () => {
+    expect(pagarmeBaseUrl('sk_test_abc', '/paymentlinks')).toBe(
       'https://sdx-api.pagar.me/core/v5',
     );
-    expect(pagarmeBaseUrl('sk_live_abc')).toBe('https://api.pagar.me/core/v5');
+  });
+
+  it('reads orders and charges in production even with a test key', () => {
+    expect(pagarmeBaseUrl('sk_test_abc', '/orders?code=DV-0001')).toBe(
+      'https://api.pagar.me/core/v5',
+    );
+    expect(pagarmeBaseUrl('sk_test_abc', '/charges/ch_1')).toBe(
+      'https://api.pagar.me/core/v5',
+    );
+  });
+
+  it('sends everything to production with a live key', () => {
+    expect(pagarmeBaseUrl('sk_live_abc', '/paymentlinks')).toBe(
+      'https://api.pagar.me/core/v5',
+    );
   });
 
   it('lets PAGARME_API_URL win, without a trailing slash', () => {
-    expect(pagarmeBaseUrl('sk_live_abc', 'https://outra.api/core/v5/')).toBe(
-      'https://outra.api/core/v5',
-    );
+    expect(
+      pagarmeBaseUrl(
+        'sk_test_abc',
+        '/paymentlinks',
+        'https://outra.api/core/v5/',
+      ),
+    ).toBe('https://outra.api/core/v5');
   });
 });
 
