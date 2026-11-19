@@ -31,7 +31,9 @@ de 3 dígitos e validade futura.
 
 ### Webhook no painel do Pagar.me
 
-Painel → Configurações → Webhooks → novo webhook:
+Painel → Configurações → Webhooks → novo webhook. Só um usuário com perfil
+de **admin** na conta vê a opção de criar; os outros só veem o histórico de
+eventos. Cadastre nos dois modos do Dash (Teste e Produção):
 
 - **URL:** `https://<domínio da API>/webhooks/pagarme`
 - **Autenticação:** Basic Auth com o mesmo usuário e senha de
