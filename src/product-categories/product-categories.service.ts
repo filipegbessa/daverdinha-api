@@ -12,6 +12,13 @@ import {
 import { CreateProductCategoryDto } from './dto/create-product-category.dto';
 import { UpdateProductCategoryDto } from './dto/update-product-category.dto';
 
+/**
+ * URLs de `/produtos/<slug>` que o site usa para páginas que não são
+ * categorias do admin: `promocao` junta os produtos com desconto. Uma
+ * categoria chamada "Promoção" fica com `promocao-2`.
+ */
+const RESERVED_SLUGS = new Set(['promocao']);
+
 /** O que o site recebe — nada de `active`, `order` ou datas. */
 export interface ProductCategoryPublic {
   id: string;
@@ -104,12 +111,15 @@ export class ProductCategoriesService {
   }
 
   private async createWithFreshSlug(dto: CreateProductCategoryDto) {
-    const slug = await uniqueSlug(dto.name, async (candidate) =>
-      Boolean(
-        await this.prisma.productCategory.findUnique({
-          where: { slug: candidate },
-        }),
-      ),
+    const slug = await uniqueSlug(
+      dto.name,
+      async (candidate) =>
+        RESERVED_SLUGS.has(candidate) ||
+        Boolean(
+          await this.prisma.productCategory.findUnique({
+            where: { slug: candidate },
+          }),
+        ),
     );
     return this.prisma.productCategory.create({ data: { ...dto, slug } });
   }

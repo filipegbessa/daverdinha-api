@@ -57,6 +57,14 @@ describe('ProductCategoriesService', () => {
       expect(result.slug).toBe('vasos-e-cachepos');
     });
 
+    it('skips the slug the site reserves for the sale page', async () => {
+      prisma.productCategory.create.mockImplementation(({ data }) => data);
+
+      const result = await service.create({ name: 'Promoção' });
+
+      expect(result.slug).toBe('promocao-2');
+    });
+
     it('appends -2 when another category already has the slug', async () => {
       prisma.productCategory.findUnique.mockImplementation(({ where }) =>
         where.slug === 'vasos' ? { id: 'other' } : null,
