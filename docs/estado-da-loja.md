@@ -169,6 +169,7 @@ Ordenado por impacto. Esforço: P (até 1 dia), M (2–4 dias), G (1 semana ou m
 | Agendamento de entrega e mensagem de presente | Data e período da entrega no checkout, e um cartão com recado. | Médio | M |
 | Desconto no Pix | Preço menor no Pix. Depende de o link do Pagar.me aceitar valor diferente por meio de pagamento. | Médio | M |
 | Checkout transparente | Cartão e Pix na nossa página, sem ir ao link do Pagar.me. | Alto | G |
+| Fotos de eventos passados | Pedido da cliente (2026-11-23), ainda só ideia. Três partes: galeria de fotos no evento depois que ele acontece (tabela nova `event_photos`, upload como a capa); "Como foi a última edição" na página do evento novo, ligando ao anterior por um campo "Edição anterior" no cadastro (ou por "tipo de oficina", se elas se repetirem muito); e uma seção "Eventos que já aconteceram" na agenda, só com os que têm fotos. Depende da resposta sobre direito de imagem no questionário de ingressos. | Médio | M |
 | Avaliações | Pedidas por e-mail depois da entrega, com moderação no admin. | Médio | G |
 | Variações | Tamanho e cor no mesmo produto. A maior de todas: muda o estoque e o carrinho. | Médio | G |
 | Pedido mínimo | Valor mínimo para entrega. | Baixo | P |
