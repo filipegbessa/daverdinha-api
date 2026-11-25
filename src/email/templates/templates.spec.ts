@@ -6,7 +6,7 @@ import {
   orderReadyEmail,
   orderRefundedEmail,
 } from './order-updates';
-import { escapeHtml, formatEventDate } from './layout';
+import { emailLayout, escapeHtml, formatEventDate } from './layout';
 import type { SiteOrderRow } from '../../site-orders/site-order-views';
 
 const pickup = {
@@ -173,5 +173,31 @@ describe('email templates', () => {
       expect(email.subject).toBe('Estorno do pedido DV-0042 · Daverdinha');
       expect(email.text).toContain('O estorno de R$ 59,80');
     });
+  });
+});
+
+describe('emailLayout', () => {
+  const env = { ...process.env };
+
+  afterEach(() => {
+    process.env = { ...env };
+  });
+
+  it('shows the logo when SITE_URL is set', () => {
+    process.env.SITE_URL = 'https://www.daverdinha.com.br';
+
+    const html = emailLayout('<p>Corpo</p>');
+
+    expect(html).toContain('<img src="https://www.daverdinha.com.br/logo-circle.png"');
+    expect(html).toContain('alt="Daverdinha"');
+  });
+
+  it('falls back to the text name without SITE_URL', () => {
+    delete process.env.SITE_URL;
+
+    const html = emailLayout('<p>Corpo</p>');
+
+    expect(html).not.toContain('<img');
+    expect(html).toContain('Daverdinha');
   });
 });
