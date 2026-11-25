@@ -19,6 +19,7 @@ const brl = new Intl.NumberFormat('pt-BR', {
 });
 
 /** "R$ 45,00", com espaço comum no lugar do espaço fixo. */
+
 export function formatBrl(value: number): string {
   return brl.format(value).replace(/ /g, ' ');
 }
