@@ -2,7 +2,9 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { Prisma, type Event as EventRow } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -146,6 +148,8 @@ function toData(dto: UpdateEventDto) {
  */
 @Injectable()
 export class EventsService {
+  private readonly logger = new Logger(EventsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly blob: BlobStorageService,
@@ -323,10 +327,17 @@ export class EventsService {
     return row;
   }
 
-  private upload(files: UploadedPhoto[]): Promise<string[]> {
-    return Promise.all(
-      files.map((f) => this.blob.uploadEventImage(f.buffer, f.mimetype)),
-    );
+  private async upload(files: UploadedPhoto[]): Promise<string[]> {
+    try {
+      return await Promise.all(
+        files.map((f) => this.blob.uploadEventImage(f.buffer, f.mimetype)),
+      );
+    } catch (error) {
+      this.logger.error(`Falha ao subir foto de evento pro Blob: ${error}`);
+      throw new ServiceUnavailableException(
+        'Não foi possível enviar as fotos agora. Tente de novo em instantes.',
+      );
+    }
   }
 
   /** Melhor esforço: uma foto que não sai do Blob não pode desfazer o que já foi gravado. */

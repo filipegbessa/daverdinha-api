@@ -1,7 +1,9 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -200,6 +202,8 @@ function promoData(
 
 @Injectable()
 export class ProductsService {
+  private readonly logger = new Logger(ProductsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly blob: BlobStorageService,
@@ -394,10 +398,17 @@ export class ProductsService {
     return row;
   }
 
-  private upload(files: UploadedPhoto[]): Promise<string[]> {
-    return Promise.all(
-      files.map((f) => this.blob.uploadProductImage(f.buffer, f.mimetype)),
-    );
+  private async upload(files: UploadedPhoto[]): Promise<string[]> {
+    try {
+      return await Promise.all(
+        files.map((f) => this.blob.uploadProductImage(f.buffer, f.mimetype)),
+      );
+    } catch (error) {
+      this.logger.error(`Falha ao subir foto de produto pro Blob: ${error}`);
+      throw new ServiceUnavailableException(
+        'Não foi possível enviar as fotos agora. Tente de novo em instantes.',
+      );
+    }
   }
 
   /** Melhor esforço: uma foto que não sai do Blob não pode desfazer o que já foi gravado. */
