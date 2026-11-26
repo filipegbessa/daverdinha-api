@@ -341,7 +341,7 @@ CREATE TABLE "events" (
     "location_address" TEXT,
     "price" DECIMAL(10,2),
     "spots" INTEGER,
-    "image_url" TEXT,
+    "images" TEXT[],
     "published" BOOLEAN NOT NULL DEFAULT false,
     "ticket_sales" BOOLEAN NOT NULL DEFAULT false,
     "max_tickets_per_order" INTEGER NOT NULL DEFAULT 10,

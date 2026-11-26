@@ -22,7 +22,7 @@ function row(overrides: Record<string, unknown> = {}) {
     locationAddress: null,
     price: new Prisma.Decimal('120.00') as Prisma.Decimal | null,
     spots: 8 as number | null,
-    imageUrl: null as string | null,
+    images: [] as string[],
     published: false,
     ticketSales: false,
     maxTicketsPerOrder: 10,
@@ -39,7 +39,9 @@ const dto = {
   endsAt: '2026-11-21T15:00:00Z',
 };
 
-const cover = { buffer: Buffer.from('img'), mimetype: 'image/webp' };
+function photo(name: string, mimetype = 'image/webp') {
+  return { buffer: Buffer.from(name), mimetype };
+}
 
 describe('EventsService', () => {
   let service: EventsService;
@@ -71,9 +73,9 @@ describe('EventsService', () => {
     };
     ticketsEnabled = true;
     blob = {
-      uploadEventImage: jest
-        .fn()
-        .mockResolvedValue('https://blob/events/new.webp'),
+      uploadEventImage: jest.fn(
+        async (buffer: Buffer) => `https://blob/events/${buffer.toString()}`,
+      ),
       deleteImage: jest.fn(),
     };
     const moduleRef = await Test.createTestingModule({
@@ -140,23 +142,26 @@ describe('EventsService', () => {
       expect(event.published).toBe(false);
     });
 
-    it('uploads the cover and stores its URL', async () => {
-      const event = await service.create(dto, cover);
+    it('uploads each photo and stores the URLs in the order received', async () => {
+      const event = await service.create(dto, [photo('a'), photo('b')]);
 
       expect(blob.uploadEventImage).toHaveBeenCalledWith(
-        cover.buffer,
+        Buffer.from('a'),
         'image/webp',
       );
-      expect(event.imageUrl).toBe('https://blob/events/new.webp');
+      expect(event.images).toEqual([
+        'https://blob/events/a',
+        'https://blob/events/b',
+      ]);
     });
 
-    it('deletes the uploaded cover when the insert fails', async () => {
+    it('deletes the uploaded photos when the insert fails', async () => {
       prisma.event.create.mockRejectedValue(new Error('db down'));
 
-      await expect(service.create(dto, cover)).rejects.toThrow('db down');
-      expect(blob.deleteImage).toHaveBeenCalledWith(
-        'https://blob/events/new.webp',
+      await expect(service.create(dto, [photo('a')])).rejects.toThrow(
+        'db down',
       );
+      expect(blob.deleteImage).toHaveBeenCalledWith('https://blob/events/a');
     });
 
     it('returns price as a number, or null when free', async () => {
@@ -222,31 +227,29 @@ describe('EventsService', () => {
       expect(data.locationName).toBeNull();
     });
 
-    it('replaces the cover and deletes the old one after saving', async () => {
+    it('keeps the photos when no new ones are sent', async () => {
       prisma.event.findUnique.mockResolvedValue(
-        row({ imageUrl: 'https://blob/events/old.webp' }),
+        row({ images: ['https://blob/events/old.webp'] }),
       );
 
-      await service.update('e1', {}, cover);
+      await service.update('e1', { title: 'Outro nome' });
 
-      expect(prisma.event.update.mock.calls[0][0].data.imageUrl).toBe(
-        'https://blob/events/new.webp',
+      expect(prisma.event.update.mock.calls[0][0].data).not.toHaveProperty(
+        'images',
       );
-      expect(blob.deleteImage).toHaveBeenCalledWith(
-        'https://blob/events/old.webp',
-      );
+      expect(blob.deleteImage).not.toHaveBeenCalled();
     });
 
-    it('removes the cover when asked', async () => {
+    it('replaces the photos, deleting the old ones only after saving', async () => {
       prisma.event.findUnique.mockResolvedValue(
-        row({ imageUrl: 'https://blob/events/old.webp' }),
+        row({ images: ['https://blob/events/old.webp'] }),
       );
 
-      await service.update('e1', { removeImage: true });
+      await service.update('e1', {}, [photo('new')]);
 
-      const { data } = prisma.event.update.mock.calls[0][0];
-      expect(data.imageUrl).toBeNull();
-      expect(data.removeImage).toBeUndefined();
+      expect(prisma.event.update.mock.calls[0][0].data.images).toEqual([
+        'https://blob/events/new',
+      ]);
       expect(blob.deleteImage).toHaveBeenCalledWith(
         'https://blob/events/old.webp',
       );
@@ -262,9 +265,9 @@ describe('EventsService', () => {
   });
 
   describe('remove', () => {
-    it('deletes the row and then its cover', async () => {
+    it('deletes the row and then its photos', async () => {
       prisma.event.findUnique.mockResolvedValue(
-        row({ imageUrl: 'https://blob/events/old.webp' }),
+        row({ images: ['https://blob/events/old.webp'] }),
       );
 
       await service.remove('e1');

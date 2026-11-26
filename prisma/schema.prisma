@@ -506,7 +506,8 @@ model Event {
   price              Decimal?          @db.Decimal(10, 2)
   /// `null` = sem limite divulgado.
   spots              Int?
-  imageUrl           String?           @map("image_url")
+  /// URLs públicas no Vercel Blob; a primeira é a capa.
+  images             String[]
   published          Boolean           @default(false)
   /// Venda/inscrição pelo site. Desligada, a inscrição é pelo WhatsApp.
   /// Só vale com o interruptor geral `StoreSettings.ticketsEnabled` ligado.

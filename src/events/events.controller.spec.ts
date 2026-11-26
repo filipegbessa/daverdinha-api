@@ -29,7 +29,7 @@ describe('events controllers', () => {
     pub = moduleRef.get(PublicEventsController);
   });
 
-  it('forwards admin calls with the uploaded cover', () => {
+  it('forwards admin calls with the uploaded photos', () => {
     const file = { mimetype: 'image/png', buffer: Buffer.from('a') };
     const dto = {
       title: 'Oficina',
@@ -39,17 +39,13 @@ describe('events controllers', () => {
     };
 
     admin.list({ q: 'ofi' });
-    admin.create(dto, file);
-    admin.update('e1', { removeImage: true });
+    admin.create(dto, [file]);
+    admin.update('e1', {});
     admin.remove('e1');
 
     expect(service.list).toHaveBeenCalledWith({ q: 'ofi' });
-    expect(service.create).toHaveBeenCalledWith(dto, file);
-    expect(service.update).toHaveBeenCalledWith(
-      'e1',
-      { removeImage: true },
-      undefined,
-    );
+    expect(service.create).toHaveBeenCalledWith(dto, [file]);
+    expect(service.update).toHaveBeenCalledWith('e1', {}, []);
     expect(service.remove).toHaveBeenCalledWith('e1');
   });
 

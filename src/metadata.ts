@@ -76,11 +76,11 @@ import * as m72 from './site-orders/site-order-tickets.controller';
 import * as m73 from './coupons/coupons.controller';
 import * as m74 from './promotions/shipping-promotions.controller';
 import * as m75 from './customers/customers.controller';
-import * as m76 from './openapi/openapi.controller';
-import * as m77 from './hero-slides/hero-slides.controller';
-import * as m78 from './hero-slides/public-hero-slides.controller';
-import * as m79 from './site-content/site-content.controller';
-import * as m80 from './site-content/public-site-content.controller';
+import * as m76 from './hero-slides/hero-slides.controller';
+import * as m77 from './hero-slides/public-hero-slides.controller';
+import * as m78 from './site-content/site-content.controller';
+import * as m79 from './site-content/public-site-content.controller';
+import * as m80 from './openapi/openapi.controller';
 
 export default async () => {
   const t = {
@@ -932,19 +932,7 @@ export default async () => {
             },
           },
         ],
-        [
-          m36,
-          {
-            UpdateEventDto: {
-              removeImage: {
-                required: false,
-                type: () => Boolean,
-                description:
-                  '`true` apaga a foto atual sem mandar outra (o site volta pro placeholder).',
-              },
-            },
-          },
-        ],
+        [m36, { UpdateEventDto: {} }],
         [
           m37,
           {
@@ -1495,9 +1483,8 @@ export default async () => {
           },
         ],
         [m75, { CustomersController: { list: {}, byPhone: { type: Object } } }],
-        [m76, { OpenApiController: { get: { type: Object } } }],
         [
-          m77,
+          m76,
           {
             HeroSlidesController: {
               list: { type: [Object] },
@@ -1510,11 +1497,12 @@ export default async () => {
           },
         ],
         [
-          m78,
+          m77,
           { PublicHeroSlidesController: { listActive: { type: [Object] } } },
         ],
-        [m79, { SiteContentController: { updateAbout: { type: Object } } }],
-        [m80, { PublicSiteContentController: { getAbout: { type: Object } } }],
+        [m78, { SiteContentController: { updateAbout: { type: Object } } }],
+        [m79, { PublicSiteContentController: { getAbout: { type: Object } } }],
+        [m80, { OpenApiController: { get: { type: Object } } }],
       ],
     },
   };

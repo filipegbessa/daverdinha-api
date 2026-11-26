@@ -9,29 +9,33 @@ import {
   Patch,
   Post,
   Query,
-  UploadedFile,
+  UploadedFiles,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { FilesInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiBody, ApiConsumes, ApiTags } from '@nestjs/swagger';
 import { ClerkAuthGuard } from '../common/auth/clerk-auth.guard';
 import { SITE_IMAGE_MAX_BYTES, formatMegabytes } from '../common/uploads';
-import { imageFileFilter } from '../products/products.controller';
-import { EventsService, type UploadedCover } from './events.service';
+import {
+  imageFileFilter,
+  MAX_IMAGES,
+} from '../products/products.controller';
+import { EventsService, type UploadedPhoto } from './events.service';
 import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
 import { ListEventsDto } from './dto/list-events.dto';
 
-// Mesmo teto e mesmos tipos das fotos do catálogo: o Multer corta a leitura
-// ao cruzar o limite, e o tipo errado é recusado antes de subir pro Blob.
-const coverInterceptor = FileInterceptor('image', {
+// Mesmo teto, mesmos tipos e mesma quantidade máxima das fotos do catálogo: o
+// Multer corta a leitura ao cruzar o limite, e o tipo errado é recusado antes
+// de subir pro Blob.
+const photosInterceptor = FilesInterceptor('images', MAX_IMAGES, {
   limits: { fileSize: SITE_IMAGE_MAX_BYTES },
   fileFilter: imageFileFilter,
 });
 
-// O plugin do Swagger não enxerga o `FileInterceptor`.
-const eventFormSchema = (required: string[], update = false) => ({
+// O plugin do Swagger não enxerga o `FilesInterceptor`.
+const eventFormSchema = (required: string[]) => ({
   schema: {
     type: 'object',
     required,
@@ -76,16 +80,10 @@ const eventFormSchema = (required: string[], update = false) => ({
         maximum: 50,
         default: 10,
       },
-      ...(update && {
-        removeImage: {
-          type: 'boolean',
-          description: 'Apaga a capa atual sem mandar outra.',
-        },
-      }),
-      image: {
-        type: 'string',
-        format: 'binary',
-        description: `Capa (JPEG, PNG ou WebP, até ${formatMegabytes(SITE_IMAGE_MAX_BYTES)}). No PATCH, substitui a atual.`,
+      images: {
+        type: 'array',
+        items: { type: 'string', format: 'binary' },
+        description: `Até ${MAX_IMAGES} fotos (JPEG, PNG ou WebP, até ${formatMegabytes(SITE_IMAGE_MAX_BYTES)} cada). A primeira é a capa. No PATCH, mandar fotos substitui todas.`,
       },
     },
   },
@@ -117,21 +115,24 @@ export class EventsController {
   @Post()
   @ApiConsumes('multipart/form-data')
   @ApiBody(eventFormSchema(['title', 'description', 'startsAt']))
-  @UseInterceptors(coverInterceptor)
-  create(@Body() dto: CreateEventDto, @UploadedFile() file?: UploadedCover) {
-    return this.service.create(dto, file);
+  @UseInterceptors(photosInterceptor)
+  create(
+    @Body() dto: CreateEventDto,
+    @UploadedFiles() files: UploadedPhoto[] = [],
+  ) {
+    return this.service.create(dto, files);
   }
 
   @Patch(':id')
   @ApiConsumes('multipart/form-data')
-  @ApiBody(eventFormSchema([], true))
-  @UseInterceptors(coverInterceptor)
+  @ApiBody(eventFormSchema([]))
+  @UseInterceptors(photosInterceptor)
   update(
     @Param('id') id: string,
     @Body() dto: UpdateEventDto,
-    @UploadedFile() file?: UploadedCover,
+    @UploadedFiles() files: UploadedPhoto[] = [],
   ) {
-    return this.service.update(id, dto, file);
+    return this.service.update(id, dto, files);
   }
 
   @Delete(':id')

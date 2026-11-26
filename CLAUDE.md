@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-Backend for the Daverdinha WhatsApp customer-service bot and its admin panel: NestJS 11 + Prisma 5 + Postgres, deployed as a single serverless function on Vercel (Neon in production). `README.md` (in Portuguese) is the detailed design record for each module. Read the relevant section before changing a module's behavior.
+Backend for the Daverdinha WhatsApp customer-service bot and its admin panel: NestJS 11 + Prisma 5 + Postgres (Neon in production). **Migrated 2026-11-25 from a Vercel serverless function to a persistent Node process on a Hostinger VPS (Coolify)** — see "Deploy" in `README.md` for the current setup, and `~/Desktop/projects/host/MIGRACAO.md` / `PLANO-MIGRACAO.md` (outside this repo) for the full migration log and reusable playbook. The old Vercel projects are still live (pausing them is pending in the migration checklist), kept as a rollback; `api/index.ts` is that legacy serverless entry point and is no longer what runs in production — `src/main.ts` is. `README.md` (in Portuguese) is the detailed design record for each module. Read the relevant section before changing a module's behavior.
 
 ## Commands
 

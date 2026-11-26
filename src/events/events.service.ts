@@ -14,15 +14,14 @@ import {
   isForeignKeyViolation,
   isUniqueViolation,
 } from '../common/prisma-errors';
-import type { UploadedFileData } from '../common/uploads';
 import { StoreSettingsService } from '../store-settings/store-settings.service';
 import { spotsLeft, takenSpots, type TakenSpots } from '../site-orders/spots';
+import type { UploadedPhoto } from '../products/products.service';
 import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
 import { ListEventsDto } from './dto/list-events.dto';
 
-/** O que o upload da capa usa do arquivo do Multer. */
-export type UploadedCover = Pick<UploadedFileData, 'buffer' | 'mimetype'>;
+export type { UploadedPhoto };
 
 /** O contrato público, igual a `src/features/site/types/event.ts` no site. */
 export interface SiteEvent {
@@ -37,7 +36,8 @@ export interface SiteEvent {
   locationAddress: string | null;
   price: number | null;
   spots: number | null;
-  imageUrl: string | null;
+  /** URLs públicas no Vercel Blob; a primeira é a capa. */
+  images: string[];
   /**
    * Venda/inscrição pelo site. No público já vem combinada com o interruptor
    * geral "Venda de ingressos" (`StoreSettings.ticketsEnabled`): o site só
@@ -93,7 +93,7 @@ function toSiteEvent(
     locationAddress: row.locationAddress,
     price: toMoneyOrNull(row.price),
     spots: row.spots,
-    imageUrl: row.imageUrl,
+    images: row.images,
     ticketSales: selling,
     maxTicketsPerOrder: row.maxTicketsPerOrder,
     spotsLeft: left,
@@ -188,19 +188,22 @@ export class EventsService {
   }
 
   /**
-   * Sobe a capa antes de gravar (o Blob não participa de transação) e apaga
-   * se a gravação falhar, pra não deixar arquivo órfão.
+   * Sobe as fotos antes de gravar (o Blob não participa de transação) e as
+   * apaga se a gravação falhar, pra não deixar arquivo órfão.
    */
-  async create(dto: CreateEventDto, file?: UploadedCover): Promise<EventAdmin> {
+  async create(
+    dto: CreateEventDto,
+    files: UploadedPhoto[] = [],
+  ): Promise<EventAdmin> {
     assertDates(
       new Date(dto.startsAt),
       dto.endsAt ? new Date(dto.endsAt) : null,
     );
-    const imageUrl = file ? await this.upload(file) : null;
+    const images = await this.upload(files);
     try {
-      return toEventAdmin(await this.insert(dto, imageUrl));
+      return toEventAdmin(await this.insert(dto, images));
     } catch (error) {
-      if (imageUrl) await this.blob.deleteImage(imageUrl);
+      await this.deleteAll(images);
       throw error;
     }
   }
@@ -208,13 +211,13 @@ export class EventsService {
   /**
    * Nunca recalcula o slug (é a URL do evento). As datas são conferidas
    * contra o que está salvo, pra uma edição que muda só uma delas também não
-   * deixar o evento terminar antes de começar. A capa antiga só é apagada
-   * depois que a linha nova está salva.
+   * deixar o evento terminar antes de começar. Fotos novas substituem a lista
+   * inteira; as antigas só são apagadas depois que a linha nova está salva.
    */
   async update(
     id: string,
     dto: UpdateEventDto,
-    file?: UploadedCover,
+    files: UploadedPhoto[] = [],
   ): Promise<EventAdmin> {
     const current = await this.findRow(id);
     assertDates(
@@ -230,28 +233,23 @@ export class EventsService {
     if (typeof dto.spots === 'number' && dto.spots < occupied) {
       throw new BadRequestException(`Já há ${occupied} vagas ocupadas.`);
     }
-    const { removeImage, ...fields } = dto;
-    const newImage = file ? await this.upload(file) : undefined;
-    const imageUrl =
-      newImage !== undefined ? newImage : removeImage ? null : undefined;
+    const images = files.length > 0 ? await this.upload(files) : undefined;
 
     let updated: EventRow;
     try {
       updated = await this.prisma.event.update({
         where: { id },
         data: {
-          ...toData(fields),
-          ...(imageUrl !== undefined && { imageUrl }),
+          ...toData(dto),
+          ...(images && { images }),
         },
       });
     } catch (error) {
-      if (newImage) await this.blob.deleteImage(newImage);
+      await this.deleteAll(images ?? []);
       throw error;
     }
 
-    if (imageUrl !== undefined && current.imageUrl) {
-      await this.blob.deleteImage(current.imageUrl);
-    }
+    if (images) await this.deleteAll(current.images);
     return toEventAdmin(updated, taken);
   }
 
@@ -271,7 +269,7 @@ export class EventsService {
       }
       throw error;
     }
-    if (current.imageUrl) await this.blob.deleteImage(current.imageUrl);
+    await this.deleteAll(current.images);
   }
 
   /**
@@ -325,8 +323,15 @@ export class EventsService {
     return row;
   }
 
-  private upload(file: UploadedCover): Promise<string> {
-    return this.blob.uploadEventImage(file.buffer, file.mimetype);
+  private upload(files: UploadedPhoto[]): Promise<string[]> {
+    return Promise.all(
+      files.map((f) => this.blob.uploadEventImage(f.buffer, f.mimetype)),
+    );
+  }
+
+  /** Melhor esforço: uma foto que não sai do Blob não pode desfazer o que já foi gravado. */
+  private async deleteAll(urls: string[]): Promise<void> {
+    await Promise.allSettled(urls.map((url) => this.blob.deleteImage(url)));
   }
 
   /**
@@ -335,12 +340,9 @@ export class EventsService {
    */
   private async insert(
     dto: CreateEventDto,
-    imageUrl: string | null,
+    images: string[],
   ): Promise<EventRow> {
-    const data = toData(dto) as Omit<
-      Prisma.EventCreateInput,
-      'slug' | 'imageUrl'
-    >;
+    const data = toData(dto) as Omit<Prisma.EventCreateInput, 'slug' | 'images'>;
     for (let attempt = 0; ; attempt++) {
       const slug = await uniqueSlug(
         dto.title,
@@ -350,7 +352,7 @@ export class EventsService {
       );
       try {
         return await this.prisma.event.create({
-          data: { ...data, slug, imageUrl },
+          data: { ...data, slug, images },
         });
       } catch (error) {
         if (attempt < 2 && isUniqueViolation(error, 'slug')) continue;

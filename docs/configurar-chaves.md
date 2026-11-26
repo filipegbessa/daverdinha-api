@@ -4,9 +4,14 @@ O código já está pronto: nada muda no código quando as chaves chegarem. Elas
 entram como variáveis de ambiente **só na API** (o site não fala com o
 Pagar.me nem com o Resend).
 
-Onde ficam: Vercel → projeto da **API** → Settings → Environment Variables.
-Depois de salvar, faça um **Redeploy** do último deploy (a Vercel só lê
-variável nova num deploy novo). Nunca coloque chave no repositório nem no site.
+**Desde 2026-11-25 (migração Vercel → Hostinger/Coolify, ver
+`~/Desktop/projects/host/MIGRACAO.md`):** onde ficam é o painel do **Coolify**
+(`http://189.24.14.225:8000` → projeto `daverdinha` → `daverdinha-api` →
+Environment Variables → Developer View), não mais o dashboard da Vercel.
+Depois de salvar, faça um **Redeploy** (mudar só o *valor* de uma env var já
+dispara isso sozinho; mudar `start_command` ou `domains` às vezes precisa de
+"Redeploy (without cache)" no painel). Nunca coloque chave no repositório nem
+no site.
 
 ## Pagar.me
 
@@ -43,7 +48,8 @@ no topo) e outro igual na produção quando a chave virar `sk_live_…`.
 
 - **Status:** Ativo.
 - **URL:** `https://<domínio da API>/webhooks/pagarme` (em produção hoje,
-  `https://daverdinha-api.vercel.app/webhooks/pagarme`).
+  `https://api.daverdinha.com.br/webhooks/pagarme`, servido pelo VPS
+  Hostinger/Coolify — não mais `daverdinha-api.vercel.app`).
 - **Máximo de tentativas:** pode ficar em 3.
 - **Habilitar autenticação:** ligado, com "Usuário do Webhook" e "Senha do
   Webhook" iguais a `PAGARME_WEBHOOK_USER` e `PAGARME_WEBHOOK_PASSWORD` na
@@ -76,9 +82,18 @@ consultam o Pagar.me sozinhos (no máximo uma vez por minuto), e o botão
    pedido confirma sozinha.
    Não ponha a chave de teste na produção com a loja ligada: qualquer
    visitante "compraria" com cartão de teste.
-2. **Produção.** Na Vercel (ambiente Production), cadastre a `sk_live_…`, o
+2. **Produção.** No Coolify (app `daverdinha-api`), cadastre a `sk_live_…`, o
    usuário e a senha do webhook; Redeploy; cadastre o webhook no painel de
    **produção** do Pagar.me (o de sandbox é outro).
+   **Atenção:** confira o valor que está cadastrado agora — na migração pra
+   cá, as chaves do tipo "Sensitive" na Vercel não puderam ser recuperadas
+   (write-only, nem a API nem `vercel env pull` mostram de novo; foi o caso do
+   VAPID, que teve que ser gerado do zero), então é fácil ter ficado alguma
+   chave de teste (`sk_test_…`) no lugar da `sk_live_…` sem ninguém perceber
+   — é exatamente o que causa o erro genérico "1002" do checkout pra
+   compradoras reais, porque o link de pagamento cai no sandbox
+   (`checkout-bff-sdx.pagar.me`, que só aceita os cartões de teste listados
+   acima).
 3. **Conferir.** No Dashboard do admin, o aviso "pagamento não configurado"
    some. Ligue "Venda pelo site" (e/ou "Venda de ingressos"), faça uma compra
    real de valor baixo e estorne pelo painel do Pagar.me. O pedido deve

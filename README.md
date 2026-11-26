@@ -13,11 +13,21 @@ Backend do bot de atendimento da Daverdinha (NestJS + Prisma + Postgres).
 
 Os passos 4, 5 e 6 só funcionam com o banco no ar — daí o passo 1 vir primeiro. Em produção esse papel é do Neon; o `docker-compose.yml` existe só pra não precisar instalar Postgres na máquina.
 
-## Deploy (Vercel)
+## Deploy (Hostinger VPS + Coolify)
 
-1. Repositório conectado em [vercel.com](https://vercel.com).
-2. Env vars do `.env.example` configuradas no dashboard do projeto (`DATABASE_URL` do Neon, mais `R2_*` e `CRON_SECRET` — ver "Imagens" abaixo).
-3. `vercel.json` já direciona todas as rotas pra `api/index.ts` e agenda o cron de retenção de mídia — não precisa configurar build command especial.
+**Migrado da Vercel em 2026-11-25** (registro completo da migração em `~/Desktop/projects/host/MIGRACAO.md` e o playbook reutilizável em `~/Desktop/projects/host/PLANO-MIGRACAO.md`, fora deste repositório).
+
+1. VPS Hostinger KVM 1 (`189.24.14.225`, Ubuntu 24.04, Coolify) — painel em `http://189.24.14.225:8000`. Repositório público conectado como "Public Git Repository" (branch `main`), build pack **Railpack** (não o "Docker Compose" que o scan sugere: o `docker-compose.yml` do repo só sobe o Postgres de dev local).
+2. Porta **3001**. Build command `npm run build`; start command `npx prisma migrate deploy && node dist/src/main` (o `tsconfig.json` não tem `rootDir`, então o `nest build` gera `dist/src/main.js`, não `dist/main.js` — `npm run start:prod` normal quebraria com `MODULE_NOT_FOUND`). É `src/main.ts` que roda em produção agora, não o wrapper serverless `api/index.ts`.
+3. Env vars (`.env.example`) cadastradas em **Environment Variables → Developer View**, no próprio Coolify — não mais no dashboard da Vercel.
+4. Domínio final `api.daverdinha.com.br` cadastrado no app (DNS no Registro.br, registro A apontando pra `189.24.14.225`); SSL (Let's Encrypt) emitido automaticamente pelo Traefik depois do primeiro deploy/restart com o domínio configurado.
+5. Healthcheck habilitado apontando pra `/health`.
+6. Deploy automático: webhook do GitHub (evento `push`) configurado manualmente no app (Coolify não usa GitHub App nesse modo "Public Git Repository").
+7. O cron de retenção de mídia **não vem mais do `vercel.json`**: é um Scheduled Task do Coolify (`curl` local no container pra `/cron/media-retention` com `Authorization: Bearer $CRON_SECRET`).
+
+**VPS tem só 1 vCPU/4 GB** — nunca disparar deploy do front e do back ao mesmo tempo (satura RAM e pode derrubar a sessão SSH/Coolify).
+
+Os projetos antigos `daverdinha` e `daverdinha-api` continuam no ar na Vercel (pausar, não deletar, ainda está pendente no plano de migração) — servem de rollback se o VPS tiver problema. `vercel.json` e `api/index.ts` ficam no repo por causa disso.
 
 ### ⚠️ Migration única + banco de produção com dado real
 
@@ -63,8 +73,8 @@ O caminho seguro depois de mudar `schema.prisma`:
 - `src/media/` — `MediaStorageService` (R2), `MediaRetentionService` (faxina + conferência) e a rota de cron que os liga. Ver "Imagens" abaixo.
 - `src/bootstrap.ts` — a configuração de app (body parser, CORS, `ValidationPipe`) compartilhada pelos dois entry points, pra que local e produção não divirjam.
 - `src/messaging/` — `ConversationMessengerService`, o único lugar que manda mensagem pro WhatsApp e grava no histórico. Os dois andam sempre juntos; fazer isso à mão em cada branch era como o histórico ficava com buracos.
-- `api/index.ts` — entry point serverless usado pelo deploy na Vercel (envolve o `AppModule` num handler Express com instância cacheada entre invocações).
-- `src/main.ts` — entry point usado localmente via `npm run start:dev`.
+- `api/index.ts` — entry point serverless do antigo deploy na Vercel (envolve o `AppModule` num handler Express com instância cacheada entre invocações). Mantido no repo só pelo projeto pausado da Vercel (rollback); não é o que roda em produção.
+- `src/main.ts` — entry point usado localmente via `npm run start:dev` **e em produção no Coolify** (`npx prisma migrate deploy && node dist/src/main`; ver "Deploy" acima).
 - `src/openapi/` — a página de docs (`GET /docs`) e o documento OpenAPI que ela mostra (`GET /openapi.json`). Ver "Documentação da API" abaixo.
 
 ## Documentação da API (OpenAPI)
@@ -76,12 +86,12 @@ A doc fica na própria API, em **`GET /docs`**: uma página HTML independente �
 - **O spec** vem de `GET /openapi.json`, **protegido pelo `ClerkAuthGuard`** como as demais rotas do admin. É montado na primeira chamada de cada instância e fica em cache; o cold start do webhook não paga esse custo.
 - **Nada vai para os servidores do Scalar:** o proxy hospedado, a barra de compartilhamento, a telemetria e o agente de IA estão desligados (ver `docs-page.ts`). O script do Scalar é fixado por versão e hash SRI.
 - **Fora do Google:** `X-Robots-Tag: noindex, nofollow` no header e na meta tag.
-- **Variável de ambiente:** `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, já configurada no projeto da API na Vercel (o prefixo é herança do frontend; aqui ela só é lida pelo `/docs`). Sem ela, `/docs` responde 503.
-- **Domínio:** a instância de produção do Clerk só roda em subdomínios do domínio dela. A API precisa estar num subdomínio do site (ex.: `api.daverdinha.com.br`); num `*.vercel.app`, o login não carrega.
+- **Variável de ambiente:** `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, configurada no Coolify junto com os demais segredos (o prefixo é herança do frontend; aqui ela só é lida pelo `/docs`). Sem ela, `/docs` responde 503.
+- **Domínio:** a instância de produção do Clerk só roda em subdomínios do domínio dela. A API precisa estar num subdomínio do site — hoje `api.daverdinha.com.br`, apontando pro VPS (`189.24.14.225`); num `*.vercel.app` ou `*.sslip.io`, o login não carrega.
 
 ### Schemas
 
-- **De onde vêm os schemas:** o plugin do `@nestjs/swagger` infere tipos, regras do `class-validator` e JSDoc dos DTOs e controllers. Como a Vercel compila `api/index.ts` sem passar pelo `nest build`, o plugin não roda no deploy — por isso o resultado dele fica em `src/metadata.ts`, **gerado e commitado**.
+- **De onde vêm os schemas:** o plugin do `@nestjs/swagger` infere tipos, regras do `class-validator` e JSDoc dos DTOs e controllers. Isso rodava só localmente (a Vercel compilava `api/index.ts` sem passar pelo `nest build`, então o plugin não rodava no deploy) — por isso o resultado dele fica em `src/metadata.ts`, **gerado e commitado**, e o CI falha se houver diff. O Coolify agora builda com `npm run build` (`nest build` de verdade), mas o código continua lendo do `src/metadata.ts` commitado; não vale trocar isso sem conferir se o plugin do swagger está de fato configurado no `nest-cli.json`.
 - **Mexeu em DTO ou controller?** Rode `npm run openapi:metadata` e commite o `src/metadata.ts`. O CI regenera o arquivo e falha se ele estiver desatualizado.
 - **O que fica de fora:** o webhook do WhatsApp e o cron de retenção (`@ApiExcludeController`) — ninguém os chama à mão.
 - **DTOs de update** usam o `PartialType` de `@nestjs/swagger`, não o de `@nestjs/mapped-types`; o segundo não copia os metadados e o schema sai vazio.
@@ -142,7 +152,7 @@ Um CEP é considerado **não resolvido** tanto quando o formato é inválido (di
 
 ### Checagem de CEP do site (`GET /delivery-locations/check?cep=`)
 
-**Pública.** Usa a mesma função do bot (`DeliveryLocationsService.resolveCep`: faixas locais primeiro, BrasilAPI depois), então o site e o bot nunca dão respostas diferentes pro mesmo CEP. Responde `{ status: 'covered' | 'not_covered' | 'unresolved', bairro? }`; CEP mal formatado ou ausente é `unresolved` com 200, não 400. A zona e o id do bairro ficam de fora da resposta (só o frete usa). Resposta com `Cache-Control: public, s-maxage=600`: a CDN da Vercel guarda por CEP por 10 minutos (mudar a cobertura no admin leva até isso pra aparecer no site; o bot não tem esse cache). Além disso, o `CepLookupService` guarda em memória, por 24 h, o bairro de cada CEP que a BrasilAPI respondeu.
+**Pública.** Usa a mesma função do bot (`DeliveryLocationsService.resolveCep`: faixas locais primeiro, BrasilAPI depois), então o site e o bot nunca dão respostas diferentes pro mesmo CEP. Responde `{ status: 'covered' | 'not_covered' | 'unresolved', bairro? }`; CEP mal formatado ou ausente é `unresolved` com 200, não 400. A zona e o id do bairro ficam de fora da resposta (só o frete usa). Resposta com `Cache-Control: public, s-maxage=600`: isso guardava por CEP por 10 minutos na CDN de borda da Vercel (mudar a cobertura no admin levava até isso pra aparecer no site; o bot não tinha esse cache). **Desde a migração pro Coolify (sem CDN de borda na frente, só Traefik) esse cache não tem mais efeito** — a pedir confirmação de se vale recriar com algo tipo Cloudflare, ou tirar o header. Além disso, o `CepLookupService` guarda em memória, por 24 h, o bairro de cada CEP que a BrasilAPI respondeu.
 
 ### Áreas de entrega do site (`delivery-areas`)
 
@@ -275,7 +285,7 @@ Produtos e categorias que a cliente cadastra no admin e o site mostra em `/produ
 Eventos (oficinas, feirinhas, aulas) que a cliente cadastra no admin e o site mostra em `/agenda`.
 
 - **Públicas, sem token** (`PublicEventsController`, registrado antes do admin): `GET /events/upcoming` traz os publicados que ainda não terminaram (evento em andamento continua), do mais próximo ao mais distante, com `now` calculado a cada chamada. `GET /events/:slug` traz qualquer publicado, inclusive passado: o link antigo não vira 404 e o site mostra "Este evento já aconteceu". Rascunho responde 404 nas duas.
-- **Admin** (`ClerkAuthGuard`): `GET /events?q=&page=&perPage=` (paginado, rascunhos e passados incluídos), `POST`/`PATCH /events/:id` (multipart, campo `image` com uma capa JPEG/PNG/WebP de até 5 MB; `removeImage=true` tira a capa) e `DELETE /events/:id`. O evento sozinho, pra página de edição, é `GET /events/:id/admin` (com `sold` e `reserved`): `GET /events/:id` colidiria com o público `/events/:slug`, registrado antes.
+- **Admin** (`ClerkAuthGuard`): `GET /events?q=&page=&perPage=` (paginado, rascunhos e passados incluídos), `POST`/`PATCH /events/:id` (multipart, campo `images` com até 6 fotos JPEG/PNG/WebP de até 5 MB cada, a primeira é a capa — mesmo limite dos produtos; no PATCH, mandar fotos substitui todas, sem mandar mantém as atuais) e `DELETE /events/:id`. O evento sozinho, pra página de edição, é `GET /events/:id/admin` (com `sold` e `reserved`): `GET /events/:id` colidiria com o público `/events/:slug`, registrado antes.
 - **`null` tem significado**: `price` gratuito, `spots` sem limite, `locationName` no ateliê. Não existe link de inscrição externo: evento sem venda pelo site é inscrição pelo WhatsApp. No multipart, campo enviado vazio vira `null`.
 - O slug sai do título na criação, nunca muda e nunca é `upcoming`. O evento não pode terminar antes de começar, inclusive numa edição que muda só uma das datas.
 - **Ingressos** (detalhes em "Loja online"): `ticketSales` liga a venda pelo site em cada evento e `maxTicketsPerOrder` limita a compra (1 a 50, padrão 10). No público, `ticketSales` já vem combinado com o interruptor `ticketsEnabled` do Dashboard e traz `spotsLeft`/`soldOut`; no admin vem o valor do evento, com `sold` (pagos) e `reserved` (pendentes válidos). A lotação (`spots`) nunca é decrementada: ocupado é contado dos pedidos (`src/site-orders/spots.ts`), numa consulta agrupada pra lista inteira. Reduzir `spots` abaixo do ocupado responde 400, e excluir evento que tem ingresso responde 409 (despublicar em vez de excluir).
@@ -343,13 +353,13 @@ A cor é escolhida livremente pelo operador num color picker. A API não tem pal
 
 Quando algo na venda falha em silêncio, a loja fica sabendo sem olhar log. `AlertsService.alert({ kind, title, detail, url })`:
 
-- **Onde avisa:** push nos aparelhos do admin (os mesmos do pedido novo, `PushNotificationsService.notifyAlert`), e-mail pra `ALERT_EMAIL` quando configurado (opcional, pelo Resend) e sempre no log com `[ALERTA]`, que dá pra filtrar nos logs da Vercel.
-- **Limite:** um aviso de cada tipo a cada 30 minutos, contado na tabela `lookup_attempts` (chave `alert:<tipo>`), porque serverless não guarda memória. Nunca lança.
+- **Onde avisa:** push nos aparelhos do admin (os mesmos do pedido novo, `PushNotificationsService.notifyAlert`), e-mail pra `ALERT_EMAIL` quando configurado (opcional, pelo Resend) e sempre no log com `[ALERTA]`, que dá pra filtrar nos logs do Coolify (antes, da Vercel).
+- **Limite:** um aviso de cada tipo a cada 30 minutos, contado na tabela `lookup_attempts` (chave `alert:<tipo>`), herdado da época serverless (sem isso, cada invocação sem memória compartilhada repetiria o aviso); continua valendo como limite mesmo rodando num processo persistente no Coolify. Nunca lança.
 - **Tipos:**
   - `payment_link`: o Pagar.me não criou o link (a compradora viu "tente de novo");
   - `amount_mismatch`: valor pago diferente do total (o pedido não vira pago);
   - `confirmation_email`: o Resend recusou o e-mail de confirmação (e-mail desligado não alerta: é configuração);
-  - `webhook_auth`: aviso do Pagar.me com usuário ou senha diferentes dos da Vercel;
+  - `webhook_auth`: aviso do Pagar.me com usuário ou senha diferentes dos cadastrados no Coolify;
   - `unexpected_error`: qualquer erro inesperado (500) no checkout público ou no webhook, pelo `AlertOnErrorInterceptor`. Os erros esperados (400, 409, 422, 429, 503) não passam por ele.
 
 ## Clientes (módulo `customers`)
@@ -398,7 +408,7 @@ O cliente manda foto pelo WhatsApp, ela vira mensagem comum no histórico (com l
 ### Recebimento (`BotEngineService.processImageMessage`)
 
 1. Confere o teto global de armazenamento (`BotSettings.mediaBytesUsed`, 8 GB) e o teto por conversa (20 imagens/24h) **antes** de gastar a chamada à Meta. Acima de qualquer um dos dois, cai no mesmo caminho de `invalid_content` acima.
-2. Baixa da Meta em duas etapas autenticadas (`WhatsAppClientService.downloadMedia`), com prazo próprio em cada uma — a Meta reentrega o que não recebe `200` dentro do `maxDuration` da Vercel.
+2. Baixa da Meta em duas etapas autenticadas (`WhatsAppClientService.downloadMedia`), com prazo próprio em cada uma — a Meta reentrega o que não recebe `200` a tempo (antes, dentro do `maxDuration` da Vercel; no Coolify o processo é persistente, mas o princípio de responder rápido continua valendo pra não acumular reentregas).
 3. Sobe pro R2 (`MediaStorageService.put`) e grava a mensagem (`kind: 'image'`, legenda em `body`, `mediaKey`/`mediaMimeType`/`mediaSizeBytes`) via `ConversationMessengerService.recordInbound` — o mesmo caminho de gravação de qualquer mensagem, sem atalho paralelo.
 4. A legenda é conteúdo, nunca comando: ela não participa de nenhuma decisão do bot, nem durante a espera de um CEP (onde uma foto conta como tentativa não resolvida, igual a um CEP ilegível).
 
@@ -414,7 +424,7 @@ Sobe **sequencialmente**, não em paralelo: primeiro pra Meta (`uploadMedia` + `
 
 ### Retenção (`MediaRetentionService`, `GET /cron/media-retention`)
 
-Cron diário (`vercel.json`, `CronSecretGuard` protegendo a rota — a Vercel manda `Authorization: Bearer $CRON_SECRET`) que faz o que pode esperar um dia:
+Cron diário — `CronSecretGuard` protegendo a rota (`Authorization: Bearer $CRON_SECRET`) — que faz o que pode esperar um dia. Antes agendado no `vercel.json`; desde a migração é um **Scheduled Task do Coolify** rodando `curl` dentro do próprio container pra `/cron/media-retention`:
 
 - **Faxina:** apaga do R2 o arquivo de toda imagem com mais de 3 anos. A mensagem permanece no histórico — só `mediaKey`/`mediaMimeType`/`mediaSizeBytes` viram `null`. Ordem por arquivo: R2 primeiro, banco depois (uma falha no meio deixa a próxima execução tentar de novo; apagar do R2 é idempotente).
 - **Conferência:** recalcula `SUM(media_size_bytes)` real e corrige `mediaBytesUsed`, caso ele tenha saído do lugar.
