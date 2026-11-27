@@ -50,6 +50,7 @@ export class ProductCategoriesService {
     } catch (error) {
       // Outra criação simultânea pegou o mesmo slug entre a checagem e o
       // insert: uma nova tentativa já enxerga o slug ocupado e pula pro próximo.
+
       if (isUniqueViolation(error, 'slug')) {
         return this.createWithFreshSlug(dto).catch((e: unknown) => {
           throw this.mapDuplicateName(e);
